@@ -131,7 +131,7 @@ export function defaultParams() {
     brakeG: 0.5,
     braking: false,           // set by the Brake button; braking uses brakeG
     resumeSpeed: 10,
-    cityMode: false,          // automatic stop-and-go riding
+    cityMode: true,           // automatic stop-and-go riding
     citySpeed: 12,            // cruise speed between lights (same units as speed)
 
     // Electronics
