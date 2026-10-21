@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, MPH } from '../src/params';
 import { clockedFrameBits, derive, squareIntegral } from '../src/sim/timing';
-import { buildSlices, hallSegments, WheelMotion } from '../src/sim/firmware';
-import { bannerBitmap, bannerTileM, stackFrames } from '../src/image/polarize';
+import { buildSlices, hallSegments, magnetAccel, WheelMotion } from '../src/sim/firmware';
+import { bannerBitmap, bannerTileM, stackFrames, waterLut } from '../src/image/polarize';
 
 describe('LED bus timing', () => {
   it('matches the Adafruit guide: 36 LEDs per lane at ~4 MHz is ~300 µs per column', () => {
@@ -184,5 +184,70 @@ describe('animation playback rate', () => {
     const one = at(1), two = at(2);
     expect(two.length).toBe(one.length);
     two.forEach((f, i) => expect(f).toBe((one[i] * 2) % 1000));
+  });
+});
+
+describe('speed ramps', () => {
+  const R = 0.339;
+  it('ramps speed linearly and keeps distance and angle continuous', () => {
+    const m = new WheelMotion();
+    m.configure(4.47, R, 0, 1, 0);
+    const before = m.dist(10), phiBefore = m.phi(10);
+    m.configure(0, R, 0, 1, 10, 4.9); // brake at 0.5 g
+    expect(m.dist(10)).toBeCloseTo(before, 9);
+    expect(m.phi(10)).toBeCloseTo(phiBefore, 9);
+    expect(m.speed(10.5)).toBeCloseTo(4.47 - 4.9 * 0.5, 9);
+    expect(m.accel(10.5)).toBeCloseTo(-4.9, 9);
+    expect(m.speed(12)).toBe(0);
+    let last = -Infinity;
+    for (let t = 9; t < 13; t += 0.01) { const ph = m.phi(t); expect(ph).toBeGreaterThanOrEqual(last - 1e-12); last = ph; }
+    expect(m.passes(13, 15)).toEqual([]);
+    expect(m.passes(9, 10.5).length).toBeGreaterThan(0);
+  });
+});
+
+describe('magnet acceleration estimate', () => {
+  it('converges on the braking rate about a revolution late', () => {
+    const p = { ...defaultParams(), hallPollMs: 0, debounceMs: 20 };
+    const m = new WheelMotion();
+    m.configure(8.94, 0.339, 0, 1, 0);           // 20 mph
+    m.configure(0, 0.339, 0, 1, 10, 0.5 * 9.81); // brake at 0.5 g from t = 10
+    expect(magnetAccel(p, m, 9.9)).toBeCloseTo(0, 6);
+    const passes = m.passes(10, 11.5);
+    expect(magnetAccel(p, m, passes[0] + 1e-6)).toBeGreaterThan(-1);    // still mostly pre-brake
+    expect(magnetAccel(p, m, passes[2] + 1e-6)).toBeCloseTo(-4.9, 0);  // two revolutions in
+  });
+  it('reads the true acceleration in ideal mode and nothing when free-running', () => {
+    const m = new WheelMotion();
+    m.configure(8.94, 0.339, 0, 1, 0);
+    m.configure(0, 0.339, 0, 1, 10, 4.9);
+    expect(magnetAccel({ ...defaultParams(), syncMode: 'ideal' }, m, 10.2)).toBeCloseTo(-4.9, 9);
+    expect(magnetAccel({ ...defaultParams(), syncMode: 'free' }, m, 10.2)).toBe(0);
+  });
+});
+
+describe('water frames and lookup table', () => {
+  it('selects the simulation step current at each time', () => {
+    const p = defaultParams();
+    const d = derive(p);
+    const m = new WheelMotion();
+    m.configure(10 * MPH, d.tireRadius, 0, 1, 0);
+    const spec = { frames: 64, fps: 30, timed: true, revsPerFrame: 1, rate: 1, live: true };
+    for (const s of buildSlices(p, d, m, 100, 100.5, Math.PI, 0, spec)) {
+      expect(Math.floor(s.frame0)).toBe(Math.floor(s.t0 * 30) % 64);
+    }
+  });
+
+  it('maps the bottom of the wheel to the bottom of the grid', () => {
+    const p = { ...defaultParams(), columnsPerRev: 360 };
+    const d = derive(p);
+    const grid = 24;
+    const lut = waterLut(p, d, grid);
+    // Column c is centred at clockwise angle (c + 0.5)°: 90° clockwise from +x points straight down.
+    const outer = d.ledsPerStrip - 1;
+    const down = lut[outer * 360 + 89], up = lut[outer * 360 + 269];
+    expect(Math.floor(down / grid)).toBeLessThan(2);
+    expect(Math.floor(up / grid)).toBeGreaterThan(grid - 3);
+    expect([...lut].every((c) => c >= 0)).toBe(true);
   });
 });

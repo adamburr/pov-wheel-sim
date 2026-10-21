@@ -20,18 +20,20 @@ export interface ChipPreset {
   ramKB: number;
   overheadUsC: number;   // per-column firmware overhead, compiled C/Arduino
   overheadUsPy: number;  // per-column overhead under CircuitPython (0 = unsupported)
+  mflops: number;        // sustained single-precision MFLOP/s on one core (rough; soft float where there is no FPU)
 }
 // Approximate figures; overheads are order-of-magnitude estimates for a tight column loop.
+// mflops assumes ~0.4 flop/cycle with an FPU (M4/M33, Xtensa), ~1 on the M7, software float otherwise.
 export const CHIPS: Record<string, ChipPreset> = {
-  'ATmega328P (Uno/Nano)': { cpuMHz: 16,  maxClockMHz: 8,  maxLanes: 1, ramKB: 2,    overheadUsC: 40, overheadUsPy: 0 },
-  'SAMD21 (M0)':           { cpuMHz: 48,  maxClockMHz: 12, maxLanes: 1, ramKB: 32,   overheadUsC: 15, overheadUsPy: 1200 },
-  'SAMD51 (M4)':           { cpuMHz: 120, maxClockMHz: 24, maxLanes: 1, ramKB: 192,  overheadUsC: 6,  overheadUsPy: 350 },
-  'nRF52840':              { cpuMHz: 64,  maxClockMHz: 8,  maxLanes: 1, ramKB: 256,  overheadUsC: 10, overheadUsPy: 500 },
-  'RP2040':                { cpuMHz: 133, maxClockMHz: 20, maxLanes: 4, ramKB: 264,  overheadUsC: 4,  overheadUsPy: 300 },
-  'RP2350':                { cpuMHz: 150, maxClockMHz: 24, maxLanes: 4, ramKB: 520,  overheadUsC: 3,  overheadUsPy: 220 },
-  'ESP32':                 { cpuMHz: 240, maxClockMHz: 20, maxLanes: 8, ramKB: 320,  overheadUsC: 8,  overheadUsPy: 300 },
-  'ESP32-S3':              { cpuMHz: 240, maxClockMHz: 20, maxLanes: 8, ramKB: 512,  overheadUsC: 6,  overheadUsPy: 250 },
-  'Teensy 4.x':            { cpuMHz: 600, maxClockMHz: 30, maxLanes: 4, ramKB: 1024, overheadUsC: 1,  overheadUsPy: 120 },
+  'ATmega328P (Uno/Nano)': { cpuMHz: 16,  maxClockMHz: 8,  maxLanes: 1, ramKB: 2,    overheadUsC: 40, overheadUsPy: 0, mflops: 0.1 },
+  'SAMD21 (M0)':           { cpuMHz: 48,  maxClockMHz: 12, maxLanes: 1, ramKB: 32,   overheadUsC: 15, overheadUsPy: 1200, mflops: 1 },
+  'SAMD51 (M4)':           { cpuMHz: 120, maxClockMHz: 24, maxLanes: 1, ramKB: 192,  overheadUsC: 6,  overheadUsPy: 350, mflops: 48 },
+  'nRF52840':              { cpuMHz: 64,  maxClockMHz: 8,  maxLanes: 1, ramKB: 256,  overheadUsC: 10, overheadUsPy: 500, mflops: 26 },
+  'RP2040':                { cpuMHz: 133, maxClockMHz: 20, maxLanes: 4, ramKB: 264,  overheadUsC: 4,  overheadUsPy: 300, mflops: 3 },
+  'RP2350':                { cpuMHz: 150, maxClockMHz: 24, maxLanes: 4, ramKB: 520,  overheadUsC: 3,  overheadUsPy: 220, mflops: 60 },
+  'ESP32':                 { cpuMHz: 240, maxClockMHz: 20, maxLanes: 8, ramKB: 320,  overheadUsC: 8,  overheadUsPy: 300, mflops: 60 },
+  'ESP32-S3':              { cpuMHz: 240, maxClockMHz: 20, maxLanes: 8, ramKB: 512,  overheadUsC: 6,  overheadUsPy: 250, mflops: 70 },
+  'Teensy 4.x':            { cpuMHz: 600, maxClockMHz: 30, maxLanes: 4, ramKB: 1024, overheadUsC: 1,  overheadUsPy: 120, mflops: 500 },
 };
 
 export type Protocol = 'clocked' | 'single-wire';
@@ -80,7 +82,7 @@ export const SHUTTERS: Record<string, number> = {
 };
 
 export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel', 'Rainbow spiral', 'Checkerboard', 'Text', 'Wide text',
-  'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)'] as const;
+  'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)', 'Water (fluid sim)'] as const;
 export type PatternName = (typeof PATTERNS)[number];
 
 export const MPH = 0.44704; // m/s
@@ -116,6 +118,10 @@ export function defaultParams() {
     speed: 10,
     wobblePct: 0,             // pedal-stroke speed surge amplitude
     cadenceRpm: 80,           // two surges per crank revolution
+    speedRampG: 0.3,          // how quickly speed changes reach the target (0 = instantly)
+    brakeG: 0.5,
+    braking: false,           // set by the Brake button; braking uses brakeG
+    resumeSpeed: 10,
 
     // Electronics
     chip: 'RP2350',
@@ -150,6 +156,13 @@ export function defaultParams() {
     revsPerFrame: 1,
     maxFrames: 48,            // frames kept when importing a GIF/video
     videoFps: 12,             // sampling rate for video clips
+    // Water (fluid sim)
+    waterFill: 0.4,           // fraction of the disc
+    waterGrid: 24,            // cells across the disc
+    waterHz: 30,              // simulation steps per second
+    waterIters: 20,           // pressure-solve iterations
+    waterFlip: 0.9,           // FLIP/PIC blend
+    accelSmoothMs: 150,       // low-pass on the firmware's acceleration estimate
     pattern: 'Smiley' as PatternName,
     text: 'HELLO',
     mapping: 'polar' as 'polar' | 'columns',

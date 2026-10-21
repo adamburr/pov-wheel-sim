@@ -62,6 +62,17 @@ Frames can advance on a timer (at the clip's fps) or every N wheel revolutions:
 
 In banner mode the frames advance as the bike travels, so the road becomes a flip-book.
 
+### Water mode
+
+Pick **💧 show water** in the Water folder, or *Water (fluid sim)* as the test pattern, to fill the bottom of the disc with simulated water. Press **🛑 brake to a stop** and it surges forward; pedal surges make it slosh. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
+
+The firmware senses braking from the magnet alone: the change in revolution time between the last two passes. The estimate arrives about a revolution late. Hard braking also rotates the whole picture until the next pass, because the firmware assumes the wheel kept its last speed. *Ideal* sync shows the best case, with no lag or angle error. A 6-axis IMU at the axle would close most of that gap.
+
+The stats panel shows:
+- the estimated sensed vs true acceleration
+- the simulation's MFLOP/s as a share of one core on the chosen chip (about 33% of an RP2350 core at the defaults)
+- firmware RAM for the lookup table and simulation state
+
 ### Banner mode
 
 Set **Image → display mode** to *banner (world-locked)* and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. Seen from the roadside with a long exposure, the bike paints the banner as it rides by.
@@ -74,10 +85,11 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 |---|---|
 | Wheel | Size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), tire width, rim depth, spokes |
 | Strips & LEDs | Strip count, LED/m, package size, diffuser, start radius, double-sided, back-strip data, radial stagger |
-| Ride | Speed (mph or km/h), pedal-surge wobble, cadence |
+| Ride | Speed (mph or km/h), pedal-surge wobble, cadence, speed-change and braking rates, brake / ride buttons |
 | Electronics | Chip preset (ATmega328P → Teensy 4.x, RP2350 default), LED type (APA102, SK9822, HD107S, WS2812B, SK6812), clock, parallel lanes, overhead, PWM, global brightness |
 | Firmware | C/Arduino hall-sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked; columns/rev, lines/s floor, hall poll, debounce |
 | Image | Wheel-locked or banner (world-locked) display, load/drop/paste an image, animated GIF/WebP/APNG, or video, or pick a test pattern (some animated), polar (picture) or Adafruit columns-as-angles mapping, gamma, bit depth, inner-LED dimming |
+| Water | Fill, grid size, sim rate, pressure iterations, FLIP ratio, acceleration smoothing |
 | Animation | Timed or revolution-synced frame advance, playback rate (×, kept across clips), source fps, revolutions per frame, import frame limit, video sample rate |
 | Camera | Chase or ride-by view, drive or non-drive side, shutter speed or human-eye persistence, auto exposure, EV, time scale |
 

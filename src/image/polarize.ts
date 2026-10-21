@@ -170,3 +170,66 @@ export function stackFrames(list: { data: Uint8Array; meanDuty: number }[], widt
   const meanDuty = list.reduce((a, f) => a + f.meanDuty, 0) / Math.max(1, list.length);
   return { data, width, height, frames: list.length, meanDuty };
 }
+
+/** Water grid size in metres per cell: the container disc fills the LEDs' reach. */
+export function waterCellM(d: Derived, grid: number): number {
+  return d.rEnd / (grid / 2 - 1);
+}
+
+/**
+ * Water mode's firmware lookup table: for every column and LED row, the simulation grid cell
+ * nearest the centre of the arc that LED paints (-1 outside the grid). Same angle convention
+ * as polarize(), so the water is upright and the right way round on the drive side.
+ */
+export function waterLut(p: Params, d: Derived, grid: number): Int32Array {
+  const C = p.columnsPerRev, n = d.ledsPerStrip, rows = rowCount(p, d);
+  const lut = new Int32Array(C * rows).fill(-1);
+  const cellM = waterCellM(d, grid);
+  const rot = (p.imageRotationDeg * Math.PI) / 180;
+  const backs = p.doubleSided && p.backData === 'independent' ? 2 : 1;
+  for (let back = 0; back < backs; back++) {
+    for (let s = 0; s < p.stripCount; s++) {
+      for (let k = 0; k < n; k++) {
+        const row = (back * p.stripCount + s) * n + k;
+        const r = ledRadius(p, d, s, k);
+        for (let c = 0; c < C; c++) {
+          const th = -((c + 0.5) * ((Math.PI * 2) / C) + rot);
+          const x = (back ? -1 : 1) * r * Math.cos(th), y = r * Math.sin(th);
+          const i = Math.floor(grid / 2 + x / cellM), j = Math.floor(grid / 2 + y / cellM);
+          if (i >= 0 && j >= 0 && i < grid && j < grid) lut[row * C + c] = j * grid + i;
+        }
+      }
+    }
+  }
+  return lut;
+}
+
+/**
+ * Paint one firmware frame of water into `out` (RGBA PWM duty): blue scaled by how full each
+ * cell is, whitening where the water moves fast (spray and foam), black for air.
+ */
+export function renderWater(
+  density: Float32Array, speed: Float32Array, lut: Int32Array, p: Params, d: Derived, out: Uint8Array,
+): number {
+  const C = p.columnsPerRev, n = d.ledsPerStrip;
+  const deep = [0.08, 0.35, 1.0], foam = [0.85, 0.95, 1.0];
+  const g = (x: number) => Math.pow(x, p.gamma);
+  let sum = 0;
+  for (let idx = 0; idx < lut.length; idx++) {
+    const cell = lut[idx], o = idx * 4;
+    let a = 0, f = 0;
+    if (cell >= 0) {
+      a = Math.min(1, Math.max(0, (density[cell] - 0.15) / 0.45));
+      f = Math.min(1, Math.max(0, (speed[cell] - 0.5) / 1.5));
+    }
+    const k = Math.floor(idx / C) % n;
+    const comp = p.radialCompensation ? ledRadius(p, d, 0, k) / d.rEnd : 1;
+    for (let ch = 0; ch < 3; ch++) {
+      const v = g(deep[ch] + (foam[ch] - deep[ch]) * f) * a * comp;
+      out[o + ch] = Math.round(v * 255);
+      sum += v;
+    }
+    out[o + 3] = 255;
+  }
+  return sum / (lut.length * 3);
+}

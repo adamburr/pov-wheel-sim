@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { defaultParams, speedMps } from './params';
 import { buildGui } from './ui';
 import { derive, type Derived } from './sim/timing';
-import { buildSlices, WheelMotion } from './sim/firmware';
+import { animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
+import { WaterSource } from './image/waterSource';
 import { computeStats, exposureSeconds } from './sim/stats';
 import { type Animation, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
 import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } from './image/polarize';
@@ -51,6 +52,9 @@ let sourceVersion = 0;
 let buffer: FrameStack | undefined;
 let banner: (FrameStack & { pixelM: number }) | undefined;
 let buildGen = 0;
+const water = new WaterSource();
+const isWater = () => p.pattern === 'Water (fluid sim)';
+let waterShown = false;
 let imageKey = '';
 let rebuildTimer = 0;
 
@@ -154,10 +158,15 @@ let lastStats = 0;
 function updateStats(d: Derived, now: number) {
   if (now - lastStats < 300) return;
   lastStats = now;
-  const bannerMode = p.displayMode === 'banner' && banner;
-  const s = computeStats(p, d, (bannerMode ? banner?.meanDuty : buffer?.meanDuty) ?? 0,
+  const w = isWater() && water.sim ? water : undefined;
+  const bannerMode = p.displayMode === 'banner' && banner && !w;
+  const s = computeStats(p, d, (w ? w.meanDuty : bannerMode ? banner?.meanDuty : buffer?.meanDuty) ?? 0,
     bannerMode && banner ? { width: banner.width, height: banner.height, tileM: bannerTileM(banner, p.tileGapM) } : undefined,
-    buffer?.frames ?? 1);
+    w ? 1 : buffer?.frames ?? 1,
+    w && w.sim ? {
+      grid: w.sim.n, particles: w.sim.count, flopsPerStep: w.sim.flopsPerStep(), ramBytes: w.ramBytes(),
+      aEstimate: w.aEstimate, aTrue: w.aTrue,
+    } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   statsEl.innerHTML = `<h1>${statsCollapsed ? '▸' : '▾'} POV wheel · ${esc(p.chip)} · ${esc(p.ledType)}</h1><table>${
     s.lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
@@ -189,7 +198,20 @@ function frame(now: number) {
   if (!p.paused) simTime += dt * p.timeScale;
 
   const d = derive(p);
-  motion.configure(speedMps(p), d.tireRadius, p.wobblePct / 100, (p.cadenceRpm / 60) * 2, simTime);
+  const rampG = p.braking ? p.brakeG : p.speedRampG;
+  motion.configure(speedMps(p), d.tireRadius, p.wobblePct / 100, (p.cadenceRpm / 60) * 2, simTime, rampG * 9.81);
+
+  // Content: live water frames, or the converted image/animation.
+  let anim = animSpecFor(p, buffer?.frames ?? 1);
+  if (isWater()) {
+    const changed = water.sync(p, d, motion, simTime);
+    pov.setLiveLayers(water.data, water.width, water.height, water.spec(p).frames, changed);
+    anim = water.spec(p);
+    waterShown = true;
+  } else if (waterShown) {
+    waterShown = false;
+    if (buffer) pov.setColumns(buffer);
+  }
 
   const key = imageKeyFor(d);
   if (key !== imageKey && !rebuildTimer) {
@@ -202,7 +224,7 @@ function frame(now: number) {
   const tB = simTime, tA = simTime - T;
   const rideBy = p.view === 'ride-by';
   const maxAngle = rideBy ? Math.PI / 8 : p.wobblePct > 0 ? Math.PI / 2 : Math.PI * 2;
-  const slices = buildSlices(p, d, motion, tA, tB, maxAngle, p.displayMode === 'banner' ? pov.bannerTile(p) : 0, buffer?.frames ?? 1);
+  const slices = buildSlices(p, d, motion, tA, tB, maxAngle, p.displayMode === 'banner' && !anim.live ? pov.bannerTile(p) : 0, anim);
 
   const L = p.trackLengthM;
   const hubAt = (t: number) => {
@@ -221,7 +243,7 @@ function frame(now: number) {
   const times = Array.from({ length: copies }, (_, i) => tB - blurT * (copies > 1 ? (i + 0.5) / copies : 0));
   wheel.pose(times, (t) => motion.phi(t), hubAt);
 
-  pov.update(p, d, slices, tB, camera);
+  pov.update(p, d, slices, tB, camera, anim);
 
   ground.position.y = -d.tireRadius;
   laneMarks.position.y = -d.tireRadius;

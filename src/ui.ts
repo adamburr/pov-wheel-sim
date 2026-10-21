@@ -57,7 +57,7 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   strips.add(p, 'radialStagger').name('radial stagger');
 
   const ride = gui.addFolder('Ride');
-  const speedCtl = ride.add(p, 'speed', 0, 40, 0.1).name('speed');
+  const speedCtl = ride.add(p, 'speed', 0, 40, 0.1).name('speed').onChange(() => { p.braking = false; });
   ride.add(p, 'speedUnit', ['mph', 'km/h']).name('units').onChange((u: string) => {
     p.speed = u === 'mph' ? p.speed / 1.609344 : p.speed * 1.609344;
     speedCtl.max(u === 'mph' ? 40 : 65);
@@ -65,6 +65,17 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   });
   ride.add(p, 'wobblePct', 0, 40, 1).name('pedal surge %');
   ride.add(p, 'cadenceRpm', 30, 130, 1).name('cadence (rpm)');
+  ride.add(p, 'speedRampG', 0, 1, 0.05).name('speed change (g)');
+  ride.add(p, 'brakeG', 0.1, 1, 0.05).name('braking (g)');
+  ride.add({
+    brake: () => {
+      if (p.speed > 0) p.resumeSpeed = p.speed;
+      p.speed = 0; p.braking = true; refresh();
+    },
+  }, 'brake').name('🛑 brake to a stop');
+  ride.add({
+    go: () => { p.speed = p.resumeSpeed || 10; p.braking = false; refresh(); },
+  }, 'go').name('▶ ride');
 
   const elec = gui.addFolder('Electronics');
   elec.add(p, 'chip', Object.keys(CHIPS)).onChange(() => { applyElectronics(p); refresh(); });
@@ -134,6 +145,16 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   img.add(p, 'colorBits', 1, 8, 1).name('bits / channel');
   img.add(p, 'radialCompensation').name('dim inner LEDs');
   img.add(p, 'showBuffer').name('show column buffer');
+
+  const water = gui.addFolder('Water (fluid sim)');
+  water.add({ show: () => { p.pattern = 'Water (fluid sim)'; p.displayMode = 'wheel'; refresh(); hooks.onViewChange(); } }, 'show').name('💧 show water');
+  water.add(p, 'waterFill', 0.05, 0.9, 0.05).name('fill');
+  water.add(p, 'waterGrid', 12, 64, 2).name('grid (cells across)');
+  water.add(p, 'waterHz', 10, 60, 5).name('sim rate (Hz)');
+  water.add(p, 'waterIters', 5, 60, 1).name('pressure iterations');
+  water.add(p, 'waterFlip', 0, 1, 0.05).name('FLIP ratio (liveliness)');
+  water.add(p, 'accelSmoothMs', 0, 1000, 10).name('accel smoothing (ms)');
+  water.close();
 
   const anim = gui.addFolder('Animation');
   anim.add(p, 'frameAdvance', { 'timed (fps)': 'timed', 'every N revolutions': 'revolution' }).name('frame advance');

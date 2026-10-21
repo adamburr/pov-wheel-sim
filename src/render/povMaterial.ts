@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import fragmentShader from './pov.frag.glsl?raw';
-import { LEDS, type Params, playbackFps, SHUTTERS, speedMps } from '../params';
+import { LEDS, type Params, SHUTTERS, speedMps } from '../params';
 import type { Derived } from '../sim/timing';
-import { MAX_SLICES, type Slice } from '../sim/firmware';
+import { animSpecFor, type AnimSpec, MAX_SLICES, type Slice } from '../sim/firmware';
 import { bannerTileM, type FrameStack } from '../image/polarize';
 
 const vertexShader = /* glsl */ `
@@ -103,7 +103,24 @@ export class PovDisplay {
     }
   }
 
-  update(p: Params, d: Derived, slices: Slice[], tRef: number, camera: THREE.Camera) {
+  /**
+   * Live frames (water): a ring of `frames` layers that are rewritten in place. Only the
+   * layers listed are uploaded.
+   */
+  setLiveLayers(data: Uint8Array<ArrayBuffer>, width: number, height: number, frames: number, changed: number[]) {
+    const img = this.colTex.image as { width: number; height: number; depth: number; data: Uint8Array };
+    if (img.width !== width || img.height !== height || img.depth !== frames || img.data !== data) {
+      this.colTex.dispose();
+      this.colTex = layered(data, width, height, frames);
+      this.shared.uCols.value = this.colTex;
+    } else {
+      for (const l of changed) this.colTex.addLayerUpdate(l);
+      this.colTex.needsUpdate = true;
+    }
+    this.frames = frames;
+  }
+
+  update(p: Params, d: Derived, slices: Slice[], tRef: number, camera: THREE.Camera, anim?: AnimSpec) {
     this.ensurePlane(p, d);
     const led = LEDS[p.ledType];
     const u = this.shared;
@@ -169,10 +186,11 @@ export class PovDisplay {
     u.uGain.value = (0.35 / (duty * strips)) * shutterGain * passGain;
 
     u.uRideBy.value = p.view === 'ride-by' ? 1 : 0;
-    u.uFrames.value = this.frames;
-    u.uFrameTimed.value = p.frameAdvance === 'timed' ? 1 : 0;
-    u.uFps.value = playbackFps(p);
-    u.uBanner.value = p.displayMode === 'banner' && this.banner ? 1 : 0;
+    const spec = anim ?? animSpecFor(p, this.frames);
+    u.uFrames.value = spec.frames;
+    u.uFrameTimed.value = spec.timed ? 1 : 0;
+    u.uFps.value = spec.fps;
+    u.uBanner.value = p.displayMode === 'banner' && this.banner && !anim?.live ? 1 : 0;
     if (this.banner) {
       u.uBannerW.value = this.banner.width * this.banner.pixelM;
       u.uBannerTile.value = bannerTileM(this.banner, p.tileGapM);
