@@ -2,6 +2,8 @@
 
 A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel display, in the spirit of Adafruit's [CircuitPython POV Bike Wheel](https://learn.adafruit.com/circuitpython-pov-bike-wheel/overview). Use it to see what a build will look like *before* you cut LED strips: wheel size, strip count, LED density, speed, chip, LED type, firmware, and camera exposure are all adjustable.
 
+**Live demo:** https://adamburr.github.io/pov-wheel-sim/
+
 ## Running
 
 ```bash
