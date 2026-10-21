@@ -120,7 +120,7 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
   return c;
 }
 
-/** A 4:1 banner with a rainbow stripe, made for banner mode where the image tiles along the road. */
+/** A 4:1 banner with rainbow stripes and the text in the top half, made for banner mode where the image tiles along the road. */
 function wideText(text: string): HTMLCanvasElement {
   const { c, g } = canvas(SIZE * 4, SIZE);
   g.fillStyle = '#000';
@@ -130,14 +130,17 @@ function wideText(text: string): HTMLCanvasElement {
   g.fillStyle = stripe;
   g.fillRect(0, 0, c.width, SIZE * 0.08);
   g.fillRect(0, SIZE * 0.92, c.width, SIZE * 0.08);
+  // Text sits in the top half, between the top stripe and the hub line. In banner mode the
+  // lower half is painted by LEDs near the ground, which smear into bright cusps.
   g.fillStyle = '#ffffff';
   g.textAlign = 'center';
-  g.textBaseline = 'middle';
+  g.textBaseline = 'alphabetic';
   const label = text || ' ';
-  let size = SIZE * 0.66;
+  const bandTop = SIZE * 0.12, bandBottom = SIZE * 0.46;
+  let size = (bandBottom - bandTop) / 0.72; // cap height ≈ 0.72 em fills the band
   g.font = `900 ${size}px sans-serif`;
   while (g.measureText(label).width > c.width * 0.92 && size > 10) { size *= 0.9; g.font = `900 ${size}px sans-serif`; }
-  g.fillText(label, c.width / 2, SIZE * 0.53);
+  g.fillText(label, c.width / 2, bandBottom - (bandBottom - bandTop - size * 0.72) / 2);
   return c;
 }
 
