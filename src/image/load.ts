@@ -141,6 +141,27 @@ function wideText(text: string): HTMLCanvasElement {
   return c;
 }
 
+// Classic parametric heart outline (x in ±16, y down), used by the beating-heart pattern.
+const HEART: [number, number][] = Array.from({ length: 101 }, (_, k) => {
+  const a = (k / 100) * Math.PI * 2;
+  return [16 * Math.sin(a) ** 3, -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a))];
+});
+
+/** Smallest circle around the heart with its centre on the vertical axis (c = centre y). */
+const HEART_FIT = (() => {
+  let best = { c: 0, r: Infinity };
+  for (let c = -10; c <= 10; c += 0.02) {
+    const r = Math.max(...HEART.map(([x, y]) => Math.hypot(x, y - c)));
+    if (r < best.r) best = { c, r };
+  }
+  return best;
+})();
+
+const heartBeat = (t: number) =>
+  1 + 0.18 * Math.max(Math.sin(t * Math.PI * 2), 0) ** 3 + 0.08 * Math.max(Math.sin(t * Math.PI * 2 - 1.2), 0) ** 3;
+const HEART_FRAMES = 16;
+const HEART_BEAT_MAX = Math.max(...Array.from({ length: HEART_FRAMES }, (_, i) => heartBeat(i / HEART_FRAMES)));
+
 const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRenderingContext2D, t: number, i: number) => void }> = {
   'Bouncing ball (animated)': {
     frames: 24, fps: 12,
@@ -160,19 +181,15 @@ const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRe
     },
   },
   'Beating heart (animated)': {
-    frames: 16, fps: 10,
+    frames: HEART_FRAMES, fps: 10,
     draw: (g, t) => {
       const R = SIZE / 2;
-      const beat = 1 + 0.18 * Math.max(Math.sin(t * Math.PI * 2), 0) ** 3 + 0.08 * Math.max(Math.sin(t * Math.PI * 2 - 1.2), 0) ** 3;
-      g.save(); g.translate(R, R * 1.05); g.scale(beat * R * 0.034, beat * R * 0.034);
+      // Scale so the strongest beat just reaches the rim.
+      const s = (heartBeat(t) * R * 0.975) / (HEART_FIT.r * HEART_BEAT_MAX);
+      g.save(); g.translate(R, R); g.scale(s, s); g.translate(0, -HEART_FIT.c);
       g.fillStyle = '#ff1f4b';
       g.beginPath();
-      for (let k = 0; k <= 100; k++) {
-        const a = (k / 100) * Math.PI * 2;
-        const x = 16 * Math.sin(a) ** 3;
-        const y = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a));
-        if (k) g.lineTo(x, y); else g.moveTo(x, y);
-      }
+      HEART.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
       g.fill(); g.restore();
     },
   },
