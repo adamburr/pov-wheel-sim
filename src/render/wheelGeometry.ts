@@ -121,11 +121,21 @@ export class WheelModel {
 
     // Fork: it translates with the bike but does not spin. The hall magnet sits hidden behind it
     // and the electronics behind the spokes, so neither is drawn.
+    // Typical road geometry: the steering axis leans back at 73° from horizontal and passes 45 mm
+    // behind the axle (fork offset). The crown sits on that axis at the axle-to-crown length.
     const forkParts: THREE.BufferGeometry[] = [];
+    const head = (73 * Math.PI) / 180, offset = 0.045, axleToCrown = d.tireRadius + 0.03;
+    const up = new THREE.Vector2(-Math.cos(head), Math.sin(head));     // along the steering axis
+    const fwd = new THREE.Vector2(Math.sin(head), Math.cos(head));     // perpendicular, forward
+    const onAxis = fwd.clone().multiplyScalar(-offset);                // axis point nearest the axle
+    const along = -onAxis.dot(up) + Math.sqrt(onAxis.dot(up) ** 2 - onAxis.lengthSq() + axleToCrown ** 2);
+    const crown = onAxis.clone().addScaledVector(up, along);
+    const headTop = crown.clone().addScaledVector(up, 0.15);
     for (const z of [-0.055, 0.055]) {
-      forkParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(-0.05, d.tireRadius + 0.08, z * 0.8), 0.008), 0x3a5a8a));
+      forkParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(crown.x, crown.y, z * 0.8), 0.008), 0x3a5a8a));
     }
-    forkParts.push(colored(rod(new THREE.Vector3(-0.05, d.tireRadius + 0.08, -0.05), new THREE.Vector3(-0.05, d.tireRadius + 0.08, 0.05), 0.012), 0x3a5a8a));
+    forkParts.push(colored(rod(new THREE.Vector3(crown.x, crown.y, -0.05), new THREE.Vector3(crown.x, crown.y, 0.05), 0.012), 0x3a5a8a));
+    forkParts.push(colored(rod(new THREE.Vector3(crown.x, crown.y, 0), new THREE.Vector3(headTop.x, headTop.y, 0), 0.018), 0x3a5a8a));
     const forkGeo = mergeGeometries(forkParts.map((g) => (g.index ? g.toNonIndexed() : g)));
     this.fixed = new THREE.InstancedMesh(forkGeo, this.forkMaterial, MAX_COPIES);
     this.group.add(this.rotating, this.fixed);
