@@ -35,6 +35,9 @@ function rod(a: THREE.Vector3, b: THREE.Vector3, radius: number): THREE.BufferGe
 export class WheelModel {
   readonly group = new THREE.Group();
   private material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
+  // The fork has its own material so it can stay solid (and hide the LEDs behind it) while
+  // the spinning parts are drawn as see-through blur copies.
+  private forkMaterial = this.material.clone();
   private rotating?: THREE.InstancedMesh;
   private fixed?: THREE.InstancedMesh;
   private key = '';
@@ -126,7 +129,7 @@ export class WheelModel {
     sensor.translate(0.012, rimInner * 0.25, 0.05);
     forkParts.push(colored(sensor, 0x2a2a2a));
     const forkGeo = mergeGeometries(forkParts.map((g) => (g.index ? g.toNonIndexed() : g)));
-    this.fixed = new THREE.InstancedMesh(forkGeo, this.material, MAX_COPIES);
+    this.fixed = new THREE.InstancedMesh(forkGeo, this.forkMaterial, MAX_COPIES);
     this.group.add(this.rotating, this.fixed);
   }
 
@@ -143,15 +146,29 @@ export class WheelModel {
       q.identity();
       this.fixed.setMatrixAt(i, this.m.compose(pos, q, one));
     }
-    this.rotating.count = this.fixed.count = k;
+    // The fork only needs blur copies when it moves during the exposure (ride-by). Otherwise one
+    // solid copy is exact, and it writes depth so the LED light behind it is hidden.
+    const hub0 = hubAt(times[0]);
+    const forkMoves = times.slice(0, k).some((t) => Math.abs(hubAt(t) - hub0) > 1e-4);
+    const forkCopies = forkMoves ? k : 1;
+    this.rotating.count = k;
+    this.fixed.count = forkCopies;
     this.rotating.instanceMatrix.needsUpdate = this.fixed.instanceMatrix.needsUpdate = true;
-    // k overlapping copies at alpha a stack to 1-(1-a)^k; pick a so full overlap is ~opaque.
-    const blur = k > 1;
-    if (this.material.transparent !== blur) {
-      this.material.transparent = blur;
-      this.material.depthWrite = !blur;
-      this.material.needsUpdate = true;
-    }
-    this.material.opacity = blur ? 1 - Math.pow(0.03, 1 / k) : 1;
+    setBlur(this.material, k);
+    setBlur(this.forkMaterial, forkCopies);
   }
+}
+
+/**
+ * k overlapping copies at alpha a stack to 1-(1-a)^k; pick a so full overlap is ~opaque.
+ * Blurred copies can't write depth, or they would hide each other.
+ */
+function setBlur(material: THREE.Material, k: number) {
+  const blur = k > 1;
+  if (material.transparent !== blur) {
+    material.transparent = blur;
+    material.depthWrite = !blur;
+    material.needsUpdate = true;
+  }
+  material.opacity = blur ? 1 - Math.pow(0.03, 1 / k) : 1;
 }
