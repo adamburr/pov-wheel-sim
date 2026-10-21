@@ -213,7 +213,7 @@ window.addEventListener('paste', (e) => {
 
 // ---- Stats panel ----
 const statsEl = document.getElementById('stats')!;
-let statsCollapsed = window.innerHeight < 700;
+let statsCollapsed = true; // start closed; click the heading to open
 statsEl.classList.toggle('collapsed', statsCollapsed);
 statsEl.addEventListener('click', (e) => {
   if ((e.target as HTMLElement).tagName === 'H1') { statsCollapsed = !statsCollapsed; statsEl.classList.toggle('collapsed', statsCollapsed); }
