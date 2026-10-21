@@ -11,7 +11,7 @@ import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } fro
 import { PovDisplay } from './render/povMaterial';
 import { WheelModel } from './render/wheelGeometry';
 import { createPost } from './render/post';
-import { createCamera, placeCamera } from './render/camera';
+import { createCamera, placeCamera, setFreeArea } from './render/camera';
 
 const p = defaultParams();
 
@@ -239,14 +239,22 @@ function updateStats(d: Derived, now: number) {
 }
 
 // ---- Frame loop ----
+let portrait = window.innerHeight > window.innerWidth;
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h);
   composer.setSize(w, h);
   camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  // Keep the wheel clear of the speed panel, and of the menu bar where it spans the top (phones).
+  const menu = (gui.domElement.querySelector(':scope > .title') ?? gui.domElement).getBoundingClientRect();
+  const top = menu.left < w * 0.3 ? menu.bottom : 0;
+  const bottom = document.getElementById('ride')!.getBoundingClientRect().top - 8;
+  setFreeArea(camera, w, h, top, bottom);
+  // Re-frame when a phone turns between portrait and landscape.
+  if ((h > w) !== portrait) { portrait = h > w; placeCamera(camera, controls, p, derive(p)); }
 }
 window.addEventListener('resize', resize);
+window.addEventListener('load', resize); // fonts can change the speed panel's height
 resize();
 placeCamera(camera, controls, p, derive(p));
 
