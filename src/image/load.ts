@@ -3,7 +3,12 @@ import type { PatternName } from '../params';
 export type ImageSource = HTMLCanvasElement | ImageBitmap;
 
 /** A looping sequence of frames; a still image is a one-frame animation. */
-export interface Animation { frames: ImageSource[]; fps: number }
+export interface Animation {
+  frames: ImageSource[];
+  fps: number;
+  /** Optional frames laid out for the wheel-locked display; `frames` is used for banner mode. */
+  wheelFrames?: ImageSource[];
+}
 
 const SIZE = 512;
 
@@ -121,6 +126,43 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
 }
 
 /** A 4:1 banner with rainbow stripes and the text in the top half, made for banner mode where the image tiles along the road. */
+/**
+ * Wide text laid out for the wheel-locked display: rainbow lines above and below the text,
+ * the whole block in the upper half of the wheel, clear of the dark hub. The text is centred
+ * between the lines and as large as the round wheel's width allows at that height.
+ */
+function wideTextWheel(text: string): HTMLCanvasElement {
+  const { c, g } = canvas();
+  const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
+  const at = (f: number) => cy - f * R; // canvas y for a height f·R above the hub
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, SIZE, SIZE);
+  const stripe = g.createLinearGradient(0, 0, SIZE, 0);
+  for (let i = 0; i <= 6; i++) stripe.addColorStop(i / 6, `hsl(${i * 60}, 100%, 50%)`);
+  g.fillStyle = stripe;
+  const lineH = 0.06 * R, low = 0.2, high = 0.8; // line centres, as fractions of R above the hub
+  g.fillRect(0, at(high) - lineH / 2, SIZE, lineH);
+  g.fillRect(0, at(low) - lineH / 2, SIZE, lineH);
+
+  const label = text || ' ';
+  const gap = 0.07; // clearance between text and lines (fraction of R)
+  const capTop = high - 0.03 - gap, capBottom = low + 0.03 + gap;
+  let size = ((capTop - capBottom) * R) / 0.72; // cap height ≈ 0.72 em
+  const fits = () => {
+    g.font = `900 ${size}px sans-serif`;
+    // The top of the text is the narrowest part of the wheel the text covers.
+    const top = capBottom + (0.72 * size) / R;
+    return g.measureText(label).width <= 2 * Math.sqrt(Math.max(0, 1 - top * top)) * R * 0.92;
+  };
+  while (!fits() && size > 10) size *= 0.95;
+  const capH = 0.72 * size, mid = (capTop + capBottom) / 2;
+  g.fillStyle = '#ffffff';
+  g.textAlign = 'center';
+  g.textBaseline = 'alphabetic';
+  g.fillText(label, cx, at(mid) + capH / 2);
+  return c;
+}
+
 function wideText(text: string): HTMLCanvasElement {
   const { c, g } = canvas(SIZE * 4, SIZE);
   g.fillStyle = '#000';
@@ -211,6 +253,7 @@ const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRe
 /** Built-in patterns as animations (stills have one frame). */
 export function makeAnimation(name: PatternName, text: string): Animation {
   const anim = ANIMATED[name];
+  if (name === 'Wide text') return { frames: [wideText(text)], fps: 1, wheelFrames: [wideTextWheel(text)] };
   if (!anim) return { frames: [makePattern(name, text)], fps: 1 };
   const frames: HTMLCanvasElement[] = [];
   for (let i = 0; i < anim.frames; i++) {

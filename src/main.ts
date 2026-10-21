@@ -75,8 +75,9 @@ async function rebuildImage(d: Derived) {
   const cols: ReturnType<typeof polarize>[] = [];
   const bans: ReturnType<typeof bannerBitmap>[] = [];
   let budgetEnd = performance.now() + 30;
-  for (const frame of source.frames) {
-    const c = polarize(p.mapping === 'polar' ? squareImageData(frame) : rawImageData(frame), p, d);
+  for (const [i, frame] of source.frames.entries()) {
+    const wheelFrame = source.wheelFrames?.[i] ?? frame;
+    const c = polarize(p.mapping === 'polar' ? squareImageData(wheelFrame) : rawImageData(frame), p, d);
     cols.push(c);
     bans.push(bannerBitmap(rawImageData(frame), p, d));
     if (cols.length * c.data.length > MAX_TEXTURE_BYTES) break;
