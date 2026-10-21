@@ -125,7 +125,7 @@ const hooks = {
 };
 const gui = buildGui(p, hooks);
 // Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
-Object.assign(window, { povSim: { p, gui, hooks } });
+Object.assign(window, { povSim: { p, gui, hooks, camera, controls } });
 
 // Drag-and-drop and paste.
 const drop = document.getElementById('drop')!;
