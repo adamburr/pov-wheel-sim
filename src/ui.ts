@@ -25,7 +25,7 @@ function applyElectronics(p: Params) {
 }
 
 export function buildGui(p: Params, hooks: UiHooks): GUI {
-  const gui = new GUI({ title: 'POV wheel' });
+  const gui = new GUI({ title: '⚙️ Settings', width: 360 });
   const refresh = () => gui.controllersRecursive().forEach((c) => c.updateDisplay());
 
   const wheel = gui.addFolder('Wheel');

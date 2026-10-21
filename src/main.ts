@@ -232,8 +232,9 @@ function updateStats(d: Derived, now: number) {
       aEstimate: w.aEstimate, aTrue: w.aTrue, wallSpeed: w.wallSpeed,
     } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  statsEl.innerHTML = `<h1>${statsCollapsed ? '▸' : '▾'} POV wheel · ${esc(p.chip)} · ${esc(p.ledType)}</h1><table>${
-    s.lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
+  const lines = [{ label: 'Build', value: `${p.chip} · ${p.ledType}` }, ...s.lines];
+  statsEl.innerHTML = `<h1>${statsCollapsed ? '▸' : '▾'} 📊 Build stats</h1><table>${
+    lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
   }</table>${s.warnings.length ? `<ul>${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`;
 }
 
