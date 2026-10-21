@@ -89,10 +89,15 @@ export class WheelModel {
       flange.translate(0, 0, z);
       parts.push(colored(flange, 0x9aa0a8));
     }
+    // 3-cross lacing: rim holes alternate between flanges; on each flange spokes alternate leading
+    // and trailing, leaving the hub 4π·crosses/N from their rim hole, which keeps the hub holes
+    // evenly spaced. Low spoke counts can't fit three crosses, so they drop to 2- or 1-cross.
+    const crosses = Math.max(1, Math.min(3, Math.floor(p.spokes / 8)));
+    const hubOffset = (4 * Math.PI * crosses) / p.spokes;
     for (let i = 0; i < p.spokes; i++) {
       const a = (i / p.spokes) * Math.PI * 2;
       const z = i % 2 ? 0.035 : -0.035;
-      const ha = a + (i % 4 < 2 ? 0.25 : -0.25); // tangential lacing
+      const ha = a + (Math.floor(i / 2) % 2 ? -hubOffset : hubOffset);
       const from = new THREE.Vector3(Math.cos(ha) * 0.028, Math.sin(ha) * 0.028, z);
       const to = new THREE.Vector3(Math.cos(a) * rimInner, Math.sin(a) * rimInner, 0);
       parts.push(colored(rod(from, to, 0.001), 0xb8bcc4));
