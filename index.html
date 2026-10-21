@@ -30,17 +30,15 @@
       #ride button:hover { background: #262d42; }
       #ride label { margin-left: auto; font-size: 14px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
       #ride input[type=checkbox] { width: 18px; height: 18px; accent-color: #4aa3ff; }
-      #ride .short { display: none; }
       /* Phones: a more compact panel with the buttons and checkbox on one line. */
       @media (max-width: 420px) {
         #ride { bottom: 12px; padding: 10px 12px 12px; }
         #ride-speed { font-size: 32px; }
         #ride-slider { margin: 6px 0; }
-        #ride .row { flex-wrap: nowrap; gap: 6px; }
-        #ride button { font-size: 13px; padding: 6px 10px; white-space: nowrap; }
-        #ride label { font-size: 13px; gap: 5px; white-space: nowrap; }
+        #ride .row { flex-wrap: nowrap; gap: 4px; }
+        #ride button { font-size: 13px; padding: 6px 8px; white-space: nowrap; }
+        #ride label { font-size: 13px; gap: 4px; white-space: nowrap; }
       }
-      @media (max-width: 359px) { #ride .long { display: none; } #ride .short { display: inline; } }
       /* Settings menu (lil-gui): larger text and controls. 'body' outranks lil-gui's own rules. */
       body .lil-gui { --font-size: 14px; --input-font-size: 14px; --widget-height: 26px; --padding: 6px; --spacing: 6px; --name-width: 47%; --slider-input-min-width: 52px; }
       /* Never wider than the screen: phones (and iPhone Display Zoom, 320 px) get 8 px margins.
@@ -60,7 +58,7 @@
       <div class="row">
         <button id="ride-brake" type="button">🛑 Brake</button>
         <button id="ride-go" type="button">▶ Ride</button>
-        <label><input id="ride-city" type="checkbox" /> 🚦 <span class="long">City stop-and-go</span><span class="short">City mode</span></label>
+        <label><input id="ride-city" type="checkbox" /> 🚦 Stop-and-go</label>
       </div>
     </div>
     <div id="drop">Drop an image to display it on the wheel</div>
