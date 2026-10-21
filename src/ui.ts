@@ -108,11 +108,15 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   document.body.appendChild(input);
   img.add({ load: () => input.click() }, 'load').name('📂 load image… (or drop / paste)');
   img.add(p, 'displayMode', { 'wheel-locked': 'wheel', 'banner (world-locked)': 'banner' }).name('display mode').onChange((m: string) => {
-    if (m !== 'banner') return;
-    // The banner is pinned to the road, so watch from the roadside. A 1 s shutter reveals a
-    // whole tile if you switch to the camera model.
-    p.view = 'ride-by';
-    p.shutter = '1 s';
+    if (m === 'banner') {
+      // The banner is pinned to the road, so watch from the roadside. A 1 s shutter reveals a
+      // whole tile if you switch to the camera model.
+      p.view = 'ride-by';
+      p.shutter = '1 s';
+    } else {
+      // A wheel-locked image reads best with the camera riding along with the hub.
+      p.view = 'chase';
+    }
     refresh();
     hooks.onViewChange();
   });
