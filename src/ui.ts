@@ -194,5 +194,7 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   render.add({ reset: () => { Object.assign(p, defaultParams()); refresh(); hooks.onPattern(); hooks.onViewChange(); } }, 'reset').name('reset all');
   render.close();
 
+  // Start collapsed so the wheel has the screen; click the title to open the settings.
+  gui.close();
   return gui;
 }
