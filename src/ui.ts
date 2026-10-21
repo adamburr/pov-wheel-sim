@@ -109,9 +109,9 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   img.add({ load: () => input.click() }, 'load').name('📂 load image… (or drop / paste)');
   img.add(p, 'displayMode', { 'wheel-locked': 'wheel', 'banner (world-locked)': 'banner' }).name('display mode').onChange((m: string) => {
     if (m !== 'banner') return;
-    // The banner only shows up when the bike moves past a camera that integrates long enough.
+    // The banner is pinned to the road, so watch from the roadside. A 1 s shutter reveals a
+    // whole tile if you switch to the camera model.
     p.view = 'ride-by';
-    p.exposureModel = 'camera';
     p.shutter = '1 s';
     refresh();
     hooks.onViewChange();
