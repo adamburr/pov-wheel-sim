@@ -102,11 +102,11 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   const img = gui.addFolder('Image');
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*';
+  input.accept = 'image/*,video/*';
   input.style.display = 'none';
   input.onchange = () => { if (input.files?.[0]) hooks.onImageFile(input.files[0]); input.value = ''; };
   document.body.appendChild(input);
-  img.add({ load: () => input.click() }, 'load').name('📂 load image… (or drop / paste)');
+  img.add({ load: () => input.click() }, 'load').name('📂 load image / GIF / video…');
   img.add(p, 'displayMode', { 'wheel-locked': 'wheel', 'banner (world-locked)': 'banner' }).name('display mode').onChange((m: string) => {
     if (m === 'banner') {
       // The banner is pinned to the road, so watch from the roadside. A 1 s shutter reveals a
@@ -134,6 +134,14 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   img.add(p, 'colorBits', 1, 8, 1).name('bits / channel');
   img.add(p, 'radialCompensation').name('dim inner LEDs');
   img.add(p, 'showBuffer').name('show column buffer');
+
+  const anim = gui.addFolder('Animation');
+  anim.add(p, 'frameAdvance', { 'timed (fps)': 'timed', 'every N revolutions': 'revolution' }).name('frame advance');
+  anim.add(p, 'animFps', 0.5, 60, 0.5).name('fps');
+  anim.add(p, 'revsPerFrame', 1, 16, 1).name('revolutions / frame');
+  anim.add(p, 'maxFrames', 1, 120, 1).name('max frames (import)');
+  anim.add(p, 'videoFps', 1, 30, 1).name('video sample fps');
+  anim.close();
 
   const cam = gui.addFolder('Camera / exposure');
   cam.add(p, 'view', { 'chase (hub-locked)': 'chase', 'ride-by (roadside)': 'ride-by' }).onChange(hooks.onViewChange);

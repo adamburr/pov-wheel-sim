@@ -2,6 +2,9 @@ import type { PatternName } from '../params';
 
 export type ImageSource = HTMLCanvasElement | ImageBitmap;
 
+/** A looping sequence of frames; a still image is a one-frame animation. */
+export interface Animation { frames: ImageSource[]; fps: number }
+
 const SIZE = 512;
 
 function canvas(w = SIZE, h = SIZE) {
@@ -138,8 +141,123 @@ function wideText(text: string): HTMLCanvasElement {
   return c;
 }
 
-export async function loadImageFile(file: Blob): Promise<ImageBitmap> {
-  return createImageBitmap(file);
+const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRenderingContext2D, t: number, i: number) => void }> = {
+  'Bouncing ball (animated)': {
+    frames: 24, fps: 12,
+    draw: (g, t) => {
+      const R = SIZE / 2;
+      const y = SIZE * 0.78 - Math.abs(Math.sin(t * Math.PI)) * SIZE * 0.5;
+      const squash = 1 - 0.25 * Math.max(0, 1 - Math.abs(Math.sin(t * Math.PI)) * 6);
+      g.strokeStyle = '#3a7bff'; g.lineWidth = R * 0.05;
+      g.beginPath(); g.arc(R, R, R * 0.95, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#ff5a1f';
+      g.beginPath(); g.ellipse(R, y, R * 0.2 / squash, R * 0.2 * squash, 0, 0, Math.PI * 2); g.fill();
+    },
+  },
+  'Beating heart (animated)': {
+    frames: 16, fps: 10,
+    draw: (g, t) => {
+      const R = SIZE / 2;
+      const beat = 1 + 0.18 * Math.max(Math.sin(t * Math.PI * 2), 0) ** 3 + 0.08 * Math.max(Math.sin(t * Math.PI * 2 - 1.2), 0) ** 3;
+      g.save(); g.translate(R, R * 1.05); g.scale(beat * R * 0.034, beat * R * 0.034);
+      g.fillStyle = '#ff1f4b';
+      g.beginPath();
+      for (let k = 0; k <= 100; k++) {
+        const a = (k / 100) * Math.PI * 2;
+        const x = 16 * Math.sin(a) ** 3;
+        const y = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a));
+        if (k) g.lineTo(x, y); else g.moveTo(x, y);
+      }
+      g.fill(); g.restore();
+    },
+  },
+  'Counter (animated)': {
+    frames: 10, fps: 2,
+    draw: (g, _t, i) => {
+      const R = SIZE / 2;
+      g.strokeStyle = '#00e5a0'; g.lineWidth = R * 0.06;
+      g.beginPath(); g.arc(R, R, R * 0.92, -Math.PI / 2, -Math.PI / 2 + ((i + 1) / 10) * Math.PI * 2); g.stroke();
+      g.fillStyle = '#fff'; g.font = `900 ${R * 1.1}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(i), R, R * 1.06);
+    },
+  },
+};
+
+/** Built-in patterns as animations (stills have one frame). */
+export function makeAnimation(name: PatternName, text: string): Animation {
+  const anim = ANIMATED[name];
+  if (!anim) return { frames: [makePattern(name, text)], fps: 1 };
+  const frames: HTMLCanvasElement[] = [];
+  for (let i = 0; i < anim.frames; i++) {
+    const { c, g } = canvas();
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, SIZE, SIZE);
+    anim.draw(g, i / anim.frames, i);
+    frames.push(c);
+  }
+  return { frames, fps: anim.fps };
+}
+
+/** Copy a decoded frame onto a canvas no bigger than SIZE on its long side. */
+function snapshot(src: CanvasImageSource, w: number, h: number): HTMLCanvasElement {
+  const s = Math.min(1, SIZE / Math.max(w, h));
+  const { c, g } = canvas(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+  g.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+
+/**
+ * Load an image or a short clip. Animated GIF/WebP/APNG decode through WebCodecs'
+ * ImageDecoder where the browser has it (otherwise only the first frame is used); videos are
+ * sampled at `videoFps`. At most `maxFrames` frames are kept.
+ */
+export async function loadMedia(file: File, maxFrames: number, videoFps: number): Promise<Animation> {
+  if (file.type.startsWith('video/')) return loadVideo(file, maxFrames, videoFps);
+  const Decoder = (globalThis as { ImageDecoder?: any }).ImageDecoder;
+  if (Decoder && (await Decoder.isTypeSupported(file.type).catch(() => false))) {
+    const dec = new Decoder({ data: await file.arrayBuffer(), type: file.type });
+    await dec.tracks.ready;
+    const count = Math.max(1, Math.min(dec.tracks.selectedTrack?.frameCount ?? 1, maxFrames));
+    const frames: HTMLCanvasElement[] = [];
+    let totalUs = 0;
+    for (let i = 0; i < count; i++) {
+      const { image } = await dec.decode({ frameIndex: i });
+      frames.push(snapshot(image, image.displayWidth, image.displayHeight));
+      totalUs += image.duration ?? 0;
+      image.close();
+    }
+    dec.close();
+    const fps = totalUs > 0 ? (count * 1e6) / totalUs : 10;
+    return { frames, fps: Math.min(60, Math.max(0.5, fps)) };
+  }
+  return { frames: [await createImageBitmap(file)], fps: 1 };
+}
+
+async function loadVideo(file: File, maxFrames: number, fps: number): Promise<Animation> {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.muted = true;
+  v.playsInline = true;
+  v.preload = 'auto';
+  v.src = url;
+  const once = (ev: string) => new Promise<void>((resolve, reject) => {
+    v.addEventListener(ev, () => resolve(), { once: true });
+    v.addEventListener('error', () => reject(new Error('Could not decode video')), { once: true });
+  });
+  try {
+    await once('loadeddata');
+    const count = Math.max(1, Math.min(maxFrames, Math.floor((v.duration || 0) * fps)));
+    const frames: HTMLCanvasElement[] = [];
+    for (let i = 0; i < count; i++) {
+      const seeked = once('seeked');
+      v.currentTime = i / fps;
+      await seeked;
+      frames.push(snapshot(v, v.videoWidth, v.videoHeight));
+    }
+    return { frames, fps };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /** Square, centred, letterboxed copy for polar mapping. */

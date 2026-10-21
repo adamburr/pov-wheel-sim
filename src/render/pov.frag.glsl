@@ -6,13 +6,14 @@
 precision highp float;
 precision highp int;
 precision highp sampler2D;
+precision highp sampler2DArray;
 
 in vec3 vLocal;
 layout(location = 0) out highp vec4 outColor;
 
-uniform sampler2D uSlices;   // 128x3: (t0, t1, phi0, omega), (m, P, enabled, hubX0), (delta0, deltaRate, hubWorld0, -)
+uniform sampler2D uSlices;   // 128x3: (t0, t1, phi0, omega), (m, P, enabled, hubX0), (delta0, deltaRate, hubWorld0, frame0)
 uniform int uSliceCount;
-uniform sampler2D uCols;     // columns x rows of PWM duty
+uniform sampler2DArray uCols; // columns x rows of PWM duty, one layer per animation frame
 uniform int uC;
 uniform int uStrips;
 uniform int uLeds;
@@ -41,12 +42,15 @@ uniform float uRRoll;
 uniform float uFalloff;
 uniform vec3 uCamLocal;
 uniform int uBanner;         // 1: image pinned to the world (banner mode)
-uniform sampler2D uBannerTex;
+uniform sampler2DArray uBannerTex;
 uniform float uBannerW;      // banner image width (m)
 uniform float uBannerTile;   // image width + gap (m)
 uniform float uBannerHalfH;  // half the banner height (m), centred on the hub
 uniform int uBannerMirror;   // independent back strips paint a mirrored banner
 uniform int uPredict;        // compute each update for its mid-display time
+uniform int uFrames;         // animation frames
+uniform int uFrameTimed;     // 1: frames advance at uFps; 0: per slice (revolution-synced)
+uniform float uFps;
 
 const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
@@ -66,9 +70,16 @@ float sq(float a, float b, float duty, float period, float phase) {
   return Fb - Fa;
 }
 
+// Animation frame the firmware had selected when it sent an update at time tSend.
+int frameAt(float tSend, vec4 A, vec4 D) {
+  if (uFrames <= 1) return 0;
+  float f = D.w + (uFrameTimed == 1 ? (tSend - A.x) * uFps : 0.0);
+  return int(mod(floor(f), float(uFrames)));
+}
+
 // Banner mode: what the firmware sends to an LED it believes is at angle offAng past strip 0,
 // radius rk, at time tu. Its belief is the true pose plus the dead-reckoning error delta(t).
-vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk) {
+vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk, int frame) {
   float dt = tu - A.x;
   float dl = D.x + D.y * dt;
   float th = A.z + A.w * dt + dl + offAng;      // believed clockwise angle of this strip
@@ -79,9 +90,9 @@ vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk) {
   if (uBannerMirror == 1 && uSide < 0.0) x = uBannerW - x;
   float v = (uBannerHalfH - pos.y) / (2.0 * uBannerHalfH);
   if (v < 0.0 || v >= 1.0) return vec3(0.0);
-  ivec2 size = textureSize(uBannerTex, 0);
+  ivec2 size = textureSize(uBannerTex, 0).xy;
   ivec2 px = clamp(ivec2(int(x / uBannerW * float(size.x)), int(v * float(size.y))), ivec2(0), size - 1);
-  return texelFetch(uBannerTex, px, 0).rgb;
+  return texelFetch(uBannerTex, ivec3(px, frame), 0).rgb;
 }
 
 // Light emitted by one LED over [ta, tb] within slice (A, B), split at column changes.
@@ -116,13 +127,15 @@ vec3 emit(float ta, float tb, vec4 A, vec4 B, vec4 D, int s, float offAng, float
     }
     if (on) {
       vec3 duty;
+      float tSend = locked ? 0.5 * (t + tn) : B.x + j * B.y;
+      int frame = frameAt(tSend, A, D);
       if (uBanner == 1) {
         // Each update is computed for one moment: the send time, or (with prediction) the
         // middle of the interval it will be on screen. Encoder-locked firmware is exact.
-        float tu = locked ? 0.5 * (t + tn) : B.x + j * B.y + (uPredict == 1 ? latch + 0.5 * B.y : 0.0);
-        duty = bannerDuty(tu, A, D, offAng, rk);
+        float tu = locked ? tSend : tSend + (uPredict == 1 ? latch + 0.5 * B.y : 0.0);
+        duty = bannerDuty(tu, A, D, offAng, rk, frame);
       } else {
-        duty = texelFetch(uCols, ivec2(int(col), row), 0).rgb;
+        duty = texelFetch(uCols, ivec3(int(col), row, frame), 0).rgb;
       }
       vec3 lit = vec3(
         sq(t, tn, duty.r, uPwmPeriod, ph),

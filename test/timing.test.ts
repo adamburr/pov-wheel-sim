@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, MPH } from '../src/params';
 import { clockedFrameBits, derive, squareIntegral } from '../src/sim/timing';
 import { buildSlices, hallSegments, WheelMotion } from '../src/sim/firmware';
-import { bannerBitmap, bannerTileM } from '../src/image/polarize';
+import { bannerBitmap, bannerTileM, stackFrames } from '../src/image/polarize';
 
 describe('LED bus timing', () => {
   it('matches the Adafruit guide: 36 LEDs per lane at ~4 MHz is ~300 µs per column', () => {
@@ -122,5 +122,45 @@ describe('banner bitmap', () => {
     expect(b.width).toBe(Math.round(b.height * 4));
     expect(b.meanDuty).toBeCloseTo(1, 6);
     expect(bannerTileM(b, 0.5)).toBeCloseTo(b.width * b.pixelM + 0.5, 9);
+  });
+});
+
+describe('animation frame selection', () => {
+  const d = derive(defaultParams());
+  const motion = new WheelMotion();
+  motion.configure(10 * MPH, d.tireRadius, 0, 1, 0);
+
+  it('advances timed frames at animFps', () => {
+    const p = { ...defaultParams(), frameAdvance: 'timed' as const, animFps: 12 };
+    for (const s of buildSlices(p, d, motion, 10, 10.5, Math.PI, 0, 8)) {
+      expect(s.frame0).toBeCloseTo(((s.t0 * 12) % 8 + 8) % 8, 9);
+    }
+  });
+
+  it('steps revolution-synced frames once per magnet detection', () => {
+    const p = { ...defaultParams(), frameAdvance: 'revolution' as const, revsPerFrame: 1, hallPollMs: 0 };
+    const slices = buildSlices(p, d, motion, 10, 12, Math.PI * 2, 0, 5).filter((s) => s.enabled);
+    const distinct = [...new Set(slices.map((s) => s.frame0))];
+    const revs = motion.passes(10, 12).length;
+    expect(distinct.length).toBe(Math.min(5, revs + 1));
+    for (const s of slices) expect(Number.isInteger(s.frame0)).toBe(true);
+  });
+
+  it('holds frames for revsPerFrame turns', () => {
+    const p = { ...defaultParams(), frameAdvance: 'revolution' as const, revsPerFrame: 4, hallPollMs: 0 };
+    const slices = buildSlices(p, d, motion, 10, 11, Math.PI * 2, 0, 50).filter((s) => s.enabled);
+    const distinct = new Set(slices.map((s) => s.frame0));
+    expect(distinct.size).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('frame stacking', () => {
+  it('stacks layers in order and averages duty', () => {
+    const a = { data: new Uint8Array([1, 2, 3, 4]), meanDuty: 0.2 };
+    const b = { data: new Uint8Array([5, 6, 7, 8]), meanDuty: 0.4 };
+    const s = stackFrames([a, b], 1, 1);
+    expect([...s.data]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(s.frames).toBe(2);
+    expect(s.meanDuty).toBeCloseTo(0.3, 9);
   });
 });

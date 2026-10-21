@@ -153,3 +153,20 @@ export function bannerBitmap(img: Pixels, p: Params, d: Derived): BannerBitmap {
 export function bannerTileM(b: { width: number; pixelM: number }, gapM: number): number {
   return b.width * b.pixelM + Math.max(0, gapM);
 }
+
+export interface FrameStack {
+  data: Uint8Array<ArrayBuffer>; // frames stacked as array-texture layers
+  width: number;
+  height: number;
+  frames: number;
+  meanDuty: number;
+}
+
+/** Stack equally sized per-frame buffers into one layered buffer. */
+export function stackFrames(list: { data: Uint8Array; meanDuty: number }[], width: number, height: number): FrameStack {
+  const layer = width * height * 4;
+  const data = new Uint8Array(layer * list.length);
+  list.forEach((f, i) => data.set(f.data, i * layer));
+  const meanDuty = list.reduce((a, f) => a + f.meanDuty, 0) / Math.max(1, list.length);
+  return { data, width, height, frames: list.length, meanDuty };
+}

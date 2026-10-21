@@ -79,7 +79,8 @@ export const SHUTTERS: Record<string, number> = {
   '1/4 s': 1 / 4, '1/2 s': 1 / 2, '1 s': 1, '2 s': 2,
 };
 
-export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel', 'Rainbow spiral', 'Checkerboard', 'Text', 'Wide text'] as const;
+export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel', 'Rainbow spiral', 'Checkerboard', 'Text', 'Wide text',
+  'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)'] as const;
 export type PatternName = (typeof PATTERNS)[number];
 
 export const MPH = 0.44704; // m/s
@@ -142,6 +143,12 @@ export function defaultParams() {
     // Image
     displayMode: 'wheel' as 'wheel' | 'banner', // banner: image pinned to the world, tiled along the road
     tileGapM: 0,
+    // Animation
+    frameAdvance: 'timed' as 'timed' | 'revolution', // timed: at animFps; revolution: at the magnet
+    animFps: 12,
+    revsPerFrame: 1,
+    maxFrames: 48,            // frames kept when importing a GIF/video
+    videoFps: 12,             // sampling rate for video clips
     pattern: 'Smiley' as PatternName,
     text: 'HELLO',
     mapping: 'polar' as 'polar' | 'columns',

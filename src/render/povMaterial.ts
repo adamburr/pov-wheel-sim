@@ -3,7 +3,7 @@ import fragmentShader from './pov.frag.glsl?raw';
 import { LEDS, type Params, SHUTTERS, speedMps } from '../params';
 import type { Derived } from '../sim/timing';
 import { MAX_SLICES, type Slice } from '../sim/firmware';
-import { type BannerBitmap, bannerTileM, type ColumnBuffer } from '../image/polarize';
+import { bannerTileM, type FrameStack } from '../image/polarize';
 
 const vertexShader = /* glsl */ `
 out vec3 vLocal;
@@ -11,6 +11,15 @@ void main() {
   vLocal = position;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
+
+function layered(data: Uint8Array<ArrayBuffer>, w: number, h: number, depth: number) {
+  const t = new THREE.DataArrayTexture(data, w, h, depth);
+  t.format = THREE.RGBAFormat;
+  t.type = THREE.UnsignedByteType;
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+}
 
 export const LED_Z = 0.009; // LED faces sit ~9 mm either side of the wheel's centre plane
 
@@ -22,9 +31,10 @@ export class PovDisplay {
   readonly group = new THREE.Group();
   private sliceData = new Float32Array(MAX_SLICES * 3 * 4);
   private sliceTex = new THREE.DataTexture(this.sliceData, MAX_SLICES, 3, THREE.RGBAFormat, THREE.FloatType);
-  private colTex: THREE.DataTexture = new THREE.DataTexture(new Uint8Array(4), 1, 1);
-  private bannerTex: THREE.DataTexture = new THREE.DataTexture(new Uint8Array(4), 1, 1);
-  private banner?: BannerBitmap;
+  private colTex = layered(new Uint8Array(4), 1, 1, 1);
+  private bannerTex = layered(new Uint8Array(4), 1, 1, 1);
+  private banner?: { width: number; height: number; pixelM: number };
+  private frames = 1;
   private shared: Record<string, THREE.IUniform>;
   private front: THREE.Mesh;
   private back: THREE.Mesh;
@@ -42,6 +52,7 @@ export class PovDisplay {
       uGbPhase: { value: 0 }, uCurrentScale: { value: 1 }, uOverflowBlank: { value: 0 },
       uT: { value: 0.25 }, uTau: { value: 0 }, uGain: { value: 1 },
       uRideBy: { value: 0 }, uRRoll: { value: 0.34 }, uFalloff: { value: 0.5 },
+      uFrames: { value: 1 }, uFrameTimed: { value: 1 }, uFps: { value: 12 },
       uBanner: { value: 0 }, uBannerTex: { value: this.bannerTex }, uBannerW: { value: 1 },
       uBannerTile: { value: 1 }, uBannerHalfH: { value: 0.3 }, uBannerMirror: { value: 0 }, uPredict: { value: 1 },
     };
@@ -60,25 +71,18 @@ export class PovDisplay {
     this.group.add(this.front, this.back);
   }
 
-  setColumns(buf: ColumnBuffer) {
-    const img = this.colTex.image as { width: number; height: number };
-    if (img.width !== buf.columns || img.height !== buf.rows) {
-      this.colTex.dispose();
-      this.colTex = new THREE.DataTexture(buf.data, buf.columns, buf.rows, THREE.RGBAFormat, THREE.UnsignedByteType);
-      this.colTex.minFilter = this.colTex.magFilter = THREE.NearestFilter;
-      this.shared.uCols.value = this.colTex;
-    } else {
-      (this.colTex.image as { data: Uint8Array }).data = buf.data;
-    }
-    this.colTex.needsUpdate = true;
+  /** Firmware column buffers, one array-texture layer per animation frame. */
+  setColumns(stack: FrameStack) {
+    this.colTex.dispose();
+    this.colTex = layered(stack.data, stack.width, stack.height, stack.frames);
+    this.shared.uCols.value = this.colTex;
+    this.frames = stack.frames;
   }
 
-  setBanner(b: BannerBitmap) {
-    this.banner = b;
+  setBanner(stack: FrameStack, pixelM: number) {
+    this.banner = { width: stack.width, height: stack.height, pixelM };
     this.bannerTex.dispose();
-    this.bannerTex = new THREE.DataTexture(b.data, b.width, b.height, THREE.RGBAFormat, THREE.UnsignedByteType);
-    this.bannerTex.minFilter = this.bannerTex.magFilter = THREE.NearestFilter;
-    this.bannerTex.needsUpdate = true;
+    this.bannerTex = layered(stack.data, stack.width, stack.height, stack.frames);
     this.shared.uBannerTex.value = this.bannerTex;
   }
 
@@ -118,6 +122,7 @@ export class PovDisplay {
       this.sliceData[o3] = s.delta0;
       this.sliceData[o3 + 1] = s.deltaRate;
       this.sliceData[o3 + 2] = s.hubWorld0;
+      this.sliceData[o3 + 3] = s.frame0;
     }
     this.sliceTex.needsUpdate = true;
     u.uSliceCount.value = n;
@@ -164,6 +169,9 @@ export class PovDisplay {
     u.uGain.value = (0.35 / (duty * strips)) * shutterGain * passGain;
 
     u.uRideBy.value = p.view === 'ride-by' ? 1 : 0;
+    u.uFrames.value = this.frames;
+    u.uFrameTimed.value = p.frameAdvance === 'timed' ? 1 : 0;
+    u.uFps.value = p.animFps;
     u.uBanner.value = p.displayMode === 'banner' && this.banner ? 1 : 0;
     if (this.banner) {
       u.uBannerW.value = this.banner.width * this.banner.pixelM;

@@ -122,6 +122,7 @@ export interface Slice {
   delta0: number;     // firmware's angle estimate minus the true angle at t0 (rad)
   deltaRate: number;  // d(delta)/dt within the slice
   hubWorld0: number;  // hub position along the road at t0, in the banner's frame (m)
+  frame0: number;     // animation frame position at t0 (timed: fractional, advances at animFps)
 }
 
 export const MAX_SLICES = 128;
@@ -131,7 +132,7 @@ export const MAX_SLICES = 128;
  * schedule, so the shader can solve LED pass times in closed form inside each slice.
  */
 export function buildSlices(
-  p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number, maxAngle: number, tileM = 0,
+  p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number, maxAngle: number, tileM = 0, frames = 1,
 ): Slice[] {
   const segs = segmentsFor(p, d, motion, tA, tB);
   const cuts = new Set<number>([tA, tB]);
@@ -189,6 +190,7 @@ export function buildSlices(
       hubWorld0 = s - Math.floor(s / tileM) * tileM;
     }
     slices.push({
+      frame0: frameAt(p, motion, seg, t0, mid, frames),
       t0, t1,
       phi0: p0 - Math.floor(p0 / TAU) * TAU,
       omega,
@@ -199,4 +201,21 @@ export function buildSlices(
     });
   }
   return slices;
+}
+
+/**
+ * Animation frame at the start of a slice. Timed playback advances at animFps (and may change
+ * mid-revolution); revolution-synced playback steps once every revsPerFrame turns, at the
+ * firmware's sync point: the magnet detection, the true pass (ideal), or a full image cycle
+ * (free-running).
+ */
+function frameAt(p: Params, motion: WheelMotion, seg: Segment | undefined, t0: number, mid: number, frames: number): number {
+  if (frames <= 1) return 0;
+  const wrap = (x: number) => ((x % frames) + frames) % frames;
+  if (p.frameAdvance === 'timed') return wrap(t0 * p.animFps);
+  let k = 0;
+  if (seg?.k !== undefined) k = seg.k;
+  else if (seg && seg.P < 0) k = Math.floor(motion.phi(mid) / TAU);
+  else if (seg) k = Math.floor(mid / (seg.P * p.columnsPerRev));
+  return wrap(Math.floor(k / Math.max(1, p.revsPerFrame)));
 }

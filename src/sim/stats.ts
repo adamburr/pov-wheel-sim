@@ -14,7 +14,7 @@ export function exposureSeconds(p: Params): number {
 export interface BannerInfo { width: number; height: number; tileM: number }
 
 /** meanDuty: average PWM duty over all LEDs and columns of the current image (0..1 per channel sum / 3). */
-export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: BannerInfo): Stats {
+export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: BannerInfo, frames = 1): Stats {
   const chip = CHIPS[p.chip];
   const led = LEDS[p.ledType];
   const C = p.columnsPerRev;
@@ -33,7 +33,9 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   const avgmA = totalLeds * (1 + 60 * meanDuty * gbScale);
   const peakmA = totalLeds * 61;
   const lanes = Math.max(1, Math.min(p.lanes, d.stripUnits));
-  const imageBytes = banner ? banner.width * banner.height * 3 : C * lanes * (d.ledsPerLane + 2) * 4;
+  const frameBytes = banner ? banner.width * banner.height * 3 : C * lanes * (d.ledsPerLane + 2) * 4;
+  const imageBytes = frameBytes * frames;
+  const playFps = p.frameAdvance === 'timed' ? p.animFps : rps / Math.max(1, p.revsPerFrame);
   const usableRam = chip.ramKB * 1024 * (p.python ? 0.45 : 0.8);
 
   const lines: StatLine[] = [
@@ -46,6 +48,10 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
     { label: 'Point refresh', value: `${fmt(refreshHz, 1)} Hz (${p.stripCount} strips)` },
     { label: 'Exposure sweep', value: `${fmt(coverage * 100, 0)}% of the disc per ${p.exposureModel === 'eye' ? 'τ' : 'shot'}` },
     ...(banner ? [{ label: 'Banner', value: `${banner.width}×${banner.height} px · repeats every ${fmt(banner.tileM, 2)} m` }] : []),
+    ...(frames > 1 ? [{
+      label: 'Animation',
+      value: `${frames} frames · ${fmt(playFps, 1)} fps ${p.frameAdvance === 'timed' ? 'timed' : `(every ${p.revsPerFrame} rev)`}`,
+    }] : []),
     { label: 'Image buffer', value: `${fmt(imageBytes / 1024, 1)} KB of ${chip.ramKB} KB RAM` },
     { label: 'Current', value: `${fmt(avgmA, 0)} mA avg · ${fmt(peakmA / 1000, 1)} A peak` },
     { label: 'Battery', value: `${fmt(p.batteryMah / Math.max(avgmA, 1), 1)} h on ${p.batteryMah} mAh` },
@@ -80,7 +86,17 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
     warnings.push(`At this shutter each strip sweeps only ${fmt(rps * T * 360, 0)}°, so the photo shows wedges. Try ≥ ${fmt(1 / (rps * p.stripCount), 2)} s.`);
   }
   if (imageBytes > usableRam) {
-    warnings.push(`The prepacked image (${fmt(imageBytes / 1024, 1)} KB) won't fit in ${p.chip} RAM${p.python ? ' under CircuitPython' : ''}.`);
+    const fit = Math.floor(usableRam / frameBytes);
+    warnings.push(frames > 1
+      ? `${frames} frames need ${fmt(imageBytes / 1024, 0)} KB, but only ${fit} fit in ${p.chip} RAM${p.python ? ' under CircuitPython' : ''}. Stream frames from flash/PSRAM, use fewer frames, or lower columns/rev.`
+      : `The prepacked image (${fmt(imageBytes / 1024, 1)} KB) won't fit in ${p.chip} RAM${p.python ? ' under CircuitPython' : ''}.`);
+  }
+  if (frames > 1 && rps > 0) {
+    if (p.frameAdvance === 'timed' && p.animFps > rps) {
+      warnings.push(`Frames change ${fmt(p.animFps / rps, 1)}× per revolution, so each strip paints different frames in different sectors (seams). Sync frames to revolutions to avoid it.`);
+    } else if (p.frameAdvance === 'revolution' && playFps < p.animFps * 0.8) {
+      warnings.push(`Synced to the wheel, the animation plays at ${fmt(playFps, 1)} fps instead of ${fmt(p.animFps, 1)} fps. It speeds up and slows down with the bike.`);
+    }
   }
   if (p.python && chip.overheadUsPy === 0) warnings.push(`CircuitPython doesn't run on ${p.chip}.`);
   if (led.gbMode === 'pwm' && p.globalBrightness < 31) {

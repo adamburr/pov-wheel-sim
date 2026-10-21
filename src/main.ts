@@ -4,8 +4,8 @@ import { buildGui } from './ui';
 import { derive, type Derived } from './sim/timing';
 import { buildSlices, WheelMotion } from './sim/firmware';
 import { computeStats, exposureSeconds } from './sim/stats';
-import { type ImageSource, loadImageFile, makePattern, rawImageData, squareImageData } from './image/load';
-import { type BannerBitmap, bannerBitmap, bannerTileM, type ColumnBuffer, polarize } from './image/polarize';
+import { type Animation, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
+import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } from './image/polarize';
 import { PovDisplay } from './render/povMaterial';
 import { WheelModel } from './render/wheelGeometry';
 import { createPost } from './render/post';
@@ -46,10 +46,11 @@ const { composer, bloom } = createPost(renderer, scene, camera);
 const motion = new WheelMotion();
 
 // ---- Image source and firmware column buffer ----
-let source: ImageSource = makePattern(p.pattern, p.text);
+let source: Animation = makeAnimation(p.pattern, p.text);
 let sourceVersion = 0;
-let buffer: ColumnBuffer | undefined;
-let banner: BannerBitmap | undefined;
+let buffer: FrameStack | undefined;
+let banner: (FrameStack & { pixelM: number }) | undefined;
+let buildGen = 0;
 let imageKey = '';
 let rebuildTimer = 0;
 
@@ -58,12 +59,33 @@ function imageKeyFor(d: Derived) {
     p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData, p.radialStagger].join('|');
 }
 
-function rebuildImage(d: Derived) {
-  const px = p.mapping === 'polar' ? squareImageData(source) : rawImageData(source);
-  buffer = polarize(px, p, d);
+const MAX_TEXTURE_BYTES = 128 * 1024 * 1024;
+
+/**
+ * Convert every animation frame into firmware buffers. Long clips are processed in chunks so
+ * the page stays responsive; a newer rebuild cancels an older one.
+ */
+async function rebuildImage(d: Derived) {
+  const gen = ++buildGen;
+  const cols: ReturnType<typeof polarize>[] = [];
+  const bans: ReturnType<typeof bannerBitmap>[] = [];
+  let budgetEnd = performance.now() + 30;
+  for (const frame of source.frames) {
+    const c = polarize(p.mapping === 'polar' ? squareImageData(frame) : rawImageData(frame), p, d);
+    cols.push(c);
+    bans.push(bannerBitmap(rawImageData(frame), p, d));
+    if (cols.length * c.data.length > MAX_TEXTURE_BYTES) break;
+    if (performance.now() > budgetEnd) {
+      await new Promise((r) => setTimeout(r, 0));
+      if (gen !== buildGen) return;
+      budgetEnd = performance.now() + 30;
+    }
+  }
+  if (gen !== buildGen) return;
+  buffer = stackFrames(cols, cols[0].columns, cols[0].rows);
   pov.setColumns(buffer);
-  banner = bannerBitmap(rawImageData(source), p, d);
-  pov.setBanner(banner);
+  banner = { ...stackFrames(bans, bans[0].width, bans[0].height), pixelM: bans[0].pixelM };
+  pov.setBanner(banner, banner.pixelM);
   lastStats = 0;
   if (p.showBuffer) drawBuffer();
 }
@@ -73,20 +95,32 @@ const bufferCanvas = bufferBox.querySelector('canvas')!;
 function drawBuffer() {
   bufferBox.style.display = p.showBuffer ? 'block' : 'none';
   if (!p.showBuffer || !buffer) return;
-  bufferCanvas.width = buffer.columns;
-  bufferCanvas.height = buffer.rows;
-  const img = new ImageData(new Uint8ClampedArray(buffer.data), buffer.columns, buffer.rows);
+  // First frame only.
+  bufferCanvas.width = buffer.width;
+  bufferCanvas.height = buffer.height;
+  const layer = buffer.width * buffer.height * 4;
+  const img = new ImageData(new Uint8ClampedArray(buffer.data.subarray(0, layer)), buffer.width, buffer.height);
   bufferCanvas.getContext('2d')!.putImageData(img, 0, 0);
 }
 
-function setSource(src: ImageSource) {
+function setSource(src: Animation) {
   source = src;
   sourceVersion++;
+  if (src.frames.length > 1) {
+    p.animFps = Math.round(src.fps * 10) / 10;
+    gui.controllersRecursive().forEach((c) => c.updateDisplay());
+  }
 }
 
 const hooks = {
-  onImageFile: async (file: File) => setSource(await loadImageFile(file)),
-  onPattern: () => setSource(makePattern(p.pattern, p.text)),
+  onImageFile: async (file: File) => {
+    try {
+      setSource(await loadMedia(file, p.maxFrames, p.videoFps));
+    } catch (err) {
+      alert(`Couldn't load ${file.name}: ${(err as Error).message}`);
+    }
+  },
+  onPattern: () => setSource(makeAnimation(p.pattern, p.text)),
   onViewChange: () => placeCamera(camera, controls, p, derive(p)),
 };
 const gui = buildGui(p, hooks);
@@ -101,7 +135,7 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   drop.style.display = 'none';
   const f = e.dataTransfer?.files[0];
-  if (f && f.type.startsWith('image/')) hooks.onImageFile(f);
+  if (f && (f.type.startsWith('image/') || f.type.startsWith('video/'))) hooks.onImageFile(f);
 });
 window.addEventListener('paste', (e) => {
   const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'));
@@ -122,7 +156,8 @@ function updateStats(d: Derived, now: number) {
   lastStats = now;
   const bannerMode = p.displayMode === 'banner' && banner;
   const s = computeStats(p, d, (bannerMode ? banner?.meanDuty : buffer?.meanDuty) ?? 0,
-    bannerMode && banner ? { width: banner.width, height: banner.height, tileM: bannerTileM(banner, p.tileGapM) } : undefined);
+    bannerMode && banner ? { width: banner.width, height: banner.height, tileM: bannerTileM(banner, p.tileGapM) } : undefined,
+    buffer?.frames ?? 1);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   statsEl.innerHTML = `<h1>${statsCollapsed ? '▸' : '▾'} POV wheel · ${esc(p.chip)} · ${esc(p.ledType)}</h1><table>${
     s.lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
@@ -167,7 +202,7 @@ function frame(now: number) {
   const tB = simTime, tA = simTime - T;
   const rideBy = p.view === 'ride-by';
   const maxAngle = rideBy ? Math.PI / 8 : p.wobblePct > 0 ? Math.PI / 2 : Math.PI * 2;
-  const slices = buildSlices(p, d, motion, tA, tB, maxAngle, p.displayMode === 'banner' ? pov.bannerTile(p) : 0);
+  const slices = buildSlices(p, d, motion, tA, tB, maxAngle, p.displayMode === 'banner' ? pov.bannerTile(p) : 0, buffer?.frames ?? 1);
 
   const L = p.trackLengthM;
   const hubAt = (t: number) => {
