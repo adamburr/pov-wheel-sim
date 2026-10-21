@@ -143,7 +143,8 @@ const hooks = {
 };
 
 // ---- Riding: stop-and-go automation and the large speed control ----
-const city = new CityRide();
+// A fresh seed each page load, so the trips (including the first) differ every visit.
+const city = new CityRide(1 + Math.floor(Math.random() * 2147483645));
 function refreshGui() { gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
 function setCity(on: boolean) {
   p.cityMode = on;
