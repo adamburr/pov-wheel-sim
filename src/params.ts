@@ -122,6 +122,8 @@ export function defaultParams() {
     brakeG: 0.5,
     braking: false,           // set by the Brake button; braking uses brakeG
     resumeSpeed: 10,
+    cityMode: false,          // automatic stop-and-go riding
+    citySpeed: 12,            // cruise speed between lights (same units as speed)
 
     // Electronics
     chip: 'RP2350',
@@ -162,7 +164,8 @@ export function defaultParams() {
     waterHz: 30,              // simulation steps per second
     waterIters: 20,           // pressure-solve iterations
     waterFlip: 0.9,           // FLIP/PIC blend
-    accelSmoothMs: 150,       // low-pass on the firmware's acceleration estimate
+    accelSmoothMs: 50,        // low-pass on the firmware's acceleration estimate (it is already held per revolution)
+    waterGain: 2,             // firmware exaggerates the sensed acceleration so the slosh reads at POV refresh rates
     pattern: 'Smiley' as PatternName,
     text: 'HELLO',
     mapping: 'polar' as 'polar' | 'columns',

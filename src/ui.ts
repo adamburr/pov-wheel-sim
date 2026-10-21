@@ -7,6 +7,9 @@ export interface UiHooks {
   onImageFile: (file: File) => void;
   onPattern: () => void;
   onViewChange: () => void;
+  onBrake: () => void;
+  onRide: () => void;
+  onCity: (on: boolean) => void;
 }
 
 /** Seed electronics values from the selected chip, LED and firmware presets. */
@@ -59,7 +62,8 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   const ride = gui.addFolder('Ride');
   const speedCtl = ride.add(p, 'speed', 0, 40, 0.1).name('speed').onChange(() => { p.braking = false; });
   ride.add(p, 'speedUnit', ['mph', 'km/h']).name('units').onChange((u: string) => {
-    p.speed = u === 'mph' ? p.speed / 1.609344 : p.speed * 1.609344;
+    const k = u === 'mph' ? 1 / 1.609344 : 1.609344;
+    p.speed *= k; p.citySpeed *= k; p.resumeSpeed *= k;
     speedCtl.max(u === 'mph' ? 40 : 65);
     refresh();
   });
@@ -67,15 +71,10 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   ride.add(p, 'cadenceRpm', 30, 130, 1).name('cadence (rpm)');
   ride.add(p, 'speedRampG', 0, 1, 0.05).name('speed change (g)');
   ride.add(p, 'brakeG', 0.1, 1, 0.05).name('braking (g)');
-  ride.add({
-    brake: () => {
-      if (p.speed > 0) p.resumeSpeed = p.speed;
-      p.speed = 0; p.braking = true; refresh();
-    },
-  }, 'brake').name('🛑 brake to a stop');
-  ride.add({
-    go: () => { p.speed = p.resumeSpeed || 10; p.braking = false; refresh(); },
-  }, 'go').name('▶ ride');
+  ride.add({ brake: hooks.onBrake }, 'brake').name('🛑 brake to a stop');
+  ride.add({ go: hooks.onRide }, 'go').name('▶ ride');
+  ride.add(p, 'cityMode').name('🚦 city stop-and-go').onChange((on: boolean) => hooks.onCity(on));
+  ride.add(p, 'citySpeed', 1, 40, 0.5).name('city cruise speed');
 
   const elec = gui.addFolder('Electronics');
   elec.add(p, 'chip', Object.keys(CHIPS)).onChange(() => { applyElectronics(p); refresh(); });
@@ -153,6 +152,7 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   water.add(p, 'waterHz', 10, 60, 5).name('sim rate (Hz)');
   water.add(p, 'waterIters', 5, 60, 1).name('pressure iterations');
   water.add(p, 'waterFlip', 0, 1, 0.05).name('FLIP ratio (liveliness)');
+  water.add(p, 'waterGain', 0, 5, 0.1).name('slosh gain ×');
   water.add(p, 'accelSmoothMs', 0, 1000, 10).name('accel smoothing (ms)');
   water.close();
 

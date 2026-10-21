@@ -66,7 +66,7 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
     ...(water ? [
       { label: 'Water', value: `${water.grid}² grid · ${water.particles} particles · ${p.waterHz} Hz` },
       { label: 'Water CPU', value: `${fmt(waterMflops(p, water), 1)} MFLOP/s ≈ ${fmt(waterCorePct(p, water), 0)}% of one ${p.chip} core` },
-      { label: 'Acceleration', value: `${gees(water.aEstimate)} firmware · ${gees(water.aTrue)} true (− = braking)` },
+      { label: 'Acceleration', value: `${gees(water.aEstimate)} firmware${p.waterGain !== 1 ? ` (×${p.waterGain} slosh)` : ''} · ${gees(water.aTrue)} true (− = braking)` },
     ] : []),
     { label: water ? 'Firmware RAM' : 'Image buffer', value: `${fmt(imageBytes / 1024, 1)} KB of ${chip.ramKB} KB RAM` },
     { label: 'Current', value: `${fmt(avgmA, 0)} mA avg · ${fmt(peakmA / 1000, 1)} A peak` },

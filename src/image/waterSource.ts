@@ -65,7 +65,7 @@ export class WaterSource {
     for (let k = this.lastStep + 1; k <= target; k++) {
       this.aEstimate += (magnetAccel(p, motion, k * dt) - this.aEstimate) * smooth;
       // Braking (negative acceleration) throws the water forward, +x on the drive side.
-      sim.step(dt, -this.aEstimate, -GRAVITY);
+      sim.step(dt, -this.aEstimate * p.waterGain, -GRAVITY);
       const layer = ((k % FRAMES) + FRAMES) % FRAMES;
       this.paint(p, d, layer);
       changed.push(layer);

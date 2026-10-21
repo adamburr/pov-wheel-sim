@@ -4,6 +4,7 @@ import { buildGui } from './ui';
 import { derive, type Derived } from './sim/timing';
 import { animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
 import { WaterSource } from './image/waterSource';
+import { CityRide } from './sim/city';
 import { computeStats, exposureSeconds } from './sim/stats';
 import { type Animation, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
 import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } from './image/polarize';
@@ -126,7 +127,62 @@ const hooks = {
   },
   onPattern: () => setSource(makeAnimation(p.pattern, p.text)),
   onViewChange: () => placeCamera(camera, controls, p, derive(p)),
+  onBrake: () => {
+    if (p.cityMode) setCity(false);
+    if (p.speed > 0) p.resumeSpeed = p.speed;
+    p.speed = 0; p.braking = true;
+    refreshGui();
+  },
+  onRide: () => {
+    if (p.cityMode) setCity(false);
+    p.speed = p.resumeSpeed || 10; p.braking = false;
+    refreshGui();
+  },
+  onCity: (on: boolean) => setCity(on),
 };
+
+// ---- Riding: stop-and-go automation and the large speed control ----
+const city = new CityRide();
+function refreshGui() { gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
+function setCity(on: boolean) {
+  p.cityMode = on;
+  if (on) {
+    if (p.speed > 0) p.citySpeed = p.speed;
+    city.start(simTime, p);
+  } else {
+    p.speed = p.citySpeed; p.braking = false;
+  }
+  refreshGui();
+}
+const rideSpeed = document.getElementById('ride-speed')!;
+const rideUnit = document.getElementById('ride-unit')!;
+const rideStatus = document.getElementById('ride-status')!;
+const rideSlider = document.getElementById('ride-slider') as HTMLInputElement;
+const rideCity = document.getElementById('ride-city') as HTMLInputElement;
+document.getElementById('ride-brake')!.addEventListener('click', () => hooks.onBrake());
+document.getElementById('ride-go')!.addEventListener('click', () => hooks.onRide());
+rideCity.addEventListener('change', () => setCity(rideCity.checked));
+rideSlider.addEventListener('input', () => {
+  const v = Number(rideSlider.value);
+  if (p.cityMode) {
+    p.citySpeed = v;
+    if (city.phase === 'go' || city.phase === 'cruise') p.speed = v;
+  } else {
+    p.speed = v; p.braking = false;
+  }
+  refreshGui();
+});
+const PHASE_TEXT = { go: '🚦 pulling away', cruise: '🚦 cruising', brake: '🚦 braking for a light', stopped: '🚦 waiting at a light' };
+function updateRidePanel(actualMps: number) {
+  const mph = p.speedUnit === 'mph';
+  rideSpeed.textContent = (actualMps / (mph ? 0.44704 : 1 / 3.6)).toFixed(1);
+  rideUnit.textContent = p.speedUnit;
+  rideSlider.max = mph ? '40' : '65';
+  if (document.activeElement !== rideSlider) rideSlider.value = String(p.cityMode ? p.citySpeed : p.speed);
+  rideCity.checked = p.cityMode;
+  const target = p.cityMode ? p.citySpeed : p.speed;
+  rideStatus.textContent = p.cityMode ? `${PHASE_TEXT[city.phase]} · cruise ${target.toFixed(1)}` : p.braking ? 'braking' : `target ${target.toFixed(1)}`;
+}
 const gui = buildGui(p, hooks);
 // Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
 Object.assign(window, { povSim: { p, gui, hooks, camera, controls } });
@@ -198,6 +254,7 @@ function frame(now: number) {
   if (!p.paused) simTime += dt * p.timeScale;
 
   const d = derive(p);
+  if (p.cityMode && city.update(simTime, p)) refreshGui();
   const rampG = p.braking ? p.brakeG : p.speedRampG;
   motion.configure(speedMps(p), d.tireRadius, p.wobblePct / 100, (p.cadenceRpm / 60) * 2, simTime, rampG * 9.81);
 
@@ -258,5 +315,6 @@ function frame(now: number) {
   controls.update();
   composer.render();
   updateStats(d, now);
+  updateRidePanel(motion.speed(simTime));
 }
 requestAnimationFrame(frame);
