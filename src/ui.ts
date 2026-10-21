@@ -70,6 +70,7 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   ride.add(p, 'wobblePct', 0, 40, 1).name('pedal surge %');
   ride.add(p, 'cadenceRpm', 30, 130, 1).name('cadence (rpm)');
   ride.add(p, 'speedRampG', 0, 1, 0.05).name('speed change (g)');
+  ride.add(p, 'accelSurgePct', 0, 90, 5).name('pedal surge speeding up %');
   ride.add(p, 'brakeG', 0.1, 1, 0.05).name('braking (g)');
   ride.add({ brake: hooks.onBrake }, 'brake').name('🛑 brake to a stop');
   ride.add({ go: hooks.onRide }, 'go').name('▶ ride');

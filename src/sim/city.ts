@@ -2,13 +2,25 @@ import type { Params } from '../params';
 
 export type CityPhase = 'go' | 'cruise' | 'brake' | 'stopped';
 
+const G = 9.81;
+const NEAREST_LIGHT_M = 3;   // light turns red just ahead: a hard stop
+const FARTHEST_LIGHT_M = 40; // spotted far off: a long, gentle roll-down
+const MAX_BRAKE_G = 0.7;
+const MIN_BRAKE_G = 0.03;
+
 /**
- * Stop-and-go city riding: speed up to the cruise speed, ride a block, brake for a light,
- * wait, repeat. It only changes the target speed and braking flag, so the bike, the magnet
- * firmware and the water all respond exactly as they do to a rider.
+ * Stop-and-go city riding: pull away, ride a block, brake for a light, wait, repeat. Each
+ * pull-away varies a little; each light turns red at a random distance ahead, and the rider
+ * brakes just hard enough to stop there (v²/2d), so some stops are sharp and others slow.
+ * It only sets the target speed and the ramp rate, so the bike, the magnet firmware and the
+ * water all respond exactly as they do to a rider.
  */
 export class CityRide {
   phase: CityPhase = 'stopped';
+  /** Acceleration (g) the current phase ramps at; the main loop uses it while city mode is on. */
+  rampG = 0.2;
+  /** Distance to the light that just turned red (m), while braking. */
+  lightM = 0;
   private until = -Infinity;
   private seed: number;
 
@@ -26,20 +38,28 @@ export class CityRide {
     const toMps = p.speedUnit === 'mph' ? 0.44704 : 1 / 3.6;
     const cruise = Math.max(0.1, p.citySpeed) * toMps;
     switch (this.phase) {
-      case 'stopped':
+      case 'stopped': {
         this.phase = 'go';
         p.speed = p.citySpeed; p.braking = false;
-        this.until = t + cruise / (Math.max(0.02, p.speedRampG) * 9.81);
+        this.rampG = Math.max(0.02, p.speedRampG) * this.between(0.7, 1.3);
+        // Pedal strokes pulse the acceleration but average out, plus a little to settle.
+        this.until = t + cruise / (this.rampG * G) + 0.5;
         break;
+      }
       case 'go':
         this.phase = 'cruise';
         this.until = t + this.between(4, 12);
         break;
-      case 'cruise':
+      case 'cruise': {
         this.phase = 'brake';
+        // Equally likely to be near or far (log-uniform), then brake to stop right there.
+        this.lightM = Math.exp(this.between(Math.log(NEAREST_LIGHT_M), Math.log(FARTHEST_LIGHT_M)));
+        const decel = Math.min(MAX_BRAKE_G * G, Math.max(MIN_BRAKE_G * G, (cruise * cruise) / (2 * this.lightM)));
+        this.rampG = decel / G;
         p.speed = 0; p.braking = true;
-        this.until = t + cruise / (Math.max(0.02, p.brakeG) * 9.81) + 0.3;
+        this.until = t + cruise / decel + 0.3;
         break;
+      }
       case 'brake':
         this.phase = 'stopped';
         this.until = t + this.between(2, 6);

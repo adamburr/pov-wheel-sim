@@ -13,10 +13,11 @@ interface MotionSeg {
   phiA: number;   // wheel angle at the anchor
   v0: number;
   vT: number;
-  acc: number;    // signed ramp acceleration (0 when the change was instant)
+  acc: number;    // signed mean ramp acceleration (0 when the change was instant)
+  k: number;      // pedal-stroke pulsing of a speed-up: acceleration acc·(1 + k sin ωt)
   tEnd: number;   // end of the ramp
-  a: number;      // surge amplitude (fraction of speed)
-  f: number;      // surge frequency (Hz)
+  a: number;      // cruising surge amplitude (fraction of speed)
+  f: number;      // surge frequency (Hz): two pedal strokes per crank turn
   R: number;      // rolling radius
 }
 
@@ -24,42 +25,68 @@ interface MotionSeg {
  * Wheel kinematics. Angle is measured in the direction of rotation (clockwise seen from the
  * drive side). Changing speed ramps at the requested acceleration (braking, speeding up);
  * every change starts a new segment so distance, angle and the history the hall-sensor model
- * looks back over all stay continuous.
+ * looks back over all stay continuous. Speeding up pulses with each pedal stroke.
  */
 export class WheelMotion {
-  private segs: MotionSeg[] = [{ tA: 0, sA: 0, phiA: 0, v0: 0, vT: 0, acc: 0, tEnd: 0, a: 0, f: 1, R: 0.34 }];
+  private segs: MotionSeg[] = [{ tA: 0, sA: 0, phiA: 0, v0: 0, vT: 0, acc: 0, k: 0, tEnd: 0, a: 0, f: 1, R: 0.34 }];
 
-  /** rampAcc: |acceleration| used to reach the new speed (m/s²); 0 jumps instantly. */
-  configure(v: number, R: number, a: number, f: number, tNow: number, rampAcc = 0) {
+  /**
+   * rampAcc: mean |acceleration| used to reach the new speed (m/s²); 0 jumps instantly.
+   * rampSurge: how strongly pedal strokes pulse the acceleration when speeding up (0..0.9).
+   */
+  configure(v: number, R: number, a: number, f: number, tNow: number, rampAcc = 0, rampSurge = 0) {
     const cur = this.segs[this.segs.length - 1];
-    if (v === cur.vT && R === cur.R && a === cur.a && f === cur.f) return;
+    if (v === cur.vT && R === cur.R && a === cur.a && f === cur.f && rampAcc === this.lastRamp) return;
+    this.lastRamp = rampAcc;
     const v0 = rampAcc > 0 ? this.baseSpeed(cur, tNow) : v;
     const acc = rampAcc > 0 && v !== v0 ? Math.sign(v - v0) * rampAcc : 0;
-    this.segs.push({
+    const g: MotionSeg = {
       tA: tNow, sA: this.dist(tNow), phiA: this.phi(tNow), v0, vT: v, acc,
-      tEnd: acc ? tNow + (v - v0) / acc : tNow, a, f, R,
-    });
+      k: acc > 0 ? Math.min(0.9, Math.max(0, rampSurge)) : 0, tEnd: tNow, a, f, R,
+    };
+    if (acc) {
+      // Speed is monotonic through the ramp, so find where it reaches the target.
+      let lo = tNow, hi = tNow + (v - v0) / (acc * (1 - g.k)) + 1e-6;
+      for (let i = 0; i < 60; i++) {
+        const mid = 0.5 * (lo + hi);
+        if ((this.rampSpeed(g, mid) - v) * Math.sign(acc) < 0) lo = mid; else hi = mid;
+      }
+      g.tEnd = hi;
+    }
+    this.segs.push(g);
     // Keep enough history for the hall model's look-back.
     while (this.segs.length > 2 && this.segs[1].tA < tNow - 30) this.segs.shift();
   }
+  private lastRamp = 0;
 
   private seg(t: number): MotionSeg {
     for (let i = this.segs.length - 1; i > 0; i--) if (t >= this.segs[i].tA) return this.segs[i];
     return this.segs[0];
   }
 
+  private rampSpeed(g: MotionSeg, t: number): number {
+    const dt = t - g.tA, w = TAU * g.f;
+    return g.v0 + g.acc * dt - (g.k ? ((g.acc * g.k) / w) * (Math.cos(w * t) - Math.cos(w * g.tA)) : 0);
+  }
+
+  private rampDist(g: MotionSeg, t: number): number {
+    const dt = t - g.tA, w = TAU * g.f;
+    let s = g.v0 * dt + 0.5 * g.acc * dt * dt;
+    if (g.k) s -= ((g.acc * g.k) / w) * ((Math.sin(w * t) - Math.sin(w * g.tA)) / w - Math.cos(w * g.tA) * dt);
+    return s;
+  }
+
   private baseSpeed(g: MotionSeg, t: number): number {
-    return t < g.tEnd ? g.v0 + g.acc * (Math.max(t, g.tA) - g.tA) : g.vT;
+    return t < g.tEnd ? this.rampSpeed(g, Math.max(t, g.tA)) : g.vT;
   }
 
   /** Distance travelled since the segment's anchor. */
   private travelled(g: MotionSeg, t: number): number {
     if (t <= g.tA) return g.v0 * (t - g.tA);
-    if (t <= g.tEnd) { const dt = t - g.tA; return g.v0 * dt + 0.5 * g.acc * dt * dt; }
-    const ramp = g.tEnd - g.tA;
+    if (t <= g.tEnd) return this.rampDist(g, t);
     const w = TAU * g.f;
     const surge = g.a ? (g.a / w) * (Math.cos(w * t) - Math.cos(w * g.tEnd)) : 0;
-    return g.v0 * ramp + 0.5 * g.acc * ramp * ramp + g.vT * (t - g.tEnd - surge);
+    return this.rampDist(g, g.tEnd) + g.vT * (t - g.tEnd - surge);
   }
 
   dist(t: number): number { const g = this.seg(t); return g.sA + this.travelled(g, t); }
@@ -71,8 +98,8 @@ export class WheelMotion {
   /** True road acceleration (m/s²), forward positive. */
   accel(t: number): number {
     const g = this.seg(t);
-    if (t >= g.tA && t < g.tEnd) return g.acc;
     const w = TAU * g.f;
+    if (t >= g.tA && t < g.tEnd) return g.acc * (1 + g.k * Math.sin(w * t));
     return t < g.tA ? 0 : g.vT * g.a * w * Math.cos(w * t);
   }
   get radius() { return this.segs[this.segs.length - 1].R; }

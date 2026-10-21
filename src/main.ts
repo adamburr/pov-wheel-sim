@@ -172,7 +172,14 @@ rideSlider.addEventListener('input', () => {
   }
   refreshGui();
 });
-const PHASE_TEXT = { go: '🚦 pulling away', cruise: '🚦 cruising', brake: '🚦 braking for a light', stopped: '🚦 waiting at a light' };
+function cityText(): string {
+  switch (city.phase) {
+    case 'go': return `🚦 pulling away at ${city.rampG.toFixed(2)} g`;
+    case 'cruise': return '🚦 cruising';
+    case 'brake': return `🚦 red light ${city.lightM.toFixed(0)} m ahead · braking ${city.rampG.toFixed(2)} g`;
+    default: return '🚦 waiting at a light';
+  }
+}
 function updateRidePanel(actualMps: number) {
   const mph = p.speedUnit === 'mph';
   rideSpeed.textContent = (actualMps / (mph ? 0.44704 : 1 / 3.6)).toFixed(1);
@@ -181,7 +188,7 @@ function updateRidePanel(actualMps: number) {
   if (document.activeElement !== rideSlider) rideSlider.value = String(p.cityMode ? p.citySpeed : p.speed);
   rideCity.checked = p.cityMode;
   const target = p.cityMode ? p.citySpeed : p.speed;
-  rideStatus.textContent = p.cityMode ? `${PHASE_TEXT[city.phase]} · cruise ${target.toFixed(1)}` : p.braking ? 'braking' : `target ${target.toFixed(1)}`;
+  rideStatus.textContent = p.cityMode ? cityText() : p.braking ? 'braking' : `target ${target.toFixed(1)}`;
 }
 const gui = buildGui(p, hooks);
 // Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
@@ -255,8 +262,8 @@ function frame(now: number) {
 
   const d = derive(p);
   if (p.cityMode && city.update(simTime, p)) refreshGui();
-  const rampG = p.braking ? p.brakeG : p.speedRampG;
-  motion.configure(speedMps(p), d.tireRadius, p.wobblePct / 100, (p.cadenceRpm / 60) * 2, simTime, rampG * 9.81);
+  const rampG = p.cityMode ? city.rampG : p.braking ? p.brakeG : p.speedRampG;
+  motion.configure(speedMps(p), d.tireRadius, p.wobblePct / 100, (p.cadenceRpm / 60) * 2, simTime, rampG * 9.81, p.accelSurgePct / 100);
 
   // Content: live water frames, or the converted image/animation.
   let anim = animSpecFor(p, buffer?.frames ?? 1);

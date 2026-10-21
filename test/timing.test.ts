@@ -214,6 +214,35 @@ describe('speed ramps', () => {
   });
 });
 
+describe('pedal surge while speeding up', () => {
+  it('pulses the acceleration but keeps speed rising to the target', () => {
+    const m = new WheelMotion();
+    const R = 0.339, f = (80 / 60) * 2, acc = 0.3 * 9.81, k = 0.6;
+    m.configure(0, R, 0, f, 0);
+    m.configure(5.4, R, 0, f, 10, acc, k);
+    let lastV = 0, minA = Infinity, maxA = -Infinity, tEnd = 0;
+    for (let t = 10; t < 14; t += 0.001) {
+      const v = m.speed(t);
+      expect(v).toBeGreaterThanOrEqual(lastV - 1e-9);
+      lastV = v;
+      if (v < 5.4 - 1e-6) { minA = Math.min(minA, m.accel(t)); maxA = Math.max(maxA, m.accel(t)); tEnd = t; }
+    }
+    expect(m.speed(14)).toBeCloseTo(5.4, 9);
+    expect(minA).toBeCloseTo(acc * (1 - k), 1);
+    expect(maxA).toBeCloseTo(acc * (1 + k), 1);
+    expect(tEnd - 10).toBeCloseTo(5.4 / acc, 0); // pulses average out
+    // Distance stays continuous across the end of the ramp.
+    expect(m.dist(tEnd + 0.002) - m.dist(tEnd)).toBeCloseTo(5.4 * 0.002, 3);
+  });
+
+  it('does not pulse when braking', () => {
+    const m = new WheelMotion();
+    m.configure(5.4, 0.339, 0, 2.67, 0);
+    m.configure(0, 0.339, 0, 2.67, 10, 2, 0.6);
+    for (let t = 10; t < 12.6; t += 0.05) expect(m.accel(t)).toBeCloseTo(-2, 9);
+  });
+});
+
 describe('magnet acceleration estimate', () => {
   it('converges on the braking rate about a revolution late', () => {
     const p = { ...defaultParams(), hallPollMs: 0, debounceMs: 20 };

@@ -67,9 +67,9 @@ In banner mode the frames advance as the bike travels, so the road becomes a fli
 Pick **💧 show water** in the Water folder, or *Water (fluid sim)* as the test pattern, to fill the bottom of the disc with simulated water. Use the speed panel at the bottom of the screen to ride:
 - Drag the slider to change speed.
 - **🛑 Brake** stops the bike; **▶ Ride** sets off again.
-- **🚦 City stop-and-go** rides automatically: it pulls away, cruises for 4–12 s, brakes for a light, and waits 2–6 s.
+- **🚦 City stop-and-go** rides automatically: it pulls away, cruises for 4–12 s, brakes for a light, and waits 2–6 s. Each light turns red at a random distance ahead (3–40 m), and the rider brakes just hard enough to stop there, so some stops are sharp and others a slow roll-down. Each pull-away varies too.
 
-The water surges against each speed change and sloshes back and forth afterwards. It's one body of water seen from both sides: from the non-drive side, braking pushes it to the viewer's left. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
+Speeding up pulses with every pedal stroke (*pedal surge speeding up*, default ±60% of the acceleration). The water surges against each speed change and sloshes back and forth afterwards. It's one body of water seen from both sides: from the non-drive side, braking pushes it to the viewer's left. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
 
 *Slosh gain* (default 2×) multiplies the sensed acceleration. A real firmware might do the same so the motion still reads at POV refresh rates; set it to 1 for strict physics.
 
@@ -92,7 +92,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 |---|---|
 | Wheel | Size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), tire width, rim depth, spokes |
 | Strips & LEDs | Strip count, LED/m, package size, diffuser, start radius, double-sided, back-strip data (independent by default, so images read correctly from both sides; *same* mirrors the non-drive side like the Adafruit wiring), radial stagger |
-| Ride | Large speed panel (slider, live readout, brake / ride, city stop-and-go), mph or km/h, pedal-surge wobble, cadence, speed-change and braking rates, city cruise speed |
+| Ride | Large speed panel (slider, live readout, brake / ride, city stop-and-go), mph or km/h, pedal surge cruising and speeding up, cadence, speed-change and braking rates, city cruise speed |
 | Electronics | Chip preset (ATmega328P → Teensy 4.x, RP2350 default), LED type (APA102, SK9822, HD107S, WS2812B, SK6812), clock, parallel lanes, overhead, PWM, global brightness |
 | Firmware | C/Arduino hall-sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked; columns/rev, lines/s floor, hall poll, debounce |
 | Image | Wheel-locked or banner (world-locked) display, load/drop/paste an image, animated GIF/WebP/APNG, or video, or pick a test pattern (some animated), polar (picture) or Adafruit columns-as-angles mapping, gamma, bit depth, inner-LED dimming |

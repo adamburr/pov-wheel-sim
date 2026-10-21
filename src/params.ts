@@ -119,6 +119,7 @@ export function defaultParams() {
     wobblePct: 0,             // pedal-stroke speed surge amplitude
     cadenceRpm: 80,           // two surges per crank revolution
     speedRampG: 0.3,          // how quickly speed changes reach the target (0 = instantly)
+    accelSurgePct: 60,        // pedal strokes pulse the acceleration when speeding up
     brakeG: 0.5,
     braking: false,           // set by the Brake button; braking uses brakeG
     resumeSpeed: 10,
