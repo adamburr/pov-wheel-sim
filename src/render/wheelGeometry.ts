@@ -119,15 +119,13 @@ export class WheelModel {
     const rotGeo = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)));
     this.rotating = new THREE.InstancedMesh(rotGeo, this.material, MAX_COPIES);
 
-    // Fork and hall sensor: they translate with the bike but do not spin.
+    // Fork: it translates with the bike but does not spin. The hall magnet sits hidden behind it
+    // and the electronics behind the spokes, so neither is drawn.
     const forkParts: THREE.BufferGeometry[] = [];
     for (const z of [-0.055, 0.055]) {
       forkParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(-0.05, d.tireRadius + 0.08, z * 0.8), 0.008), 0x3a5a8a));
     }
     forkParts.push(colored(rod(new THREE.Vector3(-0.05, d.tireRadius + 0.08, -0.05), new THREE.Vector3(-0.05, d.tireRadius + 0.08, 0.05), 0.012), 0x3a5a8a));
-    const sensor = new THREE.BoxGeometry(0.015, 0.02, 0.01);
-    sensor.translate(0.012, rimInner * 0.25, 0.05);
-    forkParts.push(colored(sensor, 0x2a2a2a));
     const forkGeo = mergeGeometries(forkParts.map((g) => (g.index ? g.toNonIndexed() : g)));
     this.fixed = new THREE.InstancedMesh(forkGeo, this.forkMaterial, MAX_COPIES);
     this.group.add(this.rotating, this.fixed);
