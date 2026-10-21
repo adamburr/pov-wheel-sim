@@ -8,16 +8,13 @@
       :root { color-scheme: dark; --panel: rgba(12, 14, 20, 0.82); --text: #d8dde6; --muted: #8b93a3; --warn: #ffb547; }
       html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; font: 12px/1.45 ui-sans-serif, system-ui, sans-serif; color: var(--text); }
       #app { position: fixed; inset: 0; }
-      #stats { position: fixed; left: 12px; top: 12px; width: 390px; font-size: 14px; max-height: calc(100% - 24px); overflow: auto; background: var(--panel); border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(6px); }
-      #stats h1 { font-size: 17px; margin: 0 0 8px; font-weight: 600; }
+      /* Build stats table inside the settings menu's "Build stats" folder. */
+      #stats { padding: 4px var(--padding) 10px; font-size: 13px; line-height: 1.4; color: var(--text); }
       #stats table { border-collapse: collapse; width: 100%; }
       #stats td { padding: 2px 0; vertical-align: top; }
       #stats td:first-child { color: var(--muted); white-space: nowrap; padding-right: 10px; }
       #stats ul { margin: 8px 0 0; padding-left: 16px; color: var(--warn); }
       #stats li { margin-bottom: 4px; }
-      #stats.collapsed table, #stats.collapsed ul { display: none; }
-      #stats.collapsed { width: auto; }
-      #stats h1 { cursor: pointer; user-select: none; }
       #buffer { position: fixed; left: 12px; bottom: 150px; background: var(--panel); border-radius: 8px; padding: 8px; display: none; }
       #buffer canvas { display: block; image-rendering: pixelated; width: 330px; height: 140px; }
       #buffer div { color: var(--muted); margin-bottom: 4px; }
@@ -38,14 +35,10 @@
       body .lil-gui.root { --title-height: 36px; }
       body .lil-gui.root > .title { font-size: 17px; }
       @media (pointer: coarse) { body .lil-gui { --input-font-size: 16px; } }
-      /* Leave room for the 360 px settings menu on the right when the window is narrow. */
-      @media (min-width: 701px) and (max-width: 800px) { #stats:not(.collapsed) { width: calc(100vw - 420px); } }
-      @media (max-width: 700px) { #stats { width: calc(100% - 48px); max-height: 35%; } }
     </style>
   </head>
   <body>
     <div id="app"></div>
-    <div id="stats"></div>
     <div id="buffer"><div>Firmware column buffer (x = column, y = strip/LED)</div><canvas></canvas></div>
     <div id="ride">
       <div class="readout"><span id="ride-speed">0.0</span><span id="ride-unit">mph</span><span id="ride-status"></span></div>

@@ -91,7 +91,7 @@ A magnet-only build can't sense bumps, so there are no bump splashes.
 
 The firmware senses braking from the magnet alone: the change in revolution time between the last two passes. The estimate arrives about a revolution late. Hard braking also rotates the whole picture until the next pass, because the firmware assumes the wheel kept its last speed. *Ideal* sync shows the best case, with no lag or angle error. A 6-axis IMU at the axle would close most of that gap.
 
-The stats panel shows:
+The **📊 Build stats** section of the settings menu shows:
 - the estimated sensed vs true acceleration
 - the simulation's MFLOP/s as a share of one core on the chosen chip (about 33% of an RP2350 core at the defaults)
 - firmware RAM for the lookup table and simulation state
@@ -116,7 +116,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 | Animation | Timed or revolution-synced frame advance, playback rate (×, kept across clips), source fps, revolutions per frame, import frame limit, video sample rate |
 | Camera | Chase or ride-by view, drive or non-drive side, shutter speed or human-eye persistence, auto exposure, EV, time scale |
 
-The stats panel reports rpm, column timing, achievable resolution, refresh rate, RAM use, current draw, and battery life, with warnings for common pitfalls.
+The **📊 Build stats** section at the top of the **⚙️ Settings & stats** menu reports rpm, column timing, achievable resolution, refresh rate, RAM use, current draw, and battery life, with warnings for common pitfalls.
 
 LED PWM rates vary between datasheets and clone parts, so every preset value can be edited.
 

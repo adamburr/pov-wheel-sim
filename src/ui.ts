@@ -24,9 +24,13 @@ function applyElectronics(p: Params) {
   p.gbPwmHz = led.gbPwmHz;
 }
 
-export function buildGui(p: Params, hooks: UiHooks): GUI {
-  const gui = new GUI({ title: '⚙️ Settings', width: 360 });
+export function buildGui(p: Params, hooks: UiHooks): { gui: GUI; stats: GUI } {
+  const gui = new GUI({ title: '⚙️ Settings & stats', width: 360 });
   const refresh = () => gui.controllersRecursive().forEach((c) => c.updateDisplay());
+
+  // Build stats first: main.ts fills this folder with a live table.
+  const stats = gui.addFolder('📊 Build stats');
+  stats.close();
 
   const wheel = gui.addFolder('Wheel');
   wheel.add(p, 'wheelPreset', Object.keys(WHEELS)).name('size').onChange((k: string) => {
@@ -196,5 +200,5 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
 
   // Start collapsed so the wheel has the screen; click the title to open the settings.
   gui.close();
-  return gui;
+  return { gui, stats };
 }

@@ -191,7 +191,7 @@ function updateRidePanel(actualMps: number) {
   const target = p.cityMode ? p.citySpeed : p.speed;
   rideStatus.textContent = p.cityMode ? cityText() : p.braking ? 'braking' : `target ${target.toFixed(1)}`;
 }
-const gui = buildGui(p, hooks);
+const { gui, stats: statsFolder } = buildGui(p, hooks);
 // Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
 Object.assign(window, { povSim: { p, gui, hooks, camera, controls } });
 
@@ -212,15 +212,15 @@ window.addEventListener('paste', (e) => {
 });
 
 // ---- Stats panel ----
-const statsEl = document.getElementById('stats')!;
-let statsCollapsed = true; // start closed; click the heading to open
-statsEl.classList.toggle('collapsed', statsCollapsed);
-statsEl.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement).tagName === 'H1') { statsCollapsed = !statsCollapsed; statsEl.classList.toggle('collapsed', statsCollapsed); }
-});
+// The live stats table lives in the settings menu's "Build stats" folder; it only redraws
+// while that folder is open.
+const statsEl = document.createElement('div');
+statsEl.id = 'stats';
+statsFolder.$children.appendChild(statsEl);
+statsFolder.onOpenClose(() => { lastStats = 0; });
 let lastStats = 0;
 function updateStats(d: Derived, now: number) {
-  if (now - lastStats < 300) return;
+  if (gui._closed || statsFolder._closed || now - lastStats < 300) return;
   lastStats = now;
   const w = isWater() && water.sim ? water : undefined;
   const bannerMode = p.displayMode === 'banner' && banner && !w;
@@ -233,7 +233,7 @@ function updateStats(d: Derived, now: number) {
     } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const lines = [{ label: 'Build', value: `${p.chip} · ${p.ledType}` }, ...s.lines];
-  statsEl.innerHTML = `<h1>${statsCollapsed ? '▸' : '▾'} 📊 Build stats</h1><table>${
+  statsEl.innerHTML = `<table>${
     lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
   }</table>${s.warnings.length ? `<ul>${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`;
 }
