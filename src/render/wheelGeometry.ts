@@ -130,15 +130,12 @@ export class WheelModel {
     const onAxis = fwd.clone().multiplyScalar(-offset);                // axis point nearest the axle
     const along = -onAxis.dot(up) + Math.sqrt(onAxis.dot(up) ** 2 - onAxis.lengthSq() + axleToCrown ** 2);
     const crown = onAxis.clone().addScaledVector(up, along);
-    // Crown: a solid block square to the steering axis, spanning both legs, with its underside at
-    // the axle-to-crown point. The legs run up into it so the joint is closed from every angle.
-    const crownH = 0.028, crownW = 0.04, crownD = 0.12;
-    const crownBox = new THREE.BoxGeometry(crownW, crownH, crownD);
-    crownBox.rotateZ(Math.PI / 2 - head);
-    const crownMid = crown.clone().addScaledVector(up, crownH / 2);
-    crownBox.translate(crownMid.x, crownMid.y, 0);
-    forkParts.push(colored(crownBox, 0x3a5a8a));
-    const legTop = crown.clone().addScaledVector(up, crownH * 0.75);
+    // Crown: a capped tube across the top of the legs, its underside at the axle-to-crown point.
+    // The legs end on its axis, inside the tube, so the joint is closed from every angle.
+    const crownR = 0.01;
+    const crownAxis = crown.clone().addScaledVector(up, crownR);
+    forkParts.push(colored(rod(new THREE.Vector3(crownAxis.x, crownAxis.y, -0.054), new THREE.Vector3(crownAxis.x, crownAxis.y, 0.054), crownR, 16, true), 0x3a5a8a));
+    const legTop = crownAxis;
     for (const z of [-0.055, 0.055]) {
       forkParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(legTop.x, legTop.y, z * 0.8), 0.008, 12, true), 0x3a5a8a));
     }
