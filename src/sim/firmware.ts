@@ -102,6 +102,11 @@ export class WheelMotion {
     if (t >= g.tA && t < g.tEnd) return g.acc * (1 + g.k * Math.sin(w * t));
     return t < g.tA ? 0 : g.vT * g.a * w * Math.cos(w * t);
   }
+  /** Mean acceleration of the current ramp (m/s²), without the pedal-stroke pulses; 0 when holding speed. */
+  rampAccel(t: number): number {
+    const g = this.seg(t);
+    return t >= g.tA && t < g.tEnd ? g.acc : 0;
+  }
   get radius() { return this.segs[this.segs.length - 1].R; }
 
   /** Smallest t in [lo, hi] with g(t) >= target, g monotonic non-decreasing. */

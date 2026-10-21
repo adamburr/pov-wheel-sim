@@ -5,6 +5,7 @@ import { derive, type Derived } from './sim/timing';
 import { animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
 import { WaterSource } from './image/waterSource';
 import { CityRide } from './sim/city';
+import { pedalSurge, riderPower } from './sim/rider';
 import { computeStats, exposureSeconds } from './sim/stats';
 import { type Animation, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
 import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } from './image/polarize';
@@ -233,7 +234,9 @@ function updateStats(d: Derived, now: number) {
       aEstimate: w.aEstimate, aTrue: w.aTrue, wallSpeed: w.wallSpeed,
     } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const v = motion.speed(simTime);
   const lines = [{ label: 'Build', value: `${p.chip} · ${p.ledType}` }, ...s.lines];
+  lines.splice(2, 0, { label: 'Rider power', value: `≈ ${Math.round(riderPower(v, motion.rampAccel(simTime)))} W` });
   statsEl.innerHTML = `<table>${
     lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
   }</table>${s.warnings.length ? `<ul>${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`;
@@ -274,7 +277,11 @@ function frame(now: number) {
   const d = derive(p);
   if (p.cityMode && city.update(simTime, p)) refreshGui();
   const rampG = p.cityMode ? city.rampG : p.braking ? p.brakeG : p.speedRampG;
-  motion.configure(speedMps(p), d.tireRadius, p.wobblePct / 100, (p.cadenceRpm / 60) * 2, simTime, rampG * 9.81, p.accelSurgePct / 100);
+  // One pedal-surge setting: each stroke pulses the rider's push, which comes from the estimated
+  // force needed (accelerating plus air drag and rolling resistance).
+  const strokeHz = (p.cadenceRpm / 60) * 2, vTarget = speedMps(p);
+  const surge = pedalSurge(p.pedalSurgePct / 100, motion.speed(simTime), vTarget, rampG * 9.81, 2 * Math.PI * strokeHz);
+  motion.configure(vTarget, d.tireRadius, surge.cruise, strokeHz, simTime, rampG * 9.81, surge.ramp);
 
   // Content: live water frames, or the converted image/animation.
   let anim = animSpecFor(p, buffer?.frames ?? 1);
@@ -298,7 +305,7 @@ function frame(now: number) {
   const T = exposureSeconds(p);
   const tB = simTime, tA = simTime - T;
   const rideBy = p.view === 'ride-by';
-  const maxAngle = rideBy ? Math.PI / 8 : p.wobblePct > 0 ? Math.PI / 2 : Math.PI * 2;
+  const maxAngle = rideBy ? Math.PI / 8 : p.pedalSurgePct > 0 ? Math.PI / 2 : Math.PI * 2;
   const slices = buildSlices(p, d, motion, tA, tB, maxAngle, p.displayMode === 'banner' && !anim.live ? pov.bannerTile(p) : 0, anim);
 
   const L = p.trackLengthM;
