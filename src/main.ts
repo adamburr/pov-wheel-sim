@@ -175,10 +175,10 @@ rideSlider.addEventListener('input', () => {
 });
 function cityText(): string {
   switch (city.phase) {
-    case 'go': return `🚦 pulling away at ${city.rampG.toFixed(2)} g`;
-    case 'cruise': return '🚦 cruising';
-    case 'brake': return `🚦 red light ${city.lightM.toFixed(0)} m ahead · braking ${city.rampG.toFixed(2)} g`;
-    default: return '🚦 waiting at a light';
+    case 'go': return `pulling away at ${city.rampG.toFixed(2)} g`;
+    case 'cruise': return 'cruising';
+    case 'brake': return `red light ${city.lightM.toFixed(0)} m ahead · braking ${city.rampG.toFixed(2)} g`;
+    default: return 'waiting at a light';
   }
 }
 function updateRidePanel(actualMps: number) {

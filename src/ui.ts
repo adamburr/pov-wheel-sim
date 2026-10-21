@@ -78,7 +78,7 @@ export function buildGui(p: Params, hooks: UiHooks): { gui: GUI; stats: GUI } {
   ride.add(p, 'brakeG', 0.1, 1, 0.05).name('braking (g)');
   ride.add({ brake: hooks.onBrake }, 'brake').name('🛑 brake to a stop');
   ride.add({ go: hooks.onRide }, 'go').name('▶ ride');
-  ride.add(p, 'cityMode').name('🚦 stop-and-go').onChange((on: boolean) => hooks.onCity(on));
+  ride.add(p, 'cityMode').name('stop-and-go').onChange((on: boolean) => hooks.onCity(on));
   ride.add(p, 'citySpeed', 1, 40, 0.5).name('stop-and-go cruise speed');
 
   const elec = gui.addFolder('Electronics');
