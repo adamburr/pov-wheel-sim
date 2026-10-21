@@ -179,7 +179,9 @@ export function waterCellM(d: Derived, grid: number): number {
 /**
  * Water mode's firmware lookup table: for every column and LED row, the simulation grid cell
  * nearest the centre of the arc that LED paints (-1 outside the grid). Same angle convention
- * as polarize(), so the water is upright and the right way round on the drive side.
+ * as polarize(). Unlike a picture, the water is one physical body: back strips sample the same
+ * cells as the front strips beside them, so the non-drive side sees it from behind and braking
+ * still throws it forward.
  */
 export function waterLut(p: Params, d: Derived, grid: number): Int32Array {
   const C = p.columnsPerRev, n = d.ledsPerStrip, rows = rowCount(p, d);
@@ -194,7 +196,7 @@ export function waterLut(p: Params, d: Derived, grid: number): Int32Array {
         const r = ledRadius(p, d, s, k);
         for (let c = 0; c < C; c++) {
           const th = -((c + 0.5) * ((Math.PI * 2) / C) + rot);
-          const x = (back ? -1 : 1) * r * Math.cos(th), y = r * Math.sin(th);
+          const x = r * Math.cos(th), y = r * Math.sin(th);
           const i = Math.floor(grid / 2 + x / cellM), j = Math.floor(grid / 2 + y / cellM);
           if (i >= 0 && j >= 0 && i < grid && j < grid) lut[row * C + c] = j * grid + i;
         }

@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, MPH } from '../src/params';
 import { clockedFrameBits, derive, squareIntegral } from '../src/sim/timing';
 import { buildSlices, hallSegments, magnetAccel, WheelMotion } from '../src/sim/firmware';
-import { bannerBitmap, bannerTileM, stackFrames, waterLut } from '../src/image/polarize';
+import { bannerBitmap, bannerTileM, polarize, stackFrames, waterLut } from '../src/image/polarize';
 
 describe('LED bus timing', () => {
   it('matches the Adafruit guide: 36 LEDs per lane at ~4 MHz is ~300 µs per column', () => {
     expect(clockedFrameBits(36)).toBe(1216);
-    const p = { ...defaultParams(), autoLength: false, stripLengthMm: 250, clockMHz: 4, lanes: 3, overheadUs: 0 };
+    // The guide wires each back strip in parallel with its front strip (shared data).
+    const p = { ...defaultParams(), backData: 'same' as const, autoLength: false, stripLengthMm: 250, clockMHz: 4, lanes: 3, overheadUs: 0 };
     const d = derive(p);
     expect(d.ledsPerStrip).toBe(36);
     expect(d.ledsPerLane).toBe(36);
@@ -15,8 +16,15 @@ describe('LED bus timing', () => {
   });
 
   it('chains strips when there are fewer lanes than strips', () => {
-    const p = { ...defaultParams(), autoLength: false, stripLengthMm: 250, lanes: 1 };
+    const p = { ...defaultParams(), backData: 'same' as const, autoLength: false, stripLengthMm: 250, lanes: 1 };
     expect(derive(p).ledsPerLane).toBe(3 * 36);
+  });
+
+  it('sends each side its own data by default, doubling the chain', () => {
+    const p = { ...defaultParams(), autoLength: false, stripLengthMm: 250, lanes: 3 };
+    expect(p.backData).toBe('independent');
+    expect(derive(p).stripUnits).toBe(6);
+    expect(derive(p).ledsPerLane).toBe(2 * 36);
   });
 
   it('puts the 400 lines/s floor at ~167 rpm for 144 columns', () => {
@@ -249,5 +257,29 @@ describe('water frames and lookup table', () => {
     expect(Math.floor(down / grid)).toBeLessThan(2);
     expect(Math.floor(up / grid)).toBeGreaterThan(grid - 3);
     expect([...lut].every((c) => c >= 0)).toBe(true);
+  });
+});
+
+describe('non-drive side', () => {
+  const p = defaultParams();
+  const d = derive(p);
+  const front = (row: number, C: number, data: ArrayLike<number>, c: number) => data[(row * C + c) * 4];
+
+  it('mirrors pictures for the back strips so they read correctly from that side', () => {
+    // Left half bright, right half dark: mirrored, the back strips see the opposite halves.
+    const w = 64, h = 64, px = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = (y * w + x) * 4; px[o] = x < w / 2 ? 255 : 0; px[o + 3] = 255; }
+    const buf = polarize({ width: w, height: h, data: px }, p, d);
+    const C = buf.columns, outer = d.ledsPerStrip - 1, backRow = p.stripCount * d.ledsPerStrip + outer;
+    let differ = 0;
+    for (let c = 0; c < C; c++) if (front(outer, C, buf.data, c) !== front(backRow, C, buf.data, c)) differ++;
+    expect(differ).toBeGreaterThan(C * 0.8);
+  });
+
+  it('shows the same physical water on both sides', () => {
+    const C = p.columnsPerRev, lut = waterLut(p, d, 24), half = p.stripCount * d.ledsPerStrip;
+    for (let row = 0; row < half; row++) for (let c = 0; c < C; c++) {
+      expect(lut[(half + row) * C + c]).toBe(lut[row * C + c]);
+    }
   });
 });

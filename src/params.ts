@@ -110,7 +110,7 @@ export function defaultParams() {
     autoLength: true,
     stripLengthMm: 250,
     doubleSided: true,
-    backData: 'same' as 'same' | 'independent',
+    backData: 'independent' as 'same' | 'independent', // independent: each side has its own strips and data
     radialStagger: false,
 
     // Ride
