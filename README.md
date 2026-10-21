@@ -4,27 +4,35 @@ A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel
 
 **Live demo:** https://adamburr.github.io/pov-wheel-sim/
 
-![A smiley face on a 700c wheel with 3 LED strips at 15 mph, 1/2 s exposure](docs/images/hero-smiley.jpg)
+![Water sloshing in a 700c wheel with 3 LED strips at 12 mph, 1/4 s exposure](docs/images/hero-water.jpg)
 
 ## Examples
 
-These are all renders from the simulator, starting from the defaults (700c wheel, 3 strips of 144 LED/m APA102, RP2350) at a steady 10 mph with stop-and-go off and the smiley test pattern, unless the caption says otherwise.
+These are all renders from the simulator, starting from the defaults (700c wheel, 3 strips of 144 LED/m APA102, RP2350, water pattern, 60% pedal surge) with stop-and-go off, unless the caption says otherwise.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/eye-default.jpg" alt="Human-eye view with fading sectors"><br><sub><b>Human eye</b> (default): at 10 mph each point refreshes about 6 times a second, so you see fading sectors.</sub></td>
-    <td width="50%"><img src="docs/images/shutter-1-30.jpg" alt="Three wedges at a 1/30 s shutter"><br><sub><b>1/30 s photo:</b> each of the 3 strips sweeps only 25°.</sub></td>
+    <td width="50%"><img src="docs/images/eye-default.jpg" alt="Water seen by the human eye"><br><sub><b>Human eye</b> (default view) at 12 mph: each point refreshes about 7 times a second, so the water shows in fading sectors.</sub></td>
+    <td width="50%"><img src="docs/images/water-splashy.jpg" alt="Splashy water throwing spray"><br><sub><b>Splashy fluid preset,</b> 12 mph, 1/4 s: softer particle packing throws more spray.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/ws2812-dashes.jpg" alt="Dashed arcs from WS2812 PWM"><br><sub><b>WS2812B at 400 Hz PWM</b> (close-up, 2020 LEDs, no diffuser, 20 mph, 1/30 s): the arcs break into dashes.</sub></td>
-    <td width="50%"><img src="docs/images/adafruit-floor.jpg" alt="Broken-up image below the 400 lines/s floor"><br><sub><b>Adafruit CircuitPython preset at 10 mph:</b> below its 400 lines/s floor the image squeezes, repeats and breaks up.</sub></td>
+    <td width="50%"><img src="docs/images/water-brake.jpg" alt="Water surging forward under braking"><br><sub><b>Braking from 15 mph</b> (ideal sync, 1/2 s, about 1 s after the brakes go on): the water surges forward and up the front wall.</sub></td>
+    <td width="50%"><img src="docs/images/smiley-half-second.jpg" alt="A smiley face at a 1/2 s exposure"><br><sub><b>Smiley test pattern,</b> 15 mph, 1/2 s: a full image, with a brighter hub where the inner LEDs sweep smaller circles.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/ride-by.jpg" alt="Cycloid streaks from a roadside camera"><br><sub><b>Ride-by, 1/4 s:</b> a fixed roadside camera sees the LEDs trace cycloids.</sub></td>
-    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO painted in the air in banner mode"><br><sub><b>Banner mode, 2 s:</b> the image is pinned to the world and painted as the bike rides past.</sub></td>
+    <td width="50%"><img src="docs/images/shutter-1-30.jpg" alt="Three wedges at a 1/30 s shutter"><br><sub><b>1/30 s photo</b> at 10 mph: each of the 3 strips sweeps only 25°.</sub></td>
+    <td width="50%"><img src="docs/images/wide-text-wheel.jpg" alt="HELLO between rainbow lines on the wheel"><br><sub><b>Wide text, wheel-locked,</b> 15 mph, 1/2 s: the text sits in the upper half, clear of the hub.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/banner-surge.jpg" alt="Torn banner from hall-sensor dead reckoning"><br><sub><b>Banner with 20% pedal surge and 4 ms hall polling:</b> dead-reckoning errors tear and double the text.</sub></td>
+    <td width="50%"><img src="docs/images/ws2812-dashes.jpg" alt="Dashed arcs from WS2812 PWM"><br><sub><b>WS2812B at 400 Hz PWM</b> (close-up, 2020 LEDs, no diffuser, 20 mph, 1/30 s, polar test grid): the arcs break into dashes.</sub></td>
+    <td width="50%"><img src="docs/images/adafruit-floor.jpg" alt="Broken-up image below the 400 lines/s floor"><br><sub><b>Adafruit CircuitPython preset</b> at 10 mph, 1 s, smiley: below its 400 lines/s floor the image squeezes, repeats and breaks up.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/ride-by.jpg" alt="Cycloid streaks from a roadside camera"><br><sub><b>Ride-by,</b> 10 mph, 1/4 s, smiley: a fixed roadside camera sees the LEDs trace cycloids.</sub></td>
+    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO painted in the air in banner mode"><br><sub><b>Banner mode,</b> 10 mph, 2 s: the image is pinned to the world and painted as the bike rides past.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/banner-surge.jpg" alt="Torn banner while pulling away"><br><sub><b>Banner while pulling away</b> from 4 to 16 mph, with 4 ms hall polling and no motion prediction: dead-reckoning errors from the pedal surges tear the text.</sub></td>
     <td width="50%"><img src="docs/images/banner-flipbook.jpg" alt="Bouncing ball animation as a flip-book along the road"><br><sub><b>Animated banner:</b> frames advance as the bike travels, so the road becomes a flip-book.</sub></td>
   </tr>
 </table>
