@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, MPH } from '../src/params';
 import { clockedFrameBits, derive, squareIntegral } from '../src/sim/timing';
 import { buildSlices, hallSegments, WheelMotion } from '../src/sim/firmware';
+import { bannerBitmap, bannerTileM } from '../src/image/polarize';
 
 describe('LED bus timing', () => {
   it('matches the Adafruit guide: 36 LEDs per lane at ~4 MHz is ~300 µs per column', () => {
@@ -75,5 +76,51 @@ describe('firmware model', () => {
     expect(slices[slices.length - 1].t1).toBe(10.25);
     for (let i = 1; i < slices.length; i++) expect(slices[i].t0).toBeCloseTo(slices[i - 1].t1, 12);
     for (const s of slices) expect(s.omega).toBeCloseTo((2 * Math.PI) / T, 6);
+  });
+});
+
+describe('banner mode dead reckoning', () => {
+  const d = derive(defaultParams());
+  const motion = new WheelMotion();
+  motion.configure(10 * MPH, d.tireRadius, 0, 1, 0);
+  const banner = { ...defaultParams(), displayMode: 'banner' as const };
+
+  it('has no position error with an instant sensor at constant speed', () => {
+    const q = { ...banner, hallPollMs: 0 };
+    for (const s of buildSlices(q, d, motion, 10, 10.5, Math.PI, 2)) {
+      expect(Math.abs(s.delta0)).toBeLessThan(1e-6);
+      expect(Math.abs(s.deltaRate)).toBeLessThan(1e-6);
+      expect(s.hubWorld0).toBeGreaterThanOrEqual(0);
+      expect(s.hubWorld0).toBeLessThan(2);
+    }
+  });
+
+  it('lags behind the true angle by up to one poll interval', () => {
+    const q = { ...banner, hallPollMs: 4 };
+    const w = (10 * MPH) / d.tireRadius;
+    for (const s of buildSlices(q, d, motion, 10, 10.5, Math.PI, 2)) {
+      expect(s.delta0).toBeLessThanOrEqual(1e-9);
+      expect(s.delta0).toBeGreaterThanOrEqual(-w * 0.004 - 1e-9);
+    }
+  });
+
+  it('pins the banner to the road in chase view', () => {
+    const slices = buildSlices(banner, d, motion, 10, 10.5, Math.PI, 2);
+    const a = slices[0], b = slices[1];
+    const travelled = d.tireRadius * a.omega * (b.t0 - a.t0);
+    expect((b.hubWorld0 - a.hubWorld0 - travelled + 4) % 2).toBeCloseTo(0, 6);
+  });
+});
+
+describe('banner bitmap', () => {
+  it('stores about one pixel per LED pitch, as tall as the LED reach', () => {
+    const p = defaultParams();
+    const d = derive(p);
+    const img = { width: 400, height: 100, data: new Uint8ClampedArray(400 * 100 * 4).fill(255) };
+    const b = bannerBitmap(img, p, d);
+    expect(b.height).toBe(Math.round((2 * d.rEnd) / d.pitch));
+    expect(b.width).toBe(Math.round(b.height * 4));
+    expect(b.meanDuty).toBeCloseTo(1, 6);
+    expect(bannerTileM(b, 0.5)).toBeCloseTo(b.width * b.pixelM + 0.5, 9);
   });
 });

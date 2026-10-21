@@ -95,6 +95,7 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   fw.add(p, 'hallPollMs', 0, 20, 0.5).name('hall poll (ms)');
   fw.add(p, 'debounceMs', 0, 300, 5).name('hall debounce (ms)');
   fw.add(p, 'overflow', ['wrap', 'blank']).name('after last column');
+  fw.add(p, 'predictMotion').name('banner: predict motion');
   fw.add(p, 'freeRunColsPerSec', 50, 20000, 10).name('free-run cols/s');
   fw.close();
 
@@ -106,8 +107,22 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   input.onchange = () => { if (input.files?.[0]) hooks.onImageFile(input.files[0]); input.value = ''; };
   document.body.appendChild(input);
   img.add({ load: () => input.click() }, 'load').name('📂 load image… (or drop / paste)');
+  img.add(p, 'displayMode', { 'wheel-locked': 'wheel', 'banner (world-locked)': 'banner' }).name('display mode').onChange((m: string) => {
+    if (m !== 'banner') return;
+    // The banner only shows up when the bike moves past a camera that integrates long enough.
+    p.view = 'ride-by';
+    p.exposureModel = 'camera';
+    p.shutter = '1 s';
+    refresh();
+    hooks.onViewChange();
+  });
+  img.add(p, 'tileGapM', 0, 3, 0.05).name('banner gap (m)');
   img.add(p, 'pattern', PATTERNS as unknown as string[]).name('test pattern').onChange(hooks.onPattern);
-  img.add(p, 'text').name('text').onFinishChange(() => { p.pattern = 'Text'; refresh(); hooks.onPattern(); });
+  img.add(p, 'text').name('text').onFinishChange(() => {
+    if (p.pattern !== 'Wide text') p.pattern = 'Text';
+    refresh();
+    hooks.onPattern();
+  });
   img.add(p, 'mapping', { 'polar (picture)': 'polar', 'columns (Adafruit BMP)': 'columns' }).name('mapping');
   img.add(p, 'fit', { 'disc (keep shape)': 'disc', 'annulus (fill LEDs)': 'annulus' }).name('fit');
   img.add(p, 'imageRotationDeg', -180, 180, 1).name('rotation (°)');

@@ -26,26 +26,19 @@ export function ledRadius(p: Params, d: Derived, strip: number, led: number): nu
  * 'polar' resamples a picture so it appears undistorted on the wheel. 'columns' reproduces the
  * Adafruit format, where each bitmap column is one angular slice and rows map straight to LEDs.
  */
-export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
-  const C = p.columnsPerRev;
-  const n = d.ledsPerStrip;
-  const rows = rowCount(p, d);
-  const out = new Uint8Array(C * rows * 4);
+/** Bilinear sampler returning PWM duty (after LED gamma), accumulated into acc. */
+function dutySampler(img: Pixels, gamma: number) {
   const lut = new Float32Array(256);
-  for (let i = 0; i < 256; i++) lut[i] = Math.pow(i / 255, p.gamma);
-  const levels = (1 << Math.max(1, Math.min(8, p.colorBits))) - 1;
-  const rot = (p.imageRotationDeg * Math.PI) / 180;
-  const dTheta = (Math.PI * 2) / C;
-  const fitR = d.rEnd;
-  let sum = 0;
-
-  const sample = (u: number, v: number, acc: number[]) => {
-    // Bilinear sample at normalised (u, v), converted to PWM duty.
+  for (let i = 0; i < 256; i++) lut[i] = Math.pow(i / 255, gamma);
+  return (u: number, v: number, acc: number[]) => {
+    // Bilinear sample at normalised (u, v), converted to PWM duty. Outside the image is black;
+    // taps just past the edge clamp so border pixels keep full weight.
+    if (u < 0 || v < 0 || u > 1 || v > 1) return;
     const x = u * img.width - 0.5, y = v * img.height - 0.5;
     const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
     for (let j = 0; j < 4; j++) {
-      const xi = x0 + (j & 1), yi = y0 + (j >> 1);
-      if (xi < 0 || yi < 0 || xi >= img.width || yi >= img.height) continue;
+      const xi = Math.min(img.width - 1, Math.max(0, x0 + (j & 1)));
+      const yi = Math.min(img.height - 1, Math.max(0, y0 + (j >> 1)));
       const w = ((j & 1) ? fx : 1 - fx) * ((j >> 1) ? fy : 1 - fy);
       const o = (yi * img.width + xi) * 4;
       const a = img.data[o + 3] / 255;
@@ -54,6 +47,19 @@ export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
       acc[2] += w * a * lut[img.data[o + 2]];
     }
   };
+}
+
+export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
+  const C = p.columnsPerRev;
+  const n = d.ledsPerStrip;
+  const rows = rowCount(p, d);
+  const out = new Uint8Array(C * rows * 4);
+  const sample = dutySampler(img, p.gamma);
+  const levels = (1 << Math.max(1, Math.min(8, p.colorBits))) - 1;
+  const rot = (p.imageRotationDeg * Math.PI) / 180;
+  const dTheta = (Math.PI * 2) / C;
+  const fitR = d.rEnd;
+  let sum = 0;
 
   const backs = p.doubleSided && p.backData === 'independent' ? 2 : 1;
   const acc = [0, 0, 0];
@@ -101,4 +107,49 @@ export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
     }
   }
   return { data: out, columns: C, rows, meanDuty: sum / (C * rows * 3) };
+}
+
+export interface BannerBitmap {
+  data: Uint8Array<ArrayBuffer>; // RGBA8 PWM duty, row 0 = top of the banner
+  width: number;
+  height: number;
+  pixelM: number;                // size of one bitmap pixel in metres (square, one LED pitch)
+  meanDuty: number;
+}
+
+/**
+ * Banner mode: the firmware stores a plain bitmap the height of the wheel's LED reach
+ * (rEnd above the hub to rEnd below) at about one pixel per LED pitch, and paints whatever
+ * part of it each LED is passing through.
+ */
+export function bannerBitmap(img: Pixels, p: Params, d: Derived): BannerBitmap {
+  const height = Math.max(2, Math.round((2 * d.rEnd) / d.pitch));
+  const width = Math.max(1, Math.round((height * img.width) / img.height));
+  const out = new Uint8Array(width * height * 4);
+  const sample = dutySampler(img, p.gamma);
+  const levels = (1 << Math.max(1, Math.min(8, p.colorBits))) - 1;
+  const S = 3; // area-average sub-samples per axis
+  const acc = [0, 0, 0];
+  let sum = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      acc[0] = acc[1] = acc[2] = 0;
+      for (let i = 0; i < S; i++) for (let j = 0; j < S; j++) {
+        sample((x + (i + 0.5) / S) / width, (y + (j + 0.5) / S) / height, acc);
+      }
+      const o = (y * width + x) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        const q = Math.round(Math.min(1, acc[ch] / (S * S)) * levels) / levels;
+        out[o + ch] = Math.round(q * 255);
+        sum += q;
+      }
+      out[o + 3] = 255;
+    }
+  }
+  return { data: out, width, height, pixelM: (2 * d.rEnd) / height, meanDuty: sum / (width * height * 3) };
+}
+
+/** Distance along the road between the starts of consecutive banner tiles. */
+export function bannerTileM(b: { width: number; pixelM: number }, gapM: number): number {
+  return b.width * b.pixelM + Math.max(0, gapM);
 }

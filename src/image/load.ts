@@ -12,6 +12,7 @@ function canvas(w = SIZE, h = SIZE) {
 
 /** Built-in test images, drawn on a black background like a night-time display. */
 export function makePattern(name: PatternName, text: string): HTMLCanvasElement {
+  if (name === 'Wide text') return wideText(text);
   const { c, g } = canvas();
   const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
   g.fillStyle = '#000';
@@ -113,6 +114,27 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
       break;
     }
   }
+  return c;
+}
+
+/** A 4:1 banner with a rainbow stripe, made for banner mode where the image tiles along the road. */
+function wideText(text: string): HTMLCanvasElement {
+  const { c, g } = canvas(SIZE * 4, SIZE);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, c.width, c.height);
+  const stripe = g.createLinearGradient(0, 0, c.width, 0);
+  for (let i = 0; i <= 6; i++) stripe.addColorStop(i / 6, `hsl(${i * 60}, 100%, 50%)`);
+  g.fillStyle = stripe;
+  g.fillRect(0, 0, c.width, SIZE * 0.08);
+  g.fillRect(0, SIZE * 0.92, c.width, SIZE * 0.08);
+  g.fillStyle = '#ffffff';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const label = text || ' ';
+  let size = SIZE * 0.66;
+  g.font = `900 ${size}px sans-serif`;
+  while (g.measureText(label).width > c.width * 0.92 && size > 10) { size *= 0.9; g.font = `900 ${size}px sans-serif`; }
+  g.fillText(label, c.width / 2, SIZE * 0.53);
   return c;
 }
 

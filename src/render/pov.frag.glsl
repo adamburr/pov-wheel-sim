@@ -10,7 +10,7 @@ precision highp sampler2D;
 in vec3 vLocal;
 layout(location = 0) out highp vec4 outColor;
 
-uniform sampler2D uSlices;   // 128x2: (t0, t1, phi0, omega), (m, P, enabled, hubX0)
+uniform sampler2D uSlices;   // 128x3: (t0, t1, phi0, omega), (m, P, enabled, hubX0), (delta0, deltaRate, hubWorld0, -)
 uniform int uSliceCount;
 uniform sampler2D uCols;     // columns x rows of PWM duty
 uniform int uC;
@@ -40,6 +40,13 @@ uniform int uRideBy;
 uniform float uRRoll;
 uniform float uFalloff;
 uniform vec3 uCamLocal;
+uniform int uBanner;         // 1: image pinned to the world (banner mode)
+uniform sampler2D uBannerTex;
+uniform float uBannerW;      // banner image width (m)
+uniform float uBannerTile;   // image width + gap (m)
+uniform float uBannerHalfH;  // half the banner height (m), centred on the hub
+uniform int uBannerMirror;   // independent back strips paint a mirrored banner
+uniform int uPredict;        // compute each update for its mid-display time
 
 const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
@@ -59,8 +66,26 @@ float sq(float a, float b, float duty, float period, float phase) {
   return Fb - Fa;
 }
 
+// Banner mode: what the firmware sends to an LED it believes is at angle offAng past strip 0,
+// radius rk, at time tu. Its belief is the true pose plus the dead-reckoning error delta(t).
+vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk) {
+  float dt = tu - A.x;
+  float dl = D.x + D.y * dt;
+  float th = A.z + A.w * dt + dl + offAng;      // believed clockwise angle of this strip
+  float hub = D.z + uRRoll * (A.w * dt + dl);   // believed hub position along the road
+  vec2 pos = vec2(hub + rk * cos(th), -rk * sin(th));
+  float x = mod(pos.x + 0.5 * uBannerW, uBannerTile);
+  if (x >= uBannerW) return vec3(0.0);
+  if (uBannerMirror == 1 && uSide < 0.0) x = uBannerW - x;
+  float v = (uBannerHalfH - pos.y) / (2.0 * uBannerHalfH);
+  if (v < 0.0 || v >= 1.0) return vec3(0.0);
+  ivec2 size = textureSize(uBannerTex, 0);
+  ivec2 px = clamp(ivec2(int(x / uBannerW * float(size.x)), int(v * float(size.y))), ivec2(0), size - 1);
+  return texelFetch(uBannerTex, px, 0).rgb;
+}
+
 // Light emitted by one LED over [ta, tb] within slice (A, B), split at column changes.
-vec3 emit(float ta, float tb, vec4 A, vec4 B, int s, float offAng, float latch, int row, float ph, float gph) {
+vec3 emit(float ta, float tb, vec4 A, vec4 B, vec4 D, int s, float offAng, float rk, float latch, int row, float ph, float gph) {
   bool locked = B.y < 0.0;
   float C = float(uC);
   float x0, xs;
@@ -86,11 +111,19 @@ vec3 emit(float ta, float tb, vec4 A, vec4 B, int s, float offAng, float latch, 
     if (locked) {
       col = mod(j, C);
     } else {
-      on = !(uOverflowBlank == 1 && j >= C);
+      on = uBanner == 1 || !(uOverflowBlank == 1 && j >= C);
       col = mod(j + offCol, C);
     }
     if (on) {
-      vec3 duty = texelFetch(uCols, ivec2(int(col), row), 0).rgb;
+      vec3 duty;
+      if (uBanner == 1) {
+        // Each update is computed for one moment: the send time, or (with prediction) the
+        // middle of the interval it will be on screen. Encoder-locked firmware is exact.
+        float tu = locked ? 0.5 * (t + tn) : B.x + j * B.y + (uPredict == 1 ? latch + 0.5 * B.y : 0.0);
+        duty = bannerDuty(tu, A, D, offAng, rk);
+      } else {
+        duty = texelFetch(uCols, ivec2(int(col), row), 0).rgb;
+      }
       vec3 lit = vec3(
         sq(t, tn, duty.r, uPwmPeriod, ph),
         sq(t, tn, duty.g, uPwmPeriod, ph),
@@ -122,7 +155,7 @@ StripInfo stripInfo(int s) {
 
 // Hub fixed (chase camera): the pixel's polar coordinates are constant, so the LED-relative
 // angle u(t) = phi0 + offset + omega (t - t0) - theta is linear and pass windows are exact.
-vec3 chaseSlice(vec2 P, vec4 A, vec4 B, float px, float hwT, float tanCov, int rowBase) {
+vec3 chaseSlice(vec2 P, vec4 A, vec4 B, vec4 D, float px, float hwT, float tanCov, int rowBase) {
   vec3 acc = vec3(0.0);
   float hw = uHalfW;
   float t0 = A.x, t1 = A.y, w = A.w;
@@ -148,7 +181,7 @@ vec3 chaseSlice(vec2 P, vec4 A, vec4 B, float px, float hwT, float tanCov, int r
         // Stationary wheel: a static LED.
         float d = r * (mod(u0 + PI, TAU) - PI);
         float cov = radCov * overlap(d - 0.5 * px, d + 0.5 * px, -hw, hw) / px;
-        if (cov > 0.0) acc += emit(t0, t1, A, B, s, si.offAng, latch, row, ph, gph) * weight(t0, t1) * cov;
+        if (cov > 0.0) acc += emit(t0, t1, A, B, D, s, si.offAng, rk, latch, row, ph, gph) * weight(t0, t1) * cov;
         continue;
       }
       float delta = min(hwT / max(r, 1e-4), PI);
@@ -161,7 +194,7 @@ vec3 chaseSlice(vec2 P, vec4 A, vec4 B, float px, float hwT, float tanCov, int r
         if (ub <= ua) continue;
         float ta = t0 + (ua - u0) / w;
         float tb = t0 + (ub - u0) / w;
-        acc += emit(ta, tb, A, B, s, si.offAng, latch, row, ph, gph) * weight(ta, tb) * radCov * tanCov;
+        acc += emit(ta, tb, A, B, D, s, si.offAng, rk, latch, row, ph, gph) * weight(ta, tb) * radCov * tanCov;
       }
     }
   }
@@ -171,11 +204,11 @@ vec3 chaseSlice(vec2 P, vec4 A, vec4 B, float px, float hwT, float tanCov, int r
 // Bike rolling past a fixed camera: LEDs trace cycloids. The pixel's angle seen from the moving
 // hub changes too, so u(t) gains a term qy*v/r^2; solve each pass with Newton steps and use the
 // local rate for the dwell time (LEDs near the ground move slowly and leave brighter streaks).
-vec3 rideBySlice(vec2 P, vec4 A, vec4 B, float px, float hwT, float tanCov, float rMax, int rowBase) {
+vec3 rideBySlice(vec2 P, vec4 A, vec4 B, vec4 D, float px, float hwT, float tanCov, float rMax, int rowBase) {
   vec3 acc = vec3(0.0);
   float hw = uHalfW;
   float t0 = A.x, t1 = A.y, w = A.w;
-  if (abs(w) < 1e-6) return chaseSlice(P - vec2(B.w, 0.0), A, B, px, hwT, tanCov, rowBase);
+  if (abs(w) < 1e-6) return chaseSlice(P - vec2(B.w, 0.0), A, B, D, px, hwT, tanCov, rowBase);
   float v = uRRoll * w;
   vec2 qa = P - vec2(B.w, 0.0);
   vec2 qb = P - vec2(B.w + v * (t1 - t0), 0.0);
@@ -220,7 +253,7 @@ vec3 rideBySlice(vec2 P, vec4 A, vec4 B, float px, float hwT, float tanCov, floa
         float latch = uLatchBase + uLatchPerLed * float(si.chainPos * uLeds + k);
         float ph = hash(float(row) + 0.5) * uPwmPeriod + uPwmPhase;
         float gph = hash(float(row) + 17.0) * uGbPeriod + uGbPhase;
-        acc += emit(ta, tb, A, B, s, si.offAng, latch, row, ph, gph) * weight(ta, tb) * radCov * tanCov;
+        acc += emit(ta, tb, A, B, D, s, si.offAng, rk, latch, row, ph, gph) * weight(ta, tb) * radCov * tanCov;
       }
     }
   }
@@ -252,8 +285,9 @@ void main() {
     vec4 A = texelFetch(uSlices, ivec2(i, 0), 0);
     vec4 B = texelFetch(uSlices, ivec2(i, 1), 0);
     if (B.z < 0.5) continue;
-    if (uRideBy == 1) acc += rideBySlice(P, A, B, px, hwT, tanCov, rMax, rowBase);
-    else acc += chaseSlice(P, A, B, px, hwT, tanCov, rowBase);
+    vec4 D = texelFetch(uSlices, ivec2(i, 2), 0);
+    if (uRideBy == 1) acc += rideBySlice(P, A, B, D, px, hwT, tanCov, rMax, rowBase);
+    else acc += chaseSlice(P, A, B, D, px, hwT, tanCov, rowBase);
   }
 
   float view = pow(cosv, uFalloff);

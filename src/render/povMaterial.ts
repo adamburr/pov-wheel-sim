@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import fragmentShader from './pov.frag.glsl?raw';
-import { LEDS, type Params, SHUTTERS } from '../params';
+import { LEDS, type Params, SHUTTERS, speedMps } from '../params';
 import type { Derived } from '../sim/timing';
 import { MAX_SLICES, type Slice } from '../sim/firmware';
-import type { ColumnBuffer } from '../image/polarize';
+import { type BannerBitmap, bannerTileM, type ColumnBuffer } from '../image/polarize';
 
 const vertexShader = /* glsl */ `
 out vec3 vLocal;
@@ -20,9 +20,11 @@ export const LED_Z = 0.009; // LED faces sit ~9 mm either side of the wheel's ce
  */
 export class PovDisplay {
   readonly group = new THREE.Group();
-  private sliceData = new Float32Array(MAX_SLICES * 2 * 4);
-  private sliceTex = new THREE.DataTexture(this.sliceData, MAX_SLICES, 2, THREE.RGBAFormat, THREE.FloatType);
+  private sliceData = new Float32Array(MAX_SLICES * 3 * 4);
+  private sliceTex = new THREE.DataTexture(this.sliceData, MAX_SLICES, 3, THREE.RGBAFormat, THREE.FloatType);
   private colTex: THREE.DataTexture = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  private bannerTex: THREE.DataTexture = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  private banner?: BannerBitmap;
   private shared: Record<string, THREE.IUniform>;
   private front: THREE.Mesh;
   private back: THREE.Mesh;
@@ -40,6 +42,8 @@ export class PovDisplay {
       uGbPhase: { value: 0 }, uCurrentScale: { value: 1 }, uOverflowBlank: { value: 0 },
       uT: { value: 0.25 }, uTau: { value: 0 }, uGain: { value: 1 },
       uRideBy: { value: 0 }, uRRoll: { value: 0.34 }, uFalloff: { value: 0.5 },
+      uBanner: { value: 0 }, uBannerTex: { value: this.bannerTex }, uBannerW: { value: 1 },
+      uBannerTile: { value: 1 }, uBannerHalfH: { value: 0.3 }, uBannerMirror: { value: 0 }, uPredict: { value: 1 },
     };
     const make = (side: number) => new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -69,6 +73,20 @@ export class PovDisplay {
     this.colTex.needsUpdate = true;
   }
 
+  setBanner(b: BannerBitmap) {
+    this.banner = b;
+    this.bannerTex.dispose();
+    this.bannerTex = new THREE.DataTexture(b.data, b.width, b.height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.bannerTex.minFilter = this.bannerTex.magFilter = THREE.NearestFilter;
+    this.bannerTex.needsUpdate = true;
+    this.shared.uBannerTex.value = this.bannerTex;
+  }
+
+  /** Distance between banner tiles along the road, or 0 when there is no banner yet. */
+  bannerTile(p: Params): number {
+    return this.banner ? bannerTileM(this.banner, p.tileGapM) : 0;
+  }
+
   private ensurePlane(p: Params, d: Derived) {
     const R = d.rEnd + 0.02;
     const key = `${p.view}|${R}|${p.trackLengthM}`;
@@ -88,7 +106,7 @@ export class PovDisplay {
     const n = Math.min(slices.length, MAX_SLICES);
     for (let i = 0; i < n; i++) {
       const s = slices[i];
-      const o = i * 4, o2 = (MAX_SLICES + i) * 4;
+      const o = i * 4, o2 = (MAX_SLICES + i) * 4, o3 = (2 * MAX_SLICES + i) * 4;
       this.sliceData[o] = s.t0 - tRef;
       this.sliceData[o + 1] = s.t1 - tRef;
       this.sliceData[o + 2] = s.phi0;
@@ -97,6 +115,9 @@ export class PovDisplay {
       this.sliceData[o2 + 1] = s.P;
       this.sliceData[o2 + 2] = s.enabled ? 1 : 0;
       this.sliceData[o2 + 3] = s.hubX0;
+      this.sliceData[o3] = s.delta0;
+      this.sliceData[o3 + 1] = s.deltaRate;
+      this.sliceData[o3 + 2] = s.hubWorld0;
     }
     this.sliceTex.needsUpdate = true;
     u.uSliceCount.value = n;
@@ -136,9 +157,21 @@ export class PovDisplay {
     const auto = p.autoExposure || eye;
     const strips = auto ? p.stripCount : 3;
     const shutterGain = auto ? 1 : SHUTTERS[p.shutter] * 30;
-    u.uGain.value = (0.35 / (duty * strips)) * shutterGain;
+    // A roadside camera only gets light at a given spot while the wheel is passing it, so its
+    // auto exposure also compensates for that fraction of the shutter time.
+    const exposure = eye ? p.eyeTauMs / 1000 : SHUTTERS[p.shutter];
+    const passGain = auto && p.view === 'ride-by' ? Math.max(1, (speedMps(p) * exposure) / (2 * d.rEnd)) : 1;
+    u.uGain.value = (0.35 / (duty * strips)) * shutterGain * passGain;
 
     u.uRideBy.value = p.view === 'ride-by' ? 1 : 0;
+    u.uBanner.value = p.displayMode === 'banner' && this.banner ? 1 : 0;
+    if (this.banner) {
+      u.uBannerW.value = this.banner.width * this.banner.pixelM;
+      u.uBannerTile.value = bannerTileM(this.banner, p.tileGapM);
+      u.uBannerHalfH.value = (this.banner.height * this.banner.pixelM) / 2;
+    }
+    u.uBannerMirror.value = independent ? 1 : 0;
+    u.uPredict.value = p.predictMotion ? 1 : 0;
     u.uRRoll.value = d.tireRadius;
     this.back.visible = p.doubleSided;
 

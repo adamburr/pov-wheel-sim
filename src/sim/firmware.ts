@@ -64,6 +64,10 @@ export interface Segment {
   m: number;        // time column 0 starts (or magnet angle when angle-locked)
   P: number;        // column period; < 0 means columns are locked to true wheel angle
   enabled: boolean;
+  // Dead reckoning (hall mode): the firmware believes the wheel is at angle
+  // 2π(k + (t - start)/T), i.e. k whole turns at the sync, advancing at the last measured rate.
+  T?: number;
+  k?: number;
 }
 
 /**
@@ -92,13 +96,16 @@ export function hallSegments(p: Params, d: Derived, motion: WheelMotion, tA: num
     let P = T / C;
     if (p.minLinesPerSec > 0) P = Math.min(P, 1 / p.minLinesPerSec);
     P = Math.max(P, d.columnTimeS);
-    segs.push({ start, end, m: start, P, enabled: T <= 1.5 });
+    segs.push({ start, end, m: start, P, enabled: T <= 1.5, T, k: Math.round(motion.phi(start) / TAU) });
   }
   return segs;
 }
 
 export function segmentsFor(p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number): Segment[] {
-  if (p.syncMode === 'hall') return hallSegments(p, d, motion, tA, tB);
+  // Banner mode needs a position estimate, which a free-running clock doesn't have.
+  if (p.syncMode === 'hall' || (p.syncMode === 'free' && p.displayMode === 'banner')) {
+    return hallSegments(p, d, motion, tA, tB);
+  }
   if (p.syncMode === 'ideal') {
     return [{ start: -Infinity, end: Infinity, m: 0, P: -1, enabled: motion.speed(tB) > 0.05 }];
   }
@@ -112,6 +119,9 @@ export function segmentsFor(p: Params, d: Derived, motion: WheelMotion, tA: numb
 export interface Slice {
   t0: number; t1: number; phi0: number; omega: number;
   m: number; P: number; enabled: boolean; hubX0: number;
+  delta0: number;     // firmware's angle estimate minus the true angle at t0 (rad)
+  deltaRate: number;  // d(delta)/dt within the slice
+  hubWorld0: number;  // hub position along the road at t0, in the banner's frame (m)
 }
 
 export const MAX_SLICES = 128;
@@ -121,7 +131,7 @@ export const MAX_SLICES = 128;
  * schedule, so the shader can solve LED pass times in closed form inside each slice.
  */
 export function buildSlices(
-  p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number, maxAngle: number,
+  p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number, maxAngle: number, tileM = 0,
 ): Slice[] {
   const segs = segmentsFor(p, d, motion, tA, tB);
   const cuts = new Set<number>([tA, tB]);
@@ -166,14 +176,26 @@ export function buildSlices(
       const s = motion.dist(t0) + L / 2;
       hubX0 = s - Math.floor(s / L + 1e-9) * L - L / 2;
     }
+    const omega = (motion.phi(t1) - p0) / (t1 - t0);
+    let delta0 = 0, deltaRate = 0;
+    if (seg?.T && seg.k !== undefined) {
+      delta0 = TAU * seg.k + (TAU * (t0 - seg.start)) / seg.T - p0;
+      deltaRate = TAU / seg.T - omega;
+    }
+    // Ride-by pins the banner to the visible track; chase pins it to distance travelled.
+    let hubWorld0 = hubX0;
+    if (!rideBy && tileM > 0) {
+      const s = motion.dist(t0);
+      hubWorld0 = s - Math.floor(s / tileM) * tileM;
+    }
     slices.push({
       t0, t1,
       phi0: p0 - Math.floor(p0 / TAU) * TAU,
-      omega: (motion.phi(t1) - p0) / (t1 - t0),
+      omega,
       m: seg ? seg.m : 0,
       P: seg ? seg.P : 1,
       enabled: !!seg && seg.enabled,
-      hubX0,
+      hubX0, delta0, deltaRate, hubWorld0,
     });
   }
   return slices;

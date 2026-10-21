@@ -5,7 +5,7 @@ import { derive, type Derived } from './sim/timing';
 import { buildSlices, WheelMotion } from './sim/firmware';
 import { computeStats, exposureSeconds } from './sim/stats';
 import { type ImageSource, loadImageFile, makePattern, rawImageData, squareImageData } from './image/load';
-import { type ColumnBuffer, polarize } from './image/polarize';
+import { type BannerBitmap, bannerBitmap, bannerTileM, type ColumnBuffer, polarize } from './image/polarize';
 import { PovDisplay } from './render/povMaterial';
 import { WheelModel } from './render/wheelGeometry';
 import { createPost } from './render/post';
@@ -49,6 +49,7 @@ const motion = new WheelMotion();
 let source: ImageSource = makePattern(p.pattern, p.text);
 let sourceVersion = 0;
 let buffer: ColumnBuffer | undefined;
+let banner: BannerBitmap | undefined;
 let imageKey = '';
 let rebuildTimer = 0;
 
@@ -61,6 +62,8 @@ function rebuildImage(d: Derived) {
   const px = p.mapping === 'polar' ? squareImageData(source) : rawImageData(source);
   buffer = polarize(px, p, d);
   pov.setColumns(buffer);
+  banner = bannerBitmap(rawImageData(source), p, d);
+  pov.setBanner(banner);
   lastStats = 0;
   if (p.showBuffer) drawBuffer();
 }
@@ -117,7 +120,9 @@ let lastStats = 0;
 function updateStats(d: Derived, now: number) {
   if (now - lastStats < 300) return;
   lastStats = now;
-  const s = computeStats(p, d, buffer?.meanDuty ?? 0);
+  const bannerMode = p.displayMode === 'banner' && banner;
+  const s = computeStats(p, d, (bannerMode ? banner?.meanDuty : buffer?.meanDuty) ?? 0,
+    bannerMode && banner ? { width: banner.width, height: banner.height, tileM: bannerTileM(banner, p.tileGapM) } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   statsEl.innerHTML = `<h1>${statsCollapsed ? '▸' : '▾'} POV wheel · ${esc(p.chip)} · ${esc(p.ledType)}</h1><table>${
     s.lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
@@ -162,7 +167,7 @@ function frame(now: number) {
   const tB = simTime, tA = simTime - T;
   const rideBy = p.view === 'ride-by';
   const maxAngle = rideBy ? Math.PI / 8 : p.wobblePct > 0 ? Math.PI / 2 : Math.PI * 2;
-  const slices = buildSlices(p, d, motion, tA, tB, maxAngle);
+  const slices = buildSlices(p, d, motion, tA, tB, maxAngle, p.displayMode === 'banner' ? pov.bannerTile(p) : 0);
 
   const L = p.trackLengthM;
   const hubAt = (t: number) => {

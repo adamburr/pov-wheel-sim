@@ -79,7 +79,7 @@ export const SHUTTERS: Record<string, number> = {
   '1/4 s': 1 / 4, '1/2 s': 1 / 2, '1 s': 1, '2 s': 2,
 };
 
-export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel', 'Rainbow spiral', 'Checkerboard', 'Text'] as const;
+export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel', 'Rainbow spiral', 'Checkerboard', 'Text', 'Wide text'] as const;
 export type PatternName = (typeof PATTERNS)[number];
 
 export const MPH = 0.44704; // m/s
@@ -136,9 +136,12 @@ export function defaultParams() {
     hallPollMs: fw.hallPollMs,
     debounceMs: fw.debounceMs,
     overflow: 'wrap' as 'wrap' | 'blank',
+    predictMotion: true,      // banner mode: compute each update for mid-display time, not send time
     freeRunColsPerSec: 540,
 
     // Image
+    displayMode: 'wheel' as 'wheel' | 'banner', // banner: image pinned to the world, tiled along the road
+    tileGapM: 0,
     pattern: 'Smiley' as PatternName,
     text: 'HELLO',
     mapping: 'polar' as 'polar' | 'columns',

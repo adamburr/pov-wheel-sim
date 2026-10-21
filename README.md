@@ -27,6 +27,12 @@ Each frame is one simulated **exposure window**. A fragment shader on the LED pl
 - cycloid streaks when a roadside camera watches the bike ride by
 - human-eye mode with exponential persistence instead of a box shutter
 
+### Banner mode
+
+Set **Image → display mode** to *banner (world-locked)* and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. Seen from the roadside with a long exposure, the bike paints the banner as it rides by.
+
+Position comes from hall-sensor dead reckoning: whole turns at each magnet pass, plus the time since the pass divided by the last revolution period. Polling delay and pedal surges show up as a torn or doubled banner. *Predict motion* computes each update for the middle of the time it's displayed instead of when it's sent. The *ideal* sync mode shows the best case. LEDs near the ground move slowly relative to the road and leave bright cusps, while the top edge streaks past at about twice road speed. The bitmap is stored at about one pixel per LED pitch, as tall as the LEDs reach.
+
 ### Parameters
 
 | Group | Highlights |
@@ -36,7 +42,7 @@ Each frame is one simulated **exposure window**. A fragment shader on the LED pl
 | Ride | Speed (mph or km/h), pedal-surge wobble, cadence |
 | Electronics | Chip preset (ATmega328P → Teensy 4.x, RP2350 default), LED type (APA102, SK9822, HD107S, WS2812B, SK6812), clock, parallel lanes, overhead, PWM, global brightness |
 | Firmware | C/Arduino hall-sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked; columns/rev, lines/s floor, hall poll, debounce |
-| Image | Load, drop, or paste any image, or pick a test pattern. Polar (picture) or Adafruit columns-as-angles mapping, gamma, bit depth, inner-LED dimming |
+| Image | Wheel-locked or banner (world-locked) display, load/drop/paste any image or pick a test pattern, polar (picture) or Adafruit columns-as-angles mapping, gamma, bit depth, inner-LED dimming |
 | Camera | Chase or ride-by view, drive or non-drive side, shutter speed or human-eye persistence, auto exposure, EV, time scale |
 
 The stats panel reports rpm, column timing, achievable resolution, refresh rate, RAM use, current draw, and battery life, with warnings for common pitfalls.
