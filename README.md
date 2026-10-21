@@ -8,7 +8,7 @@ A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel
 
 ## Examples
 
-These are all renders from the simulator, starting from the defaults (700c wheel, 3 strips of 144 LED/m APA102, RP2350) at a steady 10 mph with stop-and-go off, unless the caption says otherwise.
+These are all renders from the simulator, starting from the defaults (700c wheel, 3 strips of 144 LED/m APA102, RP2350) at a steady 10 mph with stop-and-go off and the smiley test pattern, unless the caption says otherwise.
 
 <table>
   <tr>
@@ -64,7 +64,7 @@ In banner mode the frames advance as the bike travels, so the road becomes a fli
 
 ### Water mode
 
-Pick **💧 show water** in the Water folder, or *Water (fluid sim)* as the test pattern, to fill the bottom of the disc with simulated water. Use the speed panel at the bottom of the screen to ride:
+The simulator opens in water mode: simulated water fills the bottom of the disc. To return to it from another pattern, pick **💧 show water** in the Water folder, or *Water (fluid sim)* as the test pattern. Use the speed panel at the bottom of the screen to ride:
 - Drag the slider to change speed.
 - **🛑 Brake** stops the bike; **▶ Ride** sets off again.
 - **Stop-and-go** (on by default) rides through the city automatically: it pulls away to a top speed between half and one and a half times the stop-and-go cruise speed, cruises for 4–12 s, brakes for a light, and waits 2–6 s. Each light turns red at a random distance ahead (3–40 m), and the rider brakes just hard enough to stop there, so some stops are sharp and others a slow roll-down. Each pull-away varies too.

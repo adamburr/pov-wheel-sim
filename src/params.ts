@@ -178,7 +178,7 @@ export function defaultParams() {
     rimFriction: 0.05,        // spinning rim drags the water; ~0.2+ carries it round into a ring
     accelSmoothMs: 50,        // low-pass on the firmware's acceleration estimate (it is already held per revolution)
     waterGain: 2,             // firmware exaggerates the sensed acceleration so the slosh reads at POV refresh rates
-    pattern: 'Smiley' as PatternName,
+    pattern: 'Water (fluid sim)' as PatternName,
     text: 'HELLO',
     mapping: 'polar' as 'polar' | 'columns',
     fit: 'disc' as 'disc' | 'annulus',
