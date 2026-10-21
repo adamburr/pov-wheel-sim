@@ -19,9 +19,9 @@ function colored(geo: THREE.BufferGeometry, hex: number): THREE.BufferGeometry {
 }
 
 /** A stick between two points, as a thin cylinder. */
-function rod(a: THREE.Vector3, b: THREE.Vector3, radius: number): THREE.BufferGeometry {
+function rod(a: THREE.Vector3, b: THREE.Vector3, radius: number, segments = 5, capped = false): THREE.BufferGeometry {
   const len = a.distanceTo(b);
-  const g = new THREE.CylinderGeometry(radius, radius, len, 5, 1, true);
+  const g = new THREE.CylinderGeometry(radius, radius, len, segments, 1, !capped);
   const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
   g.applyQuaternion(q);
   g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
@@ -130,10 +130,18 @@ export class WheelModel {
     const onAxis = fwd.clone().multiplyScalar(-offset);                // axis point nearest the axle
     const along = -onAxis.dot(up) + Math.sqrt(onAxis.dot(up) ** 2 - onAxis.lengthSq() + axleToCrown ** 2);
     const crown = onAxis.clone().addScaledVector(up, along);
+    // Crown: a solid block square to the steering axis, spanning both legs, with its underside at
+    // the axle-to-crown point. The legs run up into it so the joint is closed from every angle.
+    const crownH = 0.028, crownW = 0.04, crownD = 0.12;
+    const crownBox = new THREE.BoxGeometry(crownW, crownH, crownD);
+    crownBox.rotateZ(Math.PI / 2 - head);
+    const crownMid = crown.clone().addScaledVector(up, crownH / 2);
+    crownBox.translate(crownMid.x, crownMid.y, 0);
+    forkParts.push(colored(crownBox, 0x3a5a8a));
+    const legTop = crown.clone().addScaledVector(up, crownH * 0.75);
     for (const z of [-0.055, 0.055]) {
-      forkParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(crown.x, crown.y, z * 0.8), 0.008), 0x3a5a8a));
+      forkParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(legTop.x, legTop.y, z * 0.8), 0.008, 12, true), 0x3a5a8a));
     }
-    forkParts.push(colored(rod(new THREE.Vector3(crown.x, crown.y, -0.05), new THREE.Vector3(crown.x, crown.y, 0.05), 0.012), 0x3a5a8a));
     const forkGeo = mergeGeometries(forkParts.map((g) => (g.index ? g.toNonIndexed() : g)));
     this.fixed = new THREE.InstancedMesh(forkGeo, this.forkMaterial, MAX_COPIES);
     this.group.add(this.rotating, this.fixed);
