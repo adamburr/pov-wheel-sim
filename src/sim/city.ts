@@ -9,9 +9,10 @@ const MAX_BRAKE_G = 0.7;
 const MIN_BRAKE_G = 0.03;
 
 /**
- * Stop-and-go city riding: pull away, ride a block, brake for a light, wait, repeat. Each
- * pull-away varies a little; each light turns red at a random distance ahead, and the rider
- * brakes just hard enough to stop there (v²/2d), so some stops are sharp and others slow.
+ * Stop-and-go city riding: pull away, ride a block, brake for a light, wait, repeat. Each trip
+ * tops out at a different speed (half to one and a half times the cruise speed) and pulls away
+ * a little differently; each light turns red at a random distance ahead, and the rider brakes
+ * just hard enough to stop there (v²/2d), so some stops are sharp and others slow.
  * It only sets the target speed and the ramp rate, so the bike, the magnet firmware and the
  * water all respond exactly as they do to a rider.
  */
@@ -21,6 +22,8 @@ export class CityRide {
   rampG = 0.2;
   /** Distance to the light that just turned red (m), while braking. */
   lightM = 0;
+  /** This trip's top speed as a multiple of the cruise speed (0.5–1.5), drawn at each pull-away. */
+  fraction = 1;
   private until = -Infinity;
   private seed: number;
 
@@ -36,14 +39,15 @@ export class CityRide {
   update(t: number, p: Params): boolean {
     if (t < this.until) return false;
     const toMps = p.speedUnit === 'mph' ? 0.44704 : 1 / 3.6;
-    const cruise = Math.max(0.1, p.citySpeed) * toMps;
     switch (this.phase) {
       case 'stopped': {
         this.phase = 'go';
-        p.speed = p.citySpeed; p.braking = false;
+        // Each trip tops out somewhere between half and one and a half times the cruise speed.
+        this.fraction = this.between(0.5, 1.5);
+        p.speed = p.citySpeed * this.fraction; p.braking = false;
         this.rampG = Math.max(0.02, p.speedRampG) * this.between(0.7, 1.3);
         // Pedal strokes pulse the acceleration but average out, plus a little to settle.
-        this.until = t + cruise / (this.rampG * G) + 0.5;
+        this.until = t + (Math.max(0.1, p.speed) * toMps) / (this.rampG * G) + 0.5;
         break;
       }
       case 'go':
@@ -52,6 +56,7 @@ export class CityRide {
         break;
       case 'cruise': {
         this.phase = 'brake';
+        const cruise = Math.max(0.1, p.speed) * toMps; // this trip's top speed
         // Equally likely to be near or far (log-uniform), then brake to stop right there.
         this.lightM = Math.exp(this.between(Math.log(NEAREST_LIGHT_M), Math.log(FARTHEST_LIGHT_M)));
         const decel = Math.min(MAX_BRAKE_G * G, Math.max(MIN_BRAKE_G * G, (cruise * cruise) / (2 * this.lightM)));

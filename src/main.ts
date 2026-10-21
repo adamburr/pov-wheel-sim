@@ -167,7 +167,7 @@ rideSlider.addEventListener('input', () => {
   const v = Number(rideSlider.value);
   if (p.cityMode) {
     p.citySpeed = v;
-    if (city.phase === 'go' || city.phase === 'cruise') p.speed = v;
+    if (city.phase === 'go' || city.phase === 'cruise') p.speed = v * city.fraction;
   } else {
     p.speed = v; p.braking = false;
   }
@@ -175,7 +175,7 @@ rideSlider.addEventListener('input', () => {
 });
 function cityText(): string {
   switch (city.phase) {
-    case 'go': return `pulling away at ${city.rampG.toFixed(2)} g`;
+    case 'go': return `pulling away to ${p.speed.toFixed(1)} at ${city.rampG.toFixed(2)} g`;
     case 'cruise': return 'cruising';
     case 'brake': return `red light ${city.lightM.toFixed(0)} m ahead · braking ${city.rampG.toFixed(2)} g`;
     default: return 'waiting at a light';

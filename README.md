@@ -67,7 +67,7 @@ In banner mode the frames advance as the bike travels, so the road becomes a fli
 Pick **💧 show water** in the Water folder, or *Water (fluid sim)* as the test pattern, to fill the bottom of the disc with simulated water. Use the speed panel at the bottom of the screen to ride:
 - Drag the slider to change speed.
 - **🛑 Brake** stops the bike; **▶ Ride** sets off again.
-- **Stop-and-go** (on by default) rides through the city automatically: it pulls away, cruises for 4–12 s, brakes for a light, and waits 2–6 s. Each light turns red at a random distance ahead (3–40 m), and the rider brakes just hard enough to stop there, so some stops are sharp and others a slow roll-down. Each pull-away varies too.
+- **Stop-and-go** (on by default) rides through the city automatically: it pulls away to a top speed between half and one and a half times the stop-and-go cruise speed, cruises for 4–12 s, brakes for a light, and waits 2–6 s. Each light turns red at a random distance ahead (3–40 m), and the rider brakes just hard enough to stop there, so some stops are sharp and others a slow roll-down. Each pull-away varies too.
 
 Speeding up pulses with every pedal stroke (*pedal surge speeding up*, default ±60% of the acceleration). The water surges against each speed change and sloshes back and forth afterwards. It's one body of water seen from both sides: from the non-drive side, braking pushes it to the viewer's left. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
 
