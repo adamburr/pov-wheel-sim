@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Params } from '../params';
 import type { Derived } from '../sim/timing';
 import { ledRadius } from '../image/polarize';
-import { LED_Z } from './povMaterial';
+import { DIE_T, SPOKE_R, spokeZ, STRIP_T, stripTilt } from './povMaterial';
 
 const MAX_COPIES = 24;
 
@@ -99,18 +99,24 @@ export class WheelModel {
     }
 
     // LED strips: strip s points at clockwise angle 2πs/N (matching the shader's convention).
+    // Each lies radially on top of the spokes, starting at the hub flange and tilting in toward
+    // the rim like the spokes beneath it.
     const sides = p.doubleSided ? [1, -1] : [1];
+    const tilt = stripTilt(d);
     for (let s = 0; s < p.stripCount; s++) {
       const a = -(s / p.stripCount) * Math.PI * 2;
       for (const side of sides) {
-        const len = d.rEnd - d.rStart + 0.01;
-        const strip = new THREE.BoxGeometry(len, 0.012, 0.003);
-        strip.translate(d.rStart + len / 2 - 0.005, 0, side * (LED_Z - 0.003));
+        const r0 = d.rStart - 0.005, r1 = d.rEnd + 0.005, rMid = (r0 + r1) / 2;
+        const strip = new THREE.BoxGeometry((r1 - r0) / Math.cos(tilt), 0.012, STRIP_T);
+        strip.rotateY(side * tilt);
+        strip.translate(rMid, 0, side * (spokeZ(d, rMid) + SPOKE_R + STRIP_T / 2));
         strip.rotateZ(a);
         parts.push(colored(strip, 0x111114));
         for (let k = 0; k < d.ledsPerStrip; k++) {
-          const die = new THREE.BoxGeometry(p.dieMm / 1000, p.dieMm / 1000, 0.0015);
-          die.translate(ledRadius(p, d, s, k), 0, side * (LED_Z - 0.001));
+          const r = ledRadius(p, d, s, k);
+          const die = new THREE.BoxGeometry(p.dieMm / 1000, p.dieMm / 1000, DIE_T);
+          die.rotateY(side * tilt);
+          die.translate(r, 0, side * (spokeZ(d, r) + SPOKE_R + STRIP_T + DIE_T / 2));
           die.rotateZ(a);
           parts.push(colored(die, 0xe8e4d8));
         }

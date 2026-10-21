@@ -21,7 +21,29 @@ function layered(data: Uint8Array<ArrayBuffer>, w: number, h: number, depth: num
   return t;
 }
 
-export const LED_Z = 0.009; // LED faces sit ~9 mm either side of the wheel's centre plane
+// Front hub: flanges ±35 mm from the centre plane; spokes leave them at 28 mm radius and run in
+// to the rim's centre plane. The strips lie radially on top of the spokes, so they tilt the same way.
+export const FLANGE_Z = 0.035;
+export const FLANGE_R = 0.028;
+export const SPOKE_R = 0.001;
+export const STRIP_T = 0.003;
+export const DIE_T = 0.0015;
+
+/** Height of the spoke line above the centre plane at radius r (drive side; mirror for the other). */
+export function spokeZ(d: Derived, r: number): number {
+  const rimInner = d.maxLedRadius + 0.008;
+  return FLANGE_Z * Math.min(1, Math.max(0, (rimInner - r) / (rimInner - FLANGE_R)));
+}
+
+/** Tilt of the strips (and spokes) out of the wheel plane, in radians. */
+export function stripTilt(d: Derived): number {
+  return Math.atan(FLANGE_Z / (d.maxLedRadius + 0.008 - FLANGE_R));
+}
+
+/** Height of the LED faces at radius r: die on strip on spoke. */
+export function ledFaceZ(d: Derived, r: number): number {
+  return spokeZ(d, Math.max(r, d.rStart)) + SPOKE_R + STRIP_T + DIE_T;
+}
 
 /**
  * The LED light plane(s). Front faces the drive side (+z); the back plane carries the
@@ -64,8 +86,6 @@ export class PovDisplay {
     });
     this.front = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), make(1));
     this.back = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), make(-1));
-    this.front.position.z = LED_Z;
-    this.back.position.z = -LED_Z;
     this.front.renderOrder = this.back.renderOrder = 10;
     this.front.frustumCulled = this.back.frustumCulled = false;
     this.group.add(this.front, this.back);
@@ -91,15 +111,28 @@ export class PovDisplay {
     return this.banner ? bannerTileM(this.banner, p.tileGapM) : 0;
   }
 
+  /**
+   * The light surface sits just in front of the LED faces. Hub-locked, that is a shallow cone
+   * following the strips' tilt; ride-by sweeps the whole track, so it uses a flat plane at the
+   * mid-strip height.
+   */
   private ensurePlane(p: Params, d: Derived) {
     const R = d.rEnd + 0.02;
-    const key = `${p.view}|${R}|${p.trackLengthM}`;
+    const key = `${p.view}|${R}|${p.trackLengthM}|${d.rStart}|${d.maxLedRadius}`;
     if (key === this.planeKey) return;
     this.planeKey = key;
-    const w = p.view === 'ride-by' ? p.trackLengthM + 2 * R : 2 * R;
-    for (const m of [this.front, this.back]) {
+    const rideBy = p.view === 'ride-by';
+    const w = rideBy ? p.trackLengthM + 2 * R : 2 * R;
+    const midZ = ledFaceZ(d, 0.5 * (d.rStart + d.rEnd));
+    for (const [m, side] of [[this.front, 1], [this.back, -1]] as const) {
       m.geometry.dispose();
-      m.geometry = new THREE.PlaneGeometry(w, 2 * R);
+      const g = rideBy ? new THREE.PlaneGeometry(w, 2 * R) : new THREE.PlaneGeometry(w, 2 * R, 96, 96);
+      const pos = g.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        const z = rideBy ? midZ : ledFaceZ(d, Math.hypot(pos.getX(i), pos.getY(i)));
+        pos.setZ(i, side * (z + 0.0005));
+      }
+      m.geometry = g;
     }
   }
 
