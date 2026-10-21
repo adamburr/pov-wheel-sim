@@ -146,12 +146,17 @@ const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRe
     frames: 24, fps: 12,
     draw: (g, t) => {
       const R = SIZE / 2;
-      const y = SIZE * 0.78 - Math.abs(Math.sin(t * Math.PI)) * SIZE * 0.5;
-      const squash = 1 - 0.25 * Math.max(0, 1 - Math.abs(Math.sin(t * Math.PI)) * 6);
+      const ball = R * 0.2;
+      const floor = R + R * 0.925; // inner edge of the blue rim at the bottom
+      const top = SIZE * 0.28;     // ball centre at the top of the bounce
+      const h = Math.abs(Math.sin(t * Math.PI));
+      const squash = 1 - 0.25 * Math.max(0, 1 - h * 6);
+      // While squashed the ball is in contact, so its bottom rests on the rim.
+      const y = squash < 1 ? floor - ball * squash : floor - ball - h * (floor - ball - top);
       g.strokeStyle = '#3a7bff'; g.lineWidth = R * 0.05;
       g.beginPath(); g.arc(R, R, R * 0.95, 0, Math.PI * 2); g.stroke();
       g.fillStyle = '#ff5a1f';
-      g.beginPath(); g.ellipse(R, y, R * 0.2 / squash, R * 0.2 * squash, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(R, y, ball / squash, ball * squash, 0, 0, Math.PI * 2); g.fill();
     },
   },
   'Beating heart (animated)': {
