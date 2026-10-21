@@ -228,7 +228,7 @@ function updateStats(d: Derived, now: number) {
     w ? 1 : buffer?.frames ?? 1,
     w && w.sim ? {
       grid: w.sim.n, particles: w.sim.count, flopsPerStep: w.sim.flopsPerStep(), ramBytes: w.ramBytes(),
-      aEstimate: w.aEstimate, aTrue: w.aTrue,
+      aEstimate: w.aEstimate, aTrue: w.aTrue, wallSpeed: w.wallSpeed,
     } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   statsEl.innerHTML = `<h1>${statsCollapsed ? '▸' : '▾'} POV wheel · ${esc(p.chip)} · ${esc(p.ledType)}</h1><table>${

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, MPH } from '../src/params';
 import { clockedFrameBits, derive, squareIntegral } from '../src/sim/timing';
-import { buildSlices, hallSegments, magnetAccel, WheelMotion } from '../src/sim/firmware';
-import { bannerBitmap, bannerTileM, polarize, stackFrames, waterLut } from '../src/image/polarize';
+import { buildSlices, hallSegments, magnetAccel, magnetOmega, WheelMotion } from '../src/sim/firmware';
+import { bannerBitmap, bannerTileM, polarize, renderWater, stackFrames, waterLut } from '../src/image/polarize';
 
 describe('LED bus timing', () => {
   it('matches the Adafruit guide: 36 LEDs per lane at ~4 MHz is ~300 µs per column', () => {
@@ -310,5 +310,33 @@ describe('non-drive side', () => {
     for (let row = 0; row < half; row++) for (let c = 0; c < C; c++) {
       expect(lut[(half + row) * C + c]).toBe(lut[row * C + c]);
     }
+  });
+});
+
+describe('water rendering and spin estimate', () => {
+  it('draws spray white and the body of water deep blue', () => {
+    const p = defaultParams(), d = derive(p);
+    const maps = {
+      renderDensity: new Float32Array([0.8, 1.0, 0]),
+      renderBulk: new Float32Array([0.1, 1.0, 0]),
+      renderSpeed: new Float32Array([2, 0, 0]),
+    };
+    const out = new Uint8Array(3 * 4);
+    renderWater(maps, new Int32Array([0, 1, 2]), p, d, out);
+    const [sr, sg, sb] = out.slice(0, 3), [br, bg, bb] = out.slice(4, 7), [ar, ag, ab] = out.slice(8, 11);
+    expect(Math.min(sr, sg, sb)).toBeGreaterThan(150);  // spray: bright white
+    expect(bb).toBeGreaterThan(200); expect(br).toBeLessThan(10); // bulk: deep blue
+    expect(ar + ag + ab).toBe(0);                        // air: dark
+    expect(sg).toBeGreaterThan(bg);
+  });
+
+  it('estimates spin from the magnet, and nothing once stopped', () => {
+    const p = { ...defaultParams(), hallPollMs: 0 };
+    const m = new WheelMotion();
+    m.configure(10 * MPH, 0.339, 0, 1, 0);
+    expect(magnetOmega(p, m, 20)).toBeCloseTo((10 * MPH) / 0.339, 3);
+    m.configure(0, 0.339, 0, 1, 30, 4);
+    expect(magnetOmega(p, m, 40)).toBe(0);
+    expect(magnetOmega({ ...p, syncMode: 'free' }, m, 20)).toBe(0);
   });
 });

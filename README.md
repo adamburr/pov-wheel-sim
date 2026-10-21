@@ -71,6 +71,22 @@ Pick **💧 show water** in the Water folder, or *Water (fluid sim)* as the test
 
 Speeding up pulses with every pedal stroke (*pedal surge speeding up*, default ±60% of the acceleration). The water surges against each speed change and sloshes back and forth afterwards. It's one body of water seen from both sides: from the non-drive side, braking pushes it to the viewer's left. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
 
+**Rim drag.** The spinning rim drags the water touching it, using the wheel's speed as the magnet measures it. While riding, water is pulled back along the bottom and up the rear wall, where it tumbles over in breaking waves; when stopped, the rim is still and just damps the slosh. *Rim friction* (default 0.05) sets how strongly: around 0.2 or more carries the water all the way round into a ring, as real water in a spinning wheel would.
+
+**Fluid presets:**
+- **Water** (default): lively, little damping.
+- **Splashy:** livelier still, with softer particle packing, so it throws more spray.
+- **Thick (oil):** viscous, slow and heavy.
+
+Each preset sets the FLIP ratio, viscosity and particle separation, all also adjustable individually.
+
+**Rendering.** The LEDs read a map twice as fine as the simulation grid, built from the particles each step:
+- the body of water is deep blue
+- fast-moving surface water whitens into whitecaps
+- loose droplets glint white as spray
+
+A magnet-only build can't sense bumps, so there are no bump splashes.
+
 *Slosh gain* (default 2×) multiplies the sensed acceleration. A real firmware might do the same so the motion still reads at POV refresh rates; set it to 1 for strict physics.
 
 The firmware senses braking from the magnet alone: the change in revolution time between the last two passes. The estimate arrives about a revolution late. Hard braking also rotates the whole picture until the next pass, because the firmware assumes the wheel kept its last speed. *Ideal* sync shows the best case, with no lag or angle error. A 6-axis IMU at the axle would close most of that gap.
@@ -96,7 +112,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 | Electronics | Chip preset (ATmega328P → Teensy 4.x, RP2350 default), LED type (APA102, SK9822, HD107S, WS2812B, SK6812), clock, parallel lanes, overhead, PWM, global brightness |
 | Firmware | C/Arduino hall-sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked; columns/rev, lines/s floor, hall poll, debounce |
 | Image | Wheel-locked or banner (world-locked) display, load/drop/paste an image, animated GIF/WebP/APNG, or video, or pick a test pattern (some animated), polar (picture) or Adafruit columns-as-angles mapping, gamma, bit depth, inner-LED dimming |
-| Water | Fill, grid size, sim rate, pressure iterations, FLIP ratio, slosh gain, acceleration smoothing |
+| Water | Fluid preset (water, splashy, thick), rim friction, FLIP ratio, viscosity, particle separation, fill, grid size, sim rate, pressure iterations, slosh gain, acceleration smoothing |
 | Animation | Timed or revolution-synced frame advance, playback rate (×, kept across clips), source fps, revolutions per frame, import frame limit, video sample rate |
 | Camera | Chase or ride-by view, drive or non-drive side, shutter speed or human-eye persistence, auto exposure, EV, time scale |
 

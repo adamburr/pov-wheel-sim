@@ -192,6 +192,21 @@ export function magnetAccel(p: Params, motion: WheelMotion, t: number): number {
   return (R * (TAU / T2 - TAU / T1)) / (0.5 * (T1 + T2));
 }
 
+/**
+ * Wheel spin rate as the firmware knows it at time t (rad/s): one revolution per magnet pass
+ * in hall mode (0 until armed or after the timeout), the truth when encoder-locked, nothing
+ * when free-running.
+ */
+export function magnetOmega(p: Params, motion: WheelMotion, t: number): number {
+  if (p.syncMode === 'ideal') return motion.speed(t) / motion.radius;
+  if (p.syncMode === 'free') return 0;
+  const det = hallDetections(p, motion, t - 5, t);
+  if (det.length < 2) return 0;
+  const T = det[det.length - 1] - det[det.length - 2];
+  if (T > 1.5 || t - det[det.length - 1] > Math.max(2, 2.5 * T)) return 0;
+  return TAU / T;
+}
+
 export function segmentsFor(p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number): Segment[] {
   // Banner mode needs a position estimate, which a free-running clock doesn't have.
   if (p.syncMode === 'hall' || (p.syncMode === 'free' && p.displayMode === 'banner')) {

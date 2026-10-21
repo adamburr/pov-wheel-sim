@@ -75,6 +75,14 @@ export const FIRMWARE: Record<string, FirmwarePreset> = {
   'Ideal (encoder-locked)':        { label: 'ideal', python: false, syncMode: 'ideal', hallPollMs: 0, debounceMs: 0, minLinesPerSec: 0, columnsPerRev: 256 },
 };
 
+export interface FluidPreset { flip: number; viscosity: number; separation: number }
+// How the simulated liquid behaves. FLIP near 1 keeps motion lively; viscosity damps it.
+export const FLUIDS: Record<string, FluidPreset> = {
+  'Water': { flip: 0.97, viscosity: 0, separation: 1 },
+  'Splashy': { flip: 0.99, viscosity: 0, separation: 0.5 },
+  'Thick (oil)': { flip: 0.7, viscosity: 0.4, separation: 1 },
+};
+
 export const SHUTTERS: Record<string, number> = {
   '1/2000 s': 1 / 2000, '1/1000 s': 1 / 1000, '1/500 s': 1 / 500, '1/250 s': 1 / 250,
   '1/125 s': 1 / 125, '1/60 s': 1 / 60, '1/30 s': 1 / 30, '1/15 s': 1 / 15, '1/8 s': 1 / 8,
@@ -164,7 +172,11 @@ export function defaultParams() {
     waterGrid: 24,            // cells across the disc
     waterHz: 30,              // simulation steps per second
     waterIters: 20,           // pressure-solve iterations
-    waterFlip: 0.9,           // FLIP/PIC blend
+    fluid: 'Water',
+    waterFlip: 0.97,          // FLIP/PIC blend
+    waterViscosity: 0,
+    waterSeparation: 1,
+    rimFriction: 0.05,        // spinning rim drags the water; ~0.2+ carries it round into a ring
     accelSmoothMs: 50,        // low-pass on the firmware's acceleration estimate (it is already held per revolution)
     waterGain: 2,             // firmware exaggerates the sensed acceleration so the slosh reads at POV refresh rates
     pattern: 'Smiley' as PatternName,

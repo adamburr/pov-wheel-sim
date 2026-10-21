@@ -1,6 +1,6 @@
 import GUI from 'lil-gui';
 import {
-  CHIPS, defaultParams, FIRMWARE, LEDS, PACKAGES, type Params, PATTERNS, SHUTTERS, WHEELS,
+  CHIPS, defaultParams, FIRMWARE, FLUIDS, LEDS, PACKAGES, type Params, PATTERNS, SHUTTERS, WHEELS,
 } from './params';
 
 export interface UiHooks {
@@ -152,7 +152,15 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
   water.add(p, 'waterGrid', 12, 64, 2).name('grid (cells across)');
   water.add(p, 'waterHz', 10, 60, 5).name('sim rate (Hz)');
   water.add(p, 'waterIters', 5, 60, 1).name('pressure iterations');
-  water.add(p, 'waterFlip', 0, 1, 0.05).name('FLIP ratio (liveliness)');
+  water.add(p, 'fluid', Object.keys(FLUIDS)).name('fluid').onChange((k: string) => {
+    const f = FLUIDS[k];
+    p.waterFlip = f.flip; p.waterViscosity = f.viscosity; p.waterSeparation = f.separation;
+    refresh();
+  });
+  water.add(p, 'rimFriction', 0, 0.5, 0.01).name('rim friction');
+  water.add(p, 'waterFlip', 0, 1, 0.01).name('FLIP ratio (liveliness)');
+  water.add(p, 'waterViscosity', 0, 1, 0.05).name('viscosity');
+  water.add(p, 'waterSeparation', 0, 1, 0.05).name('particle separation');
   water.add(p, 'waterGain', 0, 5, 0.1).name('slosh gain ×');
   water.add(p, 'accelSmoothMs', 0, 1000, 10).name('accel smoothing (ms)');
   water.close();

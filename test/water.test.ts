@@ -53,3 +53,40 @@ describe('water simulation', () => {
     expect(w.flopsPerStep()).toBeGreaterThan(1e5);
   });
 });
+
+describe('water character', () => {
+  const settle = (o: object = {}) => {
+    const w = new WaterSim({ grid: 24, fill: 0.4, cellM: 0.281 / 11, seed: 3, ...o });
+    for (let k = 0; k < 45; k++) w.step(1 / 30, 0, -9.81);
+    return w;
+  };
+
+  it('is dragged back and up the rear wall by the spinning rim', () => {
+    const still = settle({ rimFriction: 0 }), dragged = settle({ rimFriction: 0.05 });
+    const [x0, y0] = com(still);
+    for (let k = 0; k < 150; k++) { still.step(1 / 30, 0, -9.81, 4); dragged.step(1 / 30, 0, -9.81, 4); }
+    const [xs, ys] = com(still), [xd, yd] = com(dragged);
+    expect(Math.abs(xs - x0)).toBeLessThan(0.5);       // frictionless rim: nothing happens
+    expect(Math.abs(ys - y0)).toBeLessThan(0.5);
+    expect(xd).toBeLessThan(x0 - 1);                    // clockwise rim drags it backward (−x)
+    expect(yd).toBeGreaterThan(y0 + 0.5);               // and up the rear wall
+  });
+
+  it('damps sloshing faster when thick', () => {
+    const swing = (o: object) => {
+      const w = settle(o);
+      for (let k = 0; k < 9; k++) w.step(1 / 30, 6, -9.81);
+      let late = 0;
+      for (let k = 0; k < 120; k++) { w.step(1 / 30, 0, -9.81); if (k >= 60) late = Math.max(late, Math.abs(com(w)[0])); }
+      return late;
+    };
+    expect(swing({ flip: 0.7, viscosity: 0.4 })).toBeLessThan(swing({ flip: 0.97, viscosity: 0 }) * 0.6);
+  });
+
+  it('accounts for every particle in the finer render map', () => {
+    const w = settle();
+    const sum = (a: Float32Array) => a.reduce((s, x) => s + x, 0);
+    expect(sum(w.renderDensity)).toBeCloseTo(4 * sum(w.cellDensity), 0);
+    expect(w.renderN).toBe(2 * w.n);
+  });
+});

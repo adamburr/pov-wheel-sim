@@ -1,6 +1,6 @@
 import type { Params } from '../params';
 import type { Derived } from '../sim/timing';
-import { type AnimSpec, magnetAccel, type WheelMotion } from '../sim/firmware';
+import { type AnimSpec, magnetAccel, magnetOmega, type WheelMotion } from '../sim/firmware';
 import { WaterSim } from '../sim/water';
 import { renderWater, rowCount, waterCellM, waterLut } from './polarize';
 
@@ -22,6 +22,7 @@ export class WaterSource {
   meanDuty = 0;
   aEstimate = 0;       // what the firmware believes (filtered), m/s²
   aTrue = 0;
+  wallSpeed = 0;       // rim speed the firmware applies (m/s)
   private lut?: Int32Array;
   private simKey = '';
   private lutKey = '';
@@ -48,7 +49,8 @@ export class WaterSource {
     }
     if (lutKey !== this.lutKey) {
       this.lutKey = lutKey;
-      this.lut = waterLut(p, d, p.waterGrid);
+      // Draw from the 2× render map: each LED reads a cell half the size of a simulation cell.
+      this.lut = waterLut(p, d, 2 * p.waterGrid, waterCellM(d, p.waterGrid) / 2);
       this.width = p.columnsPerRev;
       this.height = rowCount(p, d);
       this.data = new Uint8Array(this.width * this.height * 4 * FRAMES);
@@ -57,6 +59,9 @@ export class WaterSource {
     const sim = this.sim!;
     sim.iterations = p.waterIters;
     sim.flip = p.waterFlip;
+    sim.viscosity = p.waterViscosity;
+    sim.separation = p.waterSeparation;
+    sim.rimFriction = p.rimFriction;
 
     const hz = p.waterHz, dt = 1 / hz;
     const target = Math.floor(t * hz);
@@ -64,8 +69,10 @@ export class WaterSource {
     const smooth = 1 - Math.exp(-dt / Math.max(1e-3, p.accelSmoothMs / 1000));
     for (let k = this.lastStep + 1; k <= target; k++) {
       this.aEstimate += (magnetAccel(p, motion, k * dt) - this.aEstimate) * smooth;
-      // Braking (negative acceleration) throws the water forward, +x on the drive side.
-      sim.step(dt, -this.aEstimate * p.waterGain, -GRAVITY);
+      // Braking (negative acceleration) throws the water forward, +x on the drive side. The rim
+      // turns clockwise at the firmware's measured spin rate and drags the water touching it.
+      this.wallSpeed = magnetOmega(p, motion, k * dt) * d.rEnd;
+      sim.step(dt, -this.aEstimate * p.waterGain, -GRAVITY, this.wallSpeed);
       const layer = ((k % FRAMES) + FRAMES) % FRAMES;
       this.paint(p, d, layer);
       changed.push(layer);
@@ -81,16 +88,16 @@ export class WaterSource {
     return changed;
   }
 
-  /** Firmware memory: the LED lookup table plus the simulation's particles and grids. */
+  /** Firmware memory: the LED lookup table plus the simulation's particles, grids and render map. */
   ramBytes(): number {
     if (!this.sim || !this.lut) return 0;
-    const n = this.sim.n;
-    return this.lut.length * 2 + this.sim.count * 16 + (n + 1) * (n + 1) * 6 * 4 + n * n * 4 * 4;
+    const n = this.sim.n, m = this.sim.renderN;
+    return this.lut.length * 2 + this.sim.count * 16 + (n + 1) * (n + 1) * 6 * 4 + n * n * 4 * 4 + m * m * 3 * 4;
   }
 
   private paint(p: Params, d: Derived, layer: number) {
     const size = this.width * this.height * 4;
     const out = this.data.subarray(layer * size, (layer + 1) * size);
-    this.meanDuty = renderWater(this.sim!.cellDensity, this.sim!.cellSpeed, this.lut!, p, d, out);
+    this.meanDuty = renderWater(this.sim!, this.lut!, p, d, out);
   }
 }

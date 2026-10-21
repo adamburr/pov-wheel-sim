@@ -183,10 +183,9 @@ export function waterCellM(d: Derived, grid: number): number {
  * cells as the front strips beside them, so the non-drive side sees it from behind and braking
  * still throws it forward.
  */
-export function waterLut(p: Params, d: Derived, grid: number): Int32Array {
+export function waterLut(p: Params, d: Derived, grid: number, cellM = waterCellM(d, grid)): Int32Array {
   const C = p.columnsPerRev, n = d.ledsPerStrip, rows = rowCount(p, d);
   const lut = new Int32Array(C * rows).fill(-1);
-  const cellM = waterCellM(d, grid);
   const rot = (p.imageRotationDeg * Math.PI) / 180;
   const backs = p.doubleSided && p.backData === 'independent' ? 2 : 1;
   for (let back = 0; back < backs; back++) {
@@ -206,23 +205,34 @@ export function waterLut(p: Params, d: Derived, grid: number): Int32Array {
   return lut;
 }
 
+/** Per-cell water maps the renderer reads (the simulation's 2× render map). */
+export interface WaterMaps {
+  renderDensity: Float32Array;  // local water amount (~1 = full)
+  renderBulk: Float32Array;     // 3×3 average: the body of water
+  renderSpeed: Float32Array;    // mean particle speed (m/s)
+}
+
 /**
- * Paint one firmware frame of water into `out` (RGBA PWM duty): blue scaled by how full each
- * cell is, whitening where the water moves fast (spray and foam), black for air.
+ * Paint one firmware frame of water into `out` (RGBA PWM duty). The body of water is deep
+ * blue; fast water near the surface whitens into whitecaps; water with no body around it is
+ * spray, drawn as bright white droplets; air is black.
  */
-export function renderWater(
-  density: Float32Array, speed: Float32Array, lut: Int32Array, p: Params, d: Derived, out: Uint8Array,
-): number {
+export function renderWater(maps: WaterMaps, lut: Int32Array, p: Params, d: Derived, out: Uint8Array): number {
   const C = p.columnsPerRev, n = d.ledsPerStrip;
   const deep = [0.08, 0.35, 1.0], foam = [0.85, 0.95, 1.0];
   const g = (x: number) => Math.pow(x, p.gamma);
+  const clamp = (x: number) => Math.min(1, Math.max(0, x));
+  const { renderDensity: dens, renderBulk: bulk, renderSpeed: speed } = maps;
   let sum = 0;
   for (let idx = 0; idx < lut.length; idx++) {
     const cell = lut[idx], o = idx * 4;
     let a = 0, f = 0;
     if (cell >= 0) {
-      a = Math.min(1, Math.max(0, (density[cell] - 0.15) / 0.45));
-      f = Math.min(1, Math.max(0, (speed[cell] - 0.5) / 1.5));
+      const b = bulk[cell], local = dens[cell];
+      a = clamp((0.5 * (local + b) - 0.2) / 0.4);
+      const surface = 1 - clamp((b - 0.5) / 0.5);
+      f = clamp((speed[cell] - 0.6) / 1.2) * surface;
+      if (b < 0.3 && local > 0.2) { a = 1; f = 1; } // spray: small droplets still glint at full brightness
     }
     const k = Math.floor(idx / C) % n;
     const comp = p.radialCompensation ? ledRadius(p, d, 0, k) / d.rEnd : 1;

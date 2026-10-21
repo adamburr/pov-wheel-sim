@@ -20,6 +20,7 @@ export interface WaterInfo {
   flopsPerStep: number;
   ramBytes: number;     // lookup table + simulation state the firmware keeps
   aEstimate: number;    // firmware's filtered acceleration estimate (m/s²)
+  wallSpeed: number;    // rim speed the firmware drags the water with (m/s)
   aTrue: number;
 }
 
@@ -64,7 +65,8 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
       value: `${frames} frames · ${fmt(playFps, 1)} fps ${p.frameAdvance === 'timed' ? 'timed' : `(every ${p.revsPerFrame} rev)`}`,
     }] : []),
     ...(water ? [
-      { label: 'Water', value: `${water.grid}² grid · ${water.particles} particles · ${p.waterHz} Hz` },
+      { label: 'Water', value: `${p.fluid} · ${water.grid}² grid · ${water.particles} particles · ${p.waterHz} Hz` },
+      { label: 'Rim drag', value: `${fmt(water.wallSpeed, 1)} m/s rim · friction ${fmt(p.rimFriction, 2)}` },
       { label: 'Water CPU', value: `${fmt(waterMflops(p, water), 1)} MFLOP/s ≈ ${fmt(waterCorePct(p, water), 0)}% of one ${p.chip} core` },
       { label: 'Acceleration', value: `${gees(water.aEstimate)} firmware${p.waterGain !== 1 ? ` (×${p.waterGain} slosh)` : ''} · ${gees(water.aTrue)} true (− = braking)` },
     ] : []),
