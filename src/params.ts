@@ -145,7 +145,8 @@ export function defaultParams() {
     tileGapM: 0,
     // Animation
     frameAdvance: 'timed' as 'timed' | 'revolution', // timed: at animFps; revolution: at the magnet
-    animFps: 12,
+    animFps: 12,              // the clip's own frame rate (set when a clip or pattern loads)
+    playbackRate: 1,          // speed multiplier, kept across clips
     revsPerFrame: 1,
     maxFrames: 48,            // frames kept when importing a GIF/video
     videoFps: 12,             // sampling rate for video clips
@@ -179,6 +180,11 @@ export function defaultParams() {
   };
 }
 export type Params = ReturnType<typeof defaultParams>;
+
+/** Frames per second the firmware aims for in timed playback. */
+export function playbackFps(p: Params): number {
+  return p.animFps * p.playbackRate;
+}
 
 export function speedMps(p: Params): number {
   return p.speedUnit === 'mph' ? p.speed * MPH : p.speed / 3.6;

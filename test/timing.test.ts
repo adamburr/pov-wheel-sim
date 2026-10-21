@@ -164,3 +164,25 @@ describe('frame stacking', () => {
     expect(s.meanDuty).toBeCloseTo(0.3, 9);
   });
 });
+
+describe('animation playback rate', () => {
+  const d = derive(defaultParams());
+  const motion = new WheelMotion();
+  motion.configure(10 * MPH, d.tireRadius, 0, 1, 0);
+
+  it('scales timed playback', () => {
+    const p = { ...defaultParams(), frameAdvance: 'timed' as const, animFps: 12, playbackRate: 0.5 };
+    for (const s of buildSlices(p, d, motion, 10, 10.5, Math.PI, 0, 8)) {
+      expect(s.frame0).toBeCloseTo(((s.t0 * 6) % 8 + 8) % 8, 9);
+    }
+  });
+
+  it('steps several frames per revolution when synced and sped up', () => {
+    const base = { ...defaultParams(), frameAdvance: 'revolution' as const, revsPerFrame: 1, hallPollMs: 0 };
+    const at = (rate: number) => buildSlices({ ...base, playbackRate: rate }, d, motion, 10, 12, Math.PI * 2, 0, 1000)
+      .filter((s) => s.enabled).map((s) => s.frame0);
+    const one = at(1), two = at(2);
+    expect(two.length).toBe(one.length);
+    two.forEach((f, i) => expect(f).toBe((one[i] * 2) % 1000));
+  });
+});

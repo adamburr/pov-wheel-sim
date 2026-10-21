@@ -53,7 +53,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 | Electronics | Chip preset (ATmega328P → Teensy 4.x, RP2350 default), LED type (APA102, SK9822, HD107S, WS2812B, SK6812), clock, parallel lanes, overhead, PWM, global brightness |
 | Firmware | C/Arduino hall-sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked; columns/rev, lines/s floor, hall poll, debounce |
 | Image | Wheel-locked or banner (world-locked) display, load/drop/paste an image, animated GIF/WebP/APNG, or video, or pick a test pattern (some animated), polar (picture) or Adafruit columns-as-angles mapping, gamma, bit depth, inner-LED dimming |
-| Animation | Timed or revolution-synced frame advance, fps, revolutions per frame, import frame limit, video sample rate |
+| Animation | Timed or revolution-synced frame advance, playback rate (×, kept across clips), source fps, revolutions per frame, import frame limit, video sample rate |
 | Camera | Chase or ride-by view, drive or non-drive side, shutter speed or human-eye persistence, auto exposure, EV, time scale |
 
 The stats panel reports rpm, column timing, achievable resolution, refresh rate, RAM use, current draw, and battery life, with warnings for common pitfalls.

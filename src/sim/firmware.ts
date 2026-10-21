@@ -1,4 +1,4 @@
-import type { Params } from '../params';
+import { type Params, playbackFps } from '../params';
 import type { Derived } from './timing';
 
 const TAU = Math.PI * 2;
@@ -122,7 +122,7 @@ export interface Slice {
   delta0: number;     // firmware's angle estimate minus the true angle at t0 (rad)
   deltaRate: number;  // d(delta)/dt within the slice
   hubWorld0: number;  // hub position along the road at t0, in the banner's frame (m)
-  frame0: number;     // animation frame position at t0 (timed: fractional, advances at animFps)
+  frame0: number;     // animation frame position at t0 (timed: fractional, advances at playback fps)
 }
 
 export const MAX_SLICES = 128;
@@ -204,18 +204,18 @@ export function buildSlices(
 }
 
 /**
- * Animation frame at the start of a slice. Timed playback advances at animFps (and may change
- * mid-revolution); revolution-synced playback steps once every revsPerFrame turns, at the
+ * Animation frame at the start of a slice. Timed playback advances at the playback fps (and may change
+ * mid-revolution); revolution-synced playback steps playbackRate frames every revsPerFrame turns, at the
  * firmware's sync point: the magnet detection, the true pass (ideal), or a full image cycle
  * (free-running).
  */
 function frameAt(p: Params, motion: WheelMotion, seg: Segment | undefined, t0: number, mid: number, frames: number): number {
   if (frames <= 1) return 0;
   const wrap = (x: number) => ((x % frames) + frames) % frames;
-  if (p.frameAdvance === 'timed') return wrap(t0 * p.animFps);
+  if (p.frameAdvance === 'timed') return wrap(t0 * playbackFps(p));
   let k = 0;
   if (seg?.k !== undefined) k = seg.k;
   else if (seg && seg.P < 0) k = Math.floor(motion.phi(mid) / TAU);
   else if (seg) k = Math.floor(mid / (seg.P * p.columnsPerRev));
-  return wrap(Math.floor(k / Math.max(1, p.revsPerFrame)));
+  return wrap(Math.floor((k * p.playbackRate) / Math.max(1, p.revsPerFrame)));
 }

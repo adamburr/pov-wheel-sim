@@ -137,7 +137,8 @@ export function buildGui(p: Params, hooks: UiHooks): GUI {
 
   const anim = gui.addFolder('Animation');
   anim.add(p, 'frameAdvance', { 'timed (fps)': 'timed', 'every N revolutions': 'revolution' }).name('frame advance');
-  anim.add(p, 'animFps', 0.5, 60, 0.5).name('fps');
+  anim.add(p, 'playbackRate', 0.1, 4, 0.05).name('playback rate ×');
+  anim.add(p, 'animFps', 0.5, 60, 0.5).name('source fps');
   anim.add(p, 'revsPerFrame', 1, 16, 1).name('revolutions / frame');
   anim.add(p, 'maxFrames', 1, 120, 1).name('max frames (import)');
   anim.add(p, 'videoFps', 1, 30, 1).name('video sample fps');

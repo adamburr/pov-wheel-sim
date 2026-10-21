@@ -1,4 +1,4 @@
-import { CHIPS, LEDS, type Params, SHUTTERS } from '../params';
+import { CHIPS, LEDS, type Params, playbackFps, SHUTTERS } from '../params';
 import type { Derived } from './timing';
 
 export interface StatLine { label: string; value: string }
@@ -35,7 +35,8 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   const lanes = Math.max(1, Math.min(p.lanes, d.stripUnits));
   const frameBytes = banner ? banner.width * banner.height * 3 : C * lanes * (d.ledsPerLane + 2) * 4;
   const imageBytes = frameBytes * frames;
-  const playFps = p.frameAdvance === 'timed' ? p.animFps : rps / Math.max(1, p.revsPerFrame);
+  const targetFps = playbackFps(p);
+  const playFps = p.frameAdvance === 'timed' ? targetFps : (rps * p.playbackRate) / Math.max(1, p.revsPerFrame);
   const usableRam = chip.ramKB * 1024 * (p.python ? 0.45 : 0.8);
 
   const lines: StatLine[] = [
@@ -92,10 +93,10 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
       : `The prepacked image (${fmt(imageBytes / 1024, 1)} KB) won't fit in ${p.chip} RAM${p.python ? ' under CircuitPython' : ''}.`);
   }
   if (frames > 1 && rps > 0) {
-    if (p.frameAdvance === 'timed' && p.animFps > rps) {
-      warnings.push(`Frames change ${fmt(p.animFps / rps, 1)}× per revolution, so each strip paints different frames in different sectors (seams). Sync frames to revolutions to avoid it.`);
-    } else if (p.frameAdvance === 'revolution' && playFps < p.animFps * 0.8) {
-      warnings.push(`Synced to the wheel, the animation plays at ${fmt(playFps, 1)} fps instead of ${fmt(p.animFps, 1)} fps. It speeds up and slows down with the bike.`);
+    if (p.frameAdvance === 'timed' && targetFps > rps) {
+      warnings.push(`Frames change ${fmt(targetFps / rps, 1)}× per revolution, so each strip paints different frames in different sectors (seams). Sync frames to revolutions to avoid it.`);
+    } else if (p.frameAdvance === 'revolution' && playFps < targetFps * 0.8) {
+      warnings.push(`Synced to the wheel, the animation plays at ${fmt(playFps, 1)} fps instead of ${fmt(targetFps, 1)} fps. It speeds up and slows down with the bike.`);
     }
   }
   if (p.python && chip.overheadUsPy === 0) warnings.push(`CircuitPython doesn't run on ${p.chip}.`);

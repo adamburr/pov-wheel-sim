@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import fragmentShader from './pov.frag.glsl?raw';
-import { LEDS, type Params, SHUTTERS, speedMps } from '../params';
+import { LEDS, type Params, playbackFps, SHUTTERS, speedMps } from '../params';
 import type { Derived } from '../sim/timing';
 import { MAX_SLICES, type Slice } from '../sim/firmware';
 import { bannerTileM, type FrameStack } from '../image/polarize';
@@ -171,7 +171,7 @@ export class PovDisplay {
     u.uRideBy.value = p.view === 'ride-by' ? 1 : 0;
     u.uFrames.value = this.frames;
     u.uFrameTimed.value = p.frameAdvance === 'timed' ? 1 : 0;
-    u.uFps.value = p.animFps;
+    u.uFps.value = playbackFps(p);
     u.uBanner.value = p.displayMode === 'banner' && this.banner ? 1 : 0;
     if (this.banner) {
       u.uBannerW.value = this.banner.width * this.banner.pixelM;
