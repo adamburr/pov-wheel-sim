@@ -35,7 +35,8 @@
       #ride input[type=checkbox] { width: 18px; height: 18px; accent-color: #4aa3ff; }
       /* Settings menu (lil-gui): larger text and controls. 'body' outranks lil-gui's own rules. */
       body .lil-gui { --font-size: 14px; --input-font-size: 14px; --widget-height: 26px; --padding: 6px; --spacing: 6px; --name-width: 47%; --slider-input-min-width: 52px; }
-      body .lil-gui.root > .lil-title { font-size: 17px; height: 34px; line-height: 32px; }
+      body .lil-gui.root { --title-height: 36px; }
+      body .lil-gui.root > .title { font-size: 17px; }
       @media (pointer: coarse) { body .lil-gui { --input-font-size: 16px; } }
       /* Leave room for the 360 px settings menu on the right when the window is narrow. */
       @media (min-width: 701px) and (max-width: 800px) { #stats:not(.collapsed) { width: calc(100vw - 420px); } }
