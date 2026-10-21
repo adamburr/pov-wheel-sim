@@ -32,7 +32,10 @@
       #ride input[type=checkbox] { width: 18px; height: 18px; accent-color: #4aa3ff; }
       /* Settings menu (lil-gui): larger text and controls. 'body' outranks lil-gui's own rules. */
       body .lil-gui { --font-size: 14px; --input-font-size: 14px; --widget-height: 26px; --padding: 6px; --spacing: 6px; --name-width: 47%; --slider-input-min-width: 52px; }
-      body .lil-gui.root { --title-height: 36px; }
+      /* Never wider than the screen: phones (and iPhone Display Zoom, 320 px) get 8 px margins.
+         !important beats the --width lil-gui sets inline. */
+      body .lil-gui.root { --title-height: 36px; --width: min(360px, calc(100vw - 16px)) !important; }
+      @media (max-width: 400px) { body .lil-gui.autoPlace { right: 8px; } }
       body .lil-gui.root > .title { font-size: 17px; }
       @media (pointer: coarse) { body .lil-gui { --input-font-size: 16px; } }
     </style>
