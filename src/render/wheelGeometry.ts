@@ -75,10 +75,6 @@ export class WheelModel {
     const rim = new THREE.ExtrudeGeometry(rimShape, { depth: 0.02, bevelEnabled: false, curveSegments: 96 });
     rim.translate(0, 0, -0.01);
     parts.push(colored(rim, 0x8a8f98));
-    // Valve stem marks the wheel's angle.
-    const valve = new THREE.CylinderGeometry(0.003, 0.003, 0.03, 6);
-    valve.translate(0, rimInner - 0.012, 0);
-    parts.push(colored(valve, 0xc0a060));
 
     const hub = new THREE.CylinderGeometry(0.018, 0.018, 0.1, 20);
     hub.rotateX(Math.PI / 2);
