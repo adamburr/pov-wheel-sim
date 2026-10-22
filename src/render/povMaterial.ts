@@ -78,7 +78,7 @@ export class PovDisplay {
       uFrames: { value: 1 }, uFrameTimed: { value: 1 }, uFps: { value: 12 },
       uBanner: { value: 0 }, uBannerTex: { value: this.bannerTex }, uBannerW: { value: 1 },
       uBannerTile: { value: 1 }, uBannerHalfH: { value: 0.3 }, uBannerMirror: { value: 0 }, uPredict: { value: 1 },
-      uLower: { value: 0 }, uBannerRide: { value: 0 },
+      uLower: { value: 0 }, uBannerRide: { value: 0 }, uSpinRate: { value: 0 }, uSpinPhase: { value: 0 },
     };
     const make = (side: number) => new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -244,6 +244,10 @@ export class PovDisplay {
     u.uPredict.value = p.predictMotion ? 1 : 0;
     u.uLower.value = BANNER_LOWER.indexOf(p.bannerLower);
     u.uBannerRide.value = p.bannerUpper === 'bike' ? 1 : 0;
+    // Spin applies to wheel-locked pictures (not live water or banners).
+    const spin = p.displayMode === 'wheel' && !spec.live && p.spinSeconds !== 0 ? 1 / p.spinSeconds : 0;
+    u.uSpinRate.value = spin;
+    u.uSpinPhase.value = spin ? (((tRef * spin) % 1) + 1) % 1 : 0;
     u.uRRoll.value = d.tireRadius;
     this.back.visible = p.doubleSided;
 

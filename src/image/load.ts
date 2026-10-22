@@ -20,6 +20,23 @@ function canvas(w = SIZE, h = SIZE) {
   return { c, g: c.getContext('2d')! };
 }
 
+/** Four rainbow arms spiralling out from the centre. */
+function drawSpiral(g: CanvasRenderingContext2D) {
+  const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
+  g.lineWidth = R * 0.07;
+  g.lineCap = 'round';
+  for (let arm = 0; arm < 4; arm++) {
+    g.strokeStyle = `hsl(${arm * 90 + 20}, 100%, 55%)`;
+    g.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const t = i / 200, a = t * Math.PI * 3 + (arm * Math.PI) / 2, r = t * R * 0.95;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    }
+    g.stroke();
+  }
+}
+
 /** Built-in test images, drawn on a black background like a night-time display. */
 export function makePattern(name: PatternName, text: string): HTMLCanvasElement {
   if (name === 'Wide text') return wideText(text);
@@ -84,17 +101,7 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
       break;
     }
     case 'Rainbow spiral': {
-      g.lineWidth = R * 0.07;
-      for (let arm = 0; arm < 4; arm++) {
-        g.strokeStyle = `hsl(${arm * 90 + 20}, 100%, 55%)`;
-        g.beginPath();
-        for (let i = 0; i <= 200; i++) {
-          const t = i / 200, a = t * Math.PI * 3 + (arm * Math.PI) / 2, r = t * R * 0.95;
-          const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-          if (i) g.lineTo(x, y); else g.moveTo(x, y);
-        }
-        g.stroke();
-      }
+      drawSpiral(g);
       break;
     }
     case 'Checkerboard': {

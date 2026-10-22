@@ -108,6 +108,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     'Arches': 'arches', 'Rainbow arches': 'rainbow', 'Scallops': 'scallops', 'Beads': 'beads', 'Truss bridge': 'bridge',
     'Picture (full height)': 'picture',
   }).name('Lower half');
+  const spinCtl = pg.add(p, 'spinSeconds', -60, 60, 1).name('Spin (s per turn, 0 = still)');
   pg.add(p, 'globalBrightness', 1, 31, 1).name('Brightness');
 
   const water = pg.addFolder('Water');
@@ -283,6 +284,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     textCtl.show(!p.useMedia && (p.pattern === 'Text' || p.pattern === 'Wide text'));
     uploadCtl.show(p.useMedia);
     upperCtl.show(p.displayMode === 'banner');
+    spinCtl.show(p.displayMode === 'wheel' && !isWater);
     gapCtl.show(p.displayMode === 'banner' && p.bannerUpper === 'road');
     lowerCtl.show(p.displayMode === 'banner');
     water.show(isWater);

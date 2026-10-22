@@ -13,7 +13,7 @@ These are all renders from the simulator, starting from the Water preset and the
 <table>
   <tr>
     <td width="50%"><img src="docs/images/eye-default.jpg" alt="Water seen by the human eye"><br><sub><b>Human eye</b> (default view) at 12 mph: each point refreshes about 7 times a second, so the water shows in fading sectors.</sub></td>
-    <td width="50%"><img src="docs/images/water-splashy.jpg" alt="Splashy water throwing spray"><br><sub><b>Splashy fluid preset,</b> 12 mph, 1/4 s: softer particle packing throws more spray.</sub></td>
+    <td width="50%"><img src="docs/images/water-splashy.jpg" alt="Splashy water throwing spray"><br><sub><b>Splashy fluid,</b> 12 mph, 1/4 s: softer particle packing throws more spray.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/water-brake.jpg" alt="Water surging forward under braking"><br><sub><b>Braking from 15 mph</b> (ideal sync, 1/2 s, about 1 s after the brakes go on): the water surges forward and up the front wall.</sub></td>
@@ -55,7 +55,7 @@ Two views show the same moment and the same animation. The main view follows the
 
 ### Presets
 
-A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with eight: Water, Splashy water, Smiley, Rainbow spiral, Clock face, Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Dropping or pasting an image puts it in the selected preset.
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with seven: Water, Smiley, Rainbow spiral (which turns slowly), Clock face, Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Dropping or pasting an image puts it in the selected preset.
 
 ### Setups
 
@@ -152,7 +152,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 
 | Where | Highlights |
 |---|---|
-| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
+| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, spin (the firmware turns a wheel-locked picture once every so many seconds by shifting the columns it sends, so it needs no extra frames), banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
 | Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma and bit depth under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce under the details folders |
 | Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1 s by default), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
 

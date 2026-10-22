@@ -48,6 +48,8 @@ uniform float uBannerTile;   // image width + gap (m)
 uniform float uBannerHalfH;  // half the banner height (m), centred on the hub
 uniform int uBannerMirror;   // independent back strips paint a mirrored banner
 uniform int uBannerRide;     // 1: the banner picture rides with the bike (centred on the hub, upright)
+uniform float uSpinRate;     // wheel-locked picture spin, turns per second (0 = still)
+uniform float uSpinPhase;    // spin at the end of the exposure, in turns (0..1)
 uniform int uPredict;        // compute each update for its mid-display time
 uniform int uLower;          // banner lower half: 0 picture, 1 arches, 2 rainbow arches, 3 scallops, 4 beads, 5 truss bridge
 uniform int uFrames;         // animation frames
@@ -214,6 +216,9 @@ vec3 emit(float ta, float tb, vec4 A, vec4 B, vec4 D, int s, float offAng, float
       vec3 duty;
       float tSend = locked ? 0.5 * (t + tn) : B.x + j * B.y;
       int frame = frameAt(tSend, A, D);
+      // Spin: the firmware turns a still picture by offsetting the column it sends, more each
+      // moment. One column at a time, so it turns smoothly and needs no extra frames.
+      if (uSpinRate != 0.0) col = mod(col + floor(fract(uSpinPhase + uSpinRate * tSend) * C), C);
       if (uBanner == 1) {
         // Each update is computed for one moment: the send time, or (with prediction) the
         // middle of the interval it will be on screen. Encoder-locked firmware is exact.

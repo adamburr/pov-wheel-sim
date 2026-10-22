@@ -1,6 +1,6 @@
 // Named presets: what the wheel shows. The real wheel steps through them in order with one
 // button; the app adds, edits, reorders and deletes them. No DOM here, so it can be tested.
-import { defaultParams, FLUIDS, type Params, pick, PRESET_KEYS, type PresetKey, sanitize } from './params';
+import { defaultParams, type Params, pick, PRESET_KEYS, type PresetKey, sanitize } from './params';
 
 export type PresetSettings = Partial<Pick<Params, PresetKey>>;
 /** An uploaded image or clip; the bytes live in the media store under `id`. */
@@ -16,15 +16,8 @@ const STORAGE_KEY = 'pov-wheel-sim.presets.v1';
 
 export const BUILT_IN_PRESETS: { name: string; settings: PresetSettings }[] = [
   { name: 'Water', settings: { pattern: 'Water (fluid sim)' } },
-  {
-    name: 'Splashy water',
-    settings: {
-      pattern: 'Water (fluid sim)', fluid: 'Splashy', waterFill: 0.5, waterFlip: FLUIDS.Splashy.flip,
-      waterViscosity: FLUIDS.Splashy.viscosity, waterSeparation: FLUIDS.Splashy.separation,
-    },
-  },
   { name: 'Smiley', settings: { pattern: 'Smiley' } },
-  { name: 'Rainbow spiral', settings: { pattern: 'Rainbow spiral' } },
+  { name: 'Rainbow spiral', settings: { pattern: 'Rainbow spiral', spinSeconds: 16 } },
   { name: 'Clock face', settings: { pattern: 'Clock face' } },
   { name: 'Beating heart', settings: { pattern: 'Beating heart (animated)' } },
   { name: 'HELLO banner', settings: { pattern: 'Wide text', text: 'HELLO', displayMode: 'banner', bannerLower: 'rainbow' } },
