@@ -207,6 +207,10 @@ export function defaultParams() {
     mapping: 'polar' as 'polar' | 'columns',
     fit: 'disc' as 'disc' | 'annulus',
     pictureFill: 'crop' as 'crop' | 'whole', // a non-square picture: crop it to fill the wheel, or letterbox the whole of it
+    pictureZoom: 1,           // scales a picture about the wheel's centre (1 = as filled)
+    pictureX: 0,              // moves it right, as a share of the wheel's width (negative = left)
+    pictureY: 0,              // moves it up, as a share of the wheel's height (negative = down)
+    pictureEdges: 'mirror' as 'dark' | 'mirror', // where a picture doesn't reach: dark, or a blurred mirror tiling of it
     imageRotationDeg: 0,
     gamma: 2.2,
     colorBits: 8,
@@ -245,7 +249,7 @@ export type Params = ReturnType<typeof defaultParams>;
 // simulation: riding, camera, exposure and rendering.
 export const PRESET_KEYS = [
   'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'pictureFill',
-  'imageRotationDeg', 'globalBrightness',
+  'pictureZoom', 'pictureX', 'pictureY', 'pictureEdges', 'imageRotationDeg', 'globalBrightness',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
   'smileyBounce', 'smileyGrip', 'smileyGain',
   'dryerRibbons', 'dryerDrumTurn', 'dryerGrip', 'dryerGain', 'dryerShuffle',
@@ -277,7 +281,7 @@ export const PATTERN_LABELS: Record<PatternName, string> = {
 // Allowed values for the string settings that pick from a list.
 const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
   pattern: PATTERNS, bannerLower: BANNER_LOWER, bannerUpper: ['road', 'bike'], fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'], mapping: ['polar', 'columns'],
-  fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
+  fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], pictureEdges: ['dark', 'mirror'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
   ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
   ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],
   overflow: ['wrap', 'blank'],
@@ -321,7 +325,8 @@ export function speedMps(p: Params): number {
  * to a picture starts them afresh, so a picture always begins the same way, whatever the preset
  * showed before: cropped to fill the wheel and turning with it.
  */
-export const PICTURE_KEYS = ['displayMode', 'tileGapM', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'pictureFill', 'imageRotationDeg',
+export const PICTURE_KEYS = ['displayMode', 'tileGapM', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'pictureFill',
+  'pictureZoom', 'pictureX', 'pictureY', 'pictureEdges', 'imageRotationDeg',
   'frameAdvance', 'playbackRate', 'revsPerFrame'] as const satisfies readonly PresetKey[];
 
 /** Show the preset's image or video instead of its pattern, with the picture settings at their defaults. */

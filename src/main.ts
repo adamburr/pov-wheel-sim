@@ -103,7 +103,7 @@ let imageKey = '';
 let rebuildTimer = 0;
 
 function imageKeyFor(d: Derived) {
-  return [sourceVersion, bannerLowerOf(p) === 'picture', p.mapping, p.fit, p.pictureFill, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
+  return [sourceVersion, bannerLowerOf(p) === 'picture', p.mapping, p.fit, p.pictureFill, p.pictureZoom, p.pictureX, p.pictureY, p.pictureEdges, p.useMedia, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
     p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData, p.radialStagger].join('|');
 }
 
@@ -120,7 +120,11 @@ async function rebuildImage(d: Derived) {
   let budgetEnd = performance.now() + 30;
   for (const [i, frame] of source.frames.entries()) {
     const wheelFrame = source.wheelFrames?.[i] ?? frame;
-    const c = polarize(p.mapping === 'polar' ? squareImageData(wheelFrame, p.pictureFill === 'crop') : rawImageData(frame), p, d);
+    // Zoom and move apply to your own pictures; patterns are drawn to fit the wheel already.
+    const square = () => (p.useMedia
+      ? squareImageData(wheelFrame, p.pictureFill === 'crop', p.pictureZoom, p.pictureX, p.pictureY, p.pictureEdges)
+      : squareImageData(wheelFrame, p.pictureFill === 'crop'));
+    const c = polarize(p.mapping === 'polar' ? square() : rawImageData(frame), p, d);
     cols.push(c);
     const bannerFrame = bannerLowerOf(p) === 'picture' ? frame : source.bannerFrames?.[i] ?? bannerTile(frame);
     bans.push(bannerBitmap(rawImageData(bannerFrame), p, d));

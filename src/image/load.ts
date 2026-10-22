@@ -481,15 +481,65 @@ export function blankAnimation(): Animation {
   return { frames: [c], fps: 1 };
 }
 
-/** Square, centred copy for polar mapping: cropped to fill the square, or letterboxed whole. */
-export function squareImageData(src: ImageSource, crop = false): ImageData {
+/**
+ * Square copy for polar mapping: cropped to fill the square, or letterboxed whole, then scaled
+ * by zoom about the centre and moved right by x and up by y (shares of the square's size).
+ * Where the picture doesn't reach, edges fills in: dark, or a heavily blurred mirror tiling of
+ * the picture (flipped copies all around, so its edges continue softly into the rest of the wheel).
+ */
+export function squareImageData(src: ImageSource, crop = false, zoom = 1, x = 0, y = 0,
+  edges: 'dark' | 'mirror' = 'dark'): ImageData {
   const { g } = canvas();
   g.fillStyle = '#000';
   g.fillRect(0, 0, SIZE, SIZE);
-  const s = (crop ? Math.max : Math.min)(SIZE / src.width, SIZE / src.height);
+  const s = (crop ? Math.max : Math.min)(SIZE / src.width, SIZE / src.height) * zoom;
   const w = src.width * s, h = src.height * s;
-  g.drawImage(src, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+  const left = (SIZE - w) / 2 + x * SIZE, top = (SIZE - h) / 2 - y * SIZE;
+  if (edges === 'mirror') {
+    // Tile at a small size, blur that heavily, then enlarge it smoothly. The blur is done here
+    // rather than with the canvas blur filter, which Safari lacks.
+    const k = 1 / 8, tiny = canvas(SIZE * k, SIZE * k), mid = canvas(SIZE / 2, SIZE / 2);
+    for (let i = Math.floor(-left / w); left + i * w < SIZE; i++) {
+      for (let j = Math.floor(-top / h); top + j * h < SIZE; j++) {
+        const fx = i % 2 !== 0, fy = j % 2 !== 0; // flipped in turn, so each edge meets its own mirror image
+        tiny.g.save();
+        tiny.g.translate((left + i * w + (fx ? w : 0)) * k, (top + j * h + (fy ? h : 0)) * k);
+        tiny.g.scale(fx ? -1 : 1, fy ? -1 : 1);
+        tiny.g.drawImage(src, 0, 0, w * k, h * k);
+        tiny.g.restore();
+      }
+    }
+    const px = tiny.g.getImageData(0, 0, tiny.c.width, tiny.c.height);
+    blur(px, Math.round(tiny.c.width / 10));
+    tiny.g.putImageData(px, 0, 0);
+    for (const t of [mid.g, g]) { t.imageSmoothingEnabled = true; t.imageSmoothingQuality = 'high'; }
+    mid.g.drawImage(tiny.c, 0, 0, SIZE / 2, SIZE / 2);
+    g.drawImage(mid.c, 0, 0, SIZE, SIZE);
+  }
+  g.drawImage(src, left, top, w, h);
   return g.getImageData(0, 0, SIZE, SIZE);
+}
+
+/** Blur pixels in place: three passes of a box blur `radius` wide each way (close to a Gaussian). */
+function blur(img: ImageData, radius: number) {
+  const { data, width, height } = img, line = new Float32Array(Math.max(width, height) * 4);
+  const pass = (n: number, count: number, at: (line: number, i: number) => number) => {
+    for (let l = 0; l < count; l++) {
+      for (let i = 0; i < n; i++) for (let ch = 0; ch < 4; ch++) line[i * 4 + ch] = data[at(l, i) + ch];
+      for (let i = 0; i < n; i++) {
+        const lo = Math.max(0, i - radius), hi = Math.min(n - 1, i + radius);
+        for (let ch = 0; ch < 4; ch++) {
+          let sum = 0;
+          for (let j = lo; j <= hi; j++) sum += line[j * 4 + ch];
+          data[at(l, i) + ch] = sum / (hi - lo + 1);
+        }
+      }
+    }
+  };
+  for (let p = 0; p < 3; p++) {
+    pass(width, height, (y, x) => (y * width + x) * 4);
+    pass(height, width, (x, y) => (y * width + x) * 4);
+  }
 }
 
 /** Native-resolution copy (capped) for the Adafruit columns-as-angles mapping. */

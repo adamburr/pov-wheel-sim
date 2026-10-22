@@ -100,10 +100,12 @@ describe('preset store', () => {
 describe('pictures', () => {
   it('start the same way whatever the preset showed before: cropped to fill the wheel, turning with it', () => {
     const p = { ...defaultParams(), pattern: 'Bouncing ball (animated)' as const, displayMode: 'banner' as const,
-      bannerUpper: 'bike' as const, bannerLower: 'bridge' as const, spinSeconds: 16, fit: 'annulus' as const, pictureFill: 'whole' as const };
+      bannerUpper: 'bike' as const, bannerLower: 'bridge' as const, spinSeconds: 16, fit: 'annulus' as const, pictureFill: 'whole' as const,
+      pictureZoom: 2, pictureX: 0.3, pictureY: -0.2, pictureEdges: 'dark' as const };
     showPicture(p);
     expect(p.useMedia).toBe(true);
-    expect(p).toMatchObject({ displayMode: 'wheel', bannerUpper: 'road', spinSeconds: 0, fit: 'disc', pictureFill: 'crop', mapping: 'polar' });
+    expect(p).toMatchObject({ displayMode: 'wheel', bannerUpper: 'road', spinSeconds: 0, fit: 'disc', pictureFill: 'crop', mapping: 'polar',
+      pictureZoom: 1, pictureX: 0, pictureY: 0, pictureEdges: 'mirror' });
     // Already showing a picture: its settings stay as the rider set them.
     p.displayMode = 'banner'; p.spinSeconds = 8;
     showPicture(p);

@@ -173,6 +173,10 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const picture = pg.addFolder('Picture details').close();
   picture.add(p, 'mapping', { 'Picture (polar)': 'polar', 'Adafruit columns': 'columns' }).name('Layout');
   const fillCtl = picture.add(p, 'pictureFill', { 'Crop to fill': 'crop', 'Whole picture': 'whole' }).name('Fill');
+  const zoomCtl = picture.add(p, 'pictureZoom', 0.25, 4, 0.05).name('Zoom');
+  const moveXCtl = picture.add(p, 'pictureX', -1, 1, 0.01).name('Move right');
+  const moveYCtl = picture.add(p, 'pictureY', -1, 1, 0.01).name('Move up');
+  const edgesCtl = picture.add(p, 'pictureEdges', { 'Blurred mirror': 'mirror', 'Dark': 'dark' }).name('Edges');
   picture.add(p, 'fit', { 'Whole disc': 'disc', 'LED ring only': 'annulus' }).name('Fit');
   picture.add(p, 'imageRotationDeg', -180, 180, 1).name('Rotation (°)');
 
@@ -321,7 +325,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     spinCtl.show(p.displayMode === 'wheel' && !live);
     gapCtl.show(p.displayMode === 'banner' && p.bannerUpper === 'road');
     lowerCtl.show(p.displayMode === 'banner' && !p.useMedia); // a picture always fills the banner's full height
-    fillCtl.show(p.useMedia && p.mapping === 'polar');
+    for (const c of [fillCtl, zoomCtl, moveXCtl, moveYCtl, edgesCtl]) c.show(p.useMedia && p.mapping === 'polar');
     water.show(isWater);
     smiley.show(isSmiley);
     dryer.show(isDryer);
