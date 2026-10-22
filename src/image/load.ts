@@ -169,6 +169,16 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
       }
       break;
     }
+    case 'Tumble dryer': { // a still of the drum: rainbow ribbons heaped at the bottom; the live simulation tumbles them
+      g.strokeStyle = 'rgb(217, 235, 255)'; g.lineWidth = R * 0.06;
+      g.beginPath(); g.arc(cx, cy, R * 0.97, 0, Math.PI * 2); g.stroke();
+      for (let i = 0; i < 6; i++) {
+        g.strokeStyle = `hsl(${i * 60}, 100%, 55%)`; g.lineWidth = R * 0.12;
+        const a = Math.PI / 2 + (i - 2.5) * 0.18;
+        g.beginPath(); g.arc(cx, cy, R * (0.85 - 0.08 * (i % 4)), a - 0.6, a + 0.6); g.stroke();
+      }
+      break;
+    }
   }
   return c;
 }

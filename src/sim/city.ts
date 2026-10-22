@@ -67,7 +67,7 @@ export class CityRide {
       }
       case 'brake':
         this.phase = 'stopped';
-        this.until = t + this.between(2, 6);
+        this.until = t + this.between(1, 3); // a short wait at the light
         break;
     }
     return true;

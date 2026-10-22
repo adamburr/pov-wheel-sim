@@ -8,6 +8,7 @@ import { getMedia, pruneMedia, putMedia } from './mediaStore';
 import { derive, type Derived } from './sim/timing';
 import { type AnimSpec, animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
 import { WaterSource } from './image/waterSource';
+import { RibbonSource } from './image/ribbonSource';
 import { SmileySource } from './image/smileySource';
 import { CityRide } from './sim/city';
 import { pedalSurge, riderPower } from './sim/rider';
@@ -75,9 +76,11 @@ let buildGen = 0;
 // Physics looks: the firmware simulates them live instead of storing frames.
 const water = new WaterSource();
 const smiley = new SmileySource();
+const dryer = new RibbonSource();
 const isWater = () => !p.useMedia && p.pattern === 'Water (fluid sim)';
 const isSmiley = () => !p.useMedia && p.pattern === 'Bouncing smiley';
-const liveSource = () => (isWater() ? water : isSmiley() ? smiley : undefined);
+const isDryer = () => !p.useMedia && p.pattern === 'Tumble dryer';
+const liveSource = () => (isWater() ? water : isSmiley() ? smiley : isDryer() ? dryer : undefined);
 let liveShown = false;
 let imageKey = '';
 let rebuildTimer = 0;
@@ -346,6 +349,10 @@ function updateStats(d: Derived, now: number) {
     w && w.sim ? {
       grid: w.sim.n, particles: w.sim.count, flopsPerStep: w.sim.flopsPerStep(), ramBytes: w.ramBytes(),
       aEstimate: w.aEstimate, aTrue: w.aTrue, wallSpeed: w.wallSpeed,
+    } : undefined,
+    isDryer() && dryer.dryer ? {
+      label: 'Ribbons', detail: `${dryer.dryer.count} × ${dryer.dryer.points} points · drum ×${p.dryerDrumTurn}`,
+      flopsPerStep: dryer.dryer.flopsPerStep(), ramBytes: dryer.ramBytes(),
     } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const v = motion.speed(simTime);
@@ -422,7 +429,7 @@ function frame(now: number) {
   const surge = pedalSurge(p.pedalSurgePct / 100, motion.speed(simTime), vTarget, rampG * 9.81, 2 * Math.PI * strokeHz);
   motion.configure(vTarget, d.tireRadius, surge.cruise, strokeHz, simTime, rampG * 9.81, surge.ramp);
 
-  // Content: live frames from a physics look (water, bouncing smiley), or the converted image/animation.
+  // Content: live frames from a physics look (water, bouncing smiley, tumble dryer), or the converted image/animation.
   let anim = animSpecFor(p, buffer?.frames ?? 1);
   const live = liveSource();
   if (live) {

@@ -90,7 +90,7 @@ export const SHUTTERS: Record<string, number> = {
 };
 
 export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel', 'Rainbow spiral', 'Checkerboard', 'Text', 'Wide text',
-  'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)', 'Water (fluid sim)', 'Bouncing smiley'] as const;
+  'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)', 'Water (fluid sim)', 'Bouncing smiley', 'Tumble dryer'] as const;
 export type PatternName = (typeof PATTERNS)[number];
 
 /**
@@ -196,6 +196,12 @@ export function defaultParams() {
     smileyBounce: 0.9,        // restitution against the wall
     smileyGrip: 0.45,         // friction with the turning wall: just short of flipping the smiley (from about 0.5 it does)
     smileyGain: 2,            // exaggerates the sensed acceleration, like the water's slosh
+    // Tumble dryer (ribbons): cloth ribbons tumbling in the drum, lifted by three paddles
+    dryerRibbons: 6,          // how many ribbons (3–10)
+    dryerDrumTurn: 0.25,      // the drum's spin as a share of the wheel's: at ×1 the ribbons pin to the rim
+    dryerGrip: 0.4,           // share of the slip against the drum wall removed at each contact
+    dryerGain: 2,             // exaggerates the sensed acceleration, like the water's slosh
+    dryerShuffle: 0.5,        // depth swaps per second between neighbouring ribbons (0 = a fixed order)
     pattern: 'Water (fluid sim)' as PatternName,
     text: 'HELLO',
     mapping: 'polar' as 'polar' | 'columns',
@@ -241,6 +247,7 @@ export const PRESET_KEYS = [
   'globalBrightness',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
   'smileyBounce', 'smileyGrip', 'smileyGain',
+  'dryerRibbons', 'dryerDrumTurn', 'dryerGrip', 'dryerGain', 'dryerShuffle',
   'frameAdvance', 'playbackRate', 'revsPerFrame',
 ] as const satisfies readonly (keyof Params)[];
 export type PresetKey = (typeof PRESET_KEYS)[number];
@@ -263,6 +270,7 @@ export const PATTERN_LABELS: Record<PatternName, string> = {
   'Color wheel': 'Color wheel', 'Rainbow spiral': 'Rainbow spiral', 'Checkerboard': 'Checkerboard',
   'Text': 'Text', 'Wide text': 'Wide text', 'Bouncing ball (animated)': 'Bouncing ball',
   'Beating heart (animated)': 'Beating heart', 'Counter (animated)': 'Counter', 'Bouncing smiley': 'Bouncing smiley',
+  'Tumble dryer': 'Tumble dryer',
 };
 
 // Allowed values for the string settings that pick from a list.

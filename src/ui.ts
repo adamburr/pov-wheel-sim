@@ -150,6 +150,13 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   smiley.add(p, 'smileyGrip', 0, 2, 0.05).name('Wall grip');
   smiley.add(p, 'smileyGain', 0, 5, 0.1).name('Push ×');
 
+  const dryer = pg.addFolder('Tumble dryer');
+  dryer.add(p, 'dryerRibbons', 3, 10, 1).name('Ribbons');
+  dryer.add(p, 'dryerDrumTurn', 0, 1, 0.05).name('Drum turn (× wheel)');
+  dryer.add(p, 'dryerGrip', 0, 1, 0.05).name('Drum grip');
+  dryer.add(p, 'dryerGain', 0, 5, 0.1).name('Push ×');
+  dryer.add(p, 'dryerShuffle', 0, 3, 0.1).name('Layer shuffle (per s)');
+
   const water = pg.addFolder('Water');
   water.add(p, 'fluid', Object.keys(FLUIDS)).name('Fluid').onChange((k: string) => {
     const f = FLUIDS[k];
@@ -249,7 +256,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const freeCtl = fwMore.add(p, 'freeRunColsPerSec', 50, 20000, 10).name('Free-run cols/s');
   fwMore.add(p, 'maxFrames', 1, 120, 1).name('Max frames (import)');
   fwMore.add(p, 'videoFps', 1, 30, 1).name('Video sample fps');
-  // How hard the firmware's physics looks (water, bouncing smiley) work: the same for every look.
+  // How hard the firmware's physics looks (water, bouncing smiley, tumble dryer) work: the same for every look.
   const waterSim = ctl.addFolder('Physics simulation').close();
   waterSim.add(p, 'waterGrid', 12, 64, 2).name('Water grid (cells across)');
   waterSim.add(p, 'waterHz', 10, 60, 5).name('Sim rate (Hz)');
@@ -318,7 +325,8 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   function syncVisibility() {
     const isWater = !p.useMedia && p.pattern === 'Water (fluid sim)';
     const isSmiley = !p.useMedia && p.pattern === 'Bouncing smiley';
-    const live = isWater || isSmiley;
+    const isDryer = !p.useMedia && p.pattern === 'Tumble dryer';
+    const live = isWater || isSmiley || isDryer;
     const animated = hooks.isAnimated();
     textCtl.show(!p.useMedia && (p.pattern === 'Text' || p.pattern === 'Wide text'));
     uploadCtl.show(p.useMedia);
@@ -328,6 +336,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     lowerCtl.show(p.displayMode === 'banner');
     water.show(isWater);
     smiley.show(isSmiley);
+    dryer.show(isDryer);
     anim.show(!live && animated);
     revsCtl.show(p.frameAdvance === 'revolution');
     picture.show(!live);

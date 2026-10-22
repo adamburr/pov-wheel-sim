@@ -3,7 +3,7 @@ import type { Derived } from '../sim/timing';
 import { type AnimSpec, magnetAccel, magnetOmega, type WheelMotion } from '../sim/firmware';
 import { SmileyBody } from '../sim/rigid';
 import { makePattern } from './load';
-import { ledRadius, rowCount } from './polarize';
+import { ledPositions, ledRadius, rowCount } from './polarize';
 
 const GRAVITY = 9.81;
 const FRAMES = 64;          // ring buffer layers, as for the water
@@ -130,31 +130,6 @@ export class SmileySource {
     }
     this.meanDuty = sum / ((pos.length / 2) * 3);
   }
-}
-
-/**
- * Each LED's position for each column, in the same upright frame as the simulation. Same angle
- * convention as the water's lookup table: back strips see the same body from behind.
- */
-function ledPositions(p: Params, d: Derived): Float32Array {
-  const C = p.columnsPerRev, n = d.ledsPerStrip, rows = rowCount(p, d);
-  const pos = new Float32Array(C * rows * 2);
-  const rot = (p.imageRotationDeg * Math.PI) / 180;
-  const backs = p.doubleSided && p.backData === 'independent' ? 2 : 1;
-  for (let back = 0; back < backs; back++) {
-    for (let s = 0; s < p.stripCount; s++) {
-      for (let k = 0; k < n; k++) {
-        const row = (back * p.stripCount + s) * n + k;
-        const r = ledRadius(p, d, s, k);
-        for (let c = 0; c < C; c++) {
-          const th = -((c + 0.5) * ((Math.PI * 2) / C) + rot);
-          pos[(row * C + c) * 2] = r * Math.cos(th);
-          pos[(row * C + c) * 2 + 1] = r * Math.sin(th);
-        }
-      }
-    }
-  }
-  return pos;
 }
 
 /** The smiley face, scaled down to the bitmap the firmware keeps. */
