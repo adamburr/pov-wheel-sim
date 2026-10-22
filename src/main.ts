@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { defaultParams, type Params, speedMps } from './params';
 import { buildUi, type Ui } from './ui';
 import { newId, PresetStore } from './presets';
-import { deviceDefaults, loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, setupFileName } from './setupFile';
+import { loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, setupFileName } from './setupFile';
+import { DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from './defaults';
 import { getMedia, pruneMedia, putMedia } from './mediaStore';
 import { derive, type Derived } from './sim/timing';
 import { type AnimSpec, animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
@@ -20,8 +21,12 @@ import { createCamera, createStripCamera, placeCamera, placeStripCamera, setFree
 // The saved setup: the hardware build and the presets (the active one is loaded into p).
 const storage = (() => { try { return window.localStorage; } catch { return undefined; } })();
 const p = defaultParams();
-Object.assign(p, loadDevice(storage));
-const store = new PresetStore(storage);
+Object.assign(p, defaultDevice(), loadDevice(storage));
+const store = new PresetStore(storage, defaultBuiltIns);
+// Media embedded in default-setup.json, so the default presets that use it can find it.
+for (const [id, m] of Object.entries(DEFAULT_SETUP.media)) putMedia(id, new Blob([m.bytes as BlobPart], { type: m.type }));
+/** Media to keep stored: what the presets use, plus the defaults' (for New and Restore). */
+const keptMedia = () => new Set([...store.mediaIds(), ...Object.keys(DEFAULT_SETUP.media)]);
 store.apply(p);
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -171,7 +176,7 @@ const hooks = {
     store.apply(p);
     loadSource();
     refreshGui();
-    pruneMedia(store.mediaIds());
+    pruneMedia(keptMedia());
   },
   onPresetEdit: (key: string) => {
     if (key === 'name') return; // renamed in the store already
@@ -194,13 +199,13 @@ const hooks = {
       store.capture(p);
       loadGen++;
       setSource(anim);
-      pruneMedia(store.mediaIds());
+      pruneMedia(keptMedia());
     } catch (err) {
       ui?.notify(`Couldn't load ${file.name}: ${(err as Error).message}`);
     }
   },
   onNewSetup: () => {
-    Object.assign(p, defaultParams());
+    Object.assign(p, defaultParams(), defaultDevice());
     saveDevice(storage, p);
     store.restoreBuiltIns();
     if (p.cityMode) city.start(simTime, p);
@@ -211,7 +216,7 @@ const hooks = {
     try {
       const setup = parseSetup(await file.text());
       for (const [id, m] of Object.entries(setup.media)) await putMedia(id, new Blob([m.bytes as BlobPart], { type: m.type }));
-      Object.assign(p, deviceDefaults(), setup.device);
+      Object.assign(p, defaultDevice(), setup.device);
       saveDevice(storage, p);
       store.replaceAll(setup.presets, setup.activePreset);
       hooks.onPresetSelected();

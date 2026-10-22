@@ -14,22 +14,6 @@ export interface KeyValueStorage {
 
 const STORAGE_KEY = 'pov-wheel-sim.presets.v1';
 
-export const BUILT_IN_PRESETS: { name: string; settings: PresetSettings }[] = [
-  { name: 'Water', settings: { pattern: 'Water (fluid sim)' } },
-  { name: 'Smiley', settings: { pattern: 'Smiley' } },
-  { name: 'Rainbow spiral', settings: { pattern: 'Rainbow spiral', spinSeconds: 16 } },
-  { name: 'Clock face', settings: { pattern: 'Clock face' } },
-  { name: 'Beating heart', settings: { pattern: 'Beating heart (animated)' } },
-  { name: 'HELLO banner', settings: { pattern: 'Wide text', text: 'HELLO WORLD', displayMode: 'banner', bannerLower: 'rainbow' } },
-  {
-    name: 'Ball on a bridge',
-    settings: { pattern: 'Bouncing ball (animated)', displayMode: 'banner', bannerLower: 'bridge', bannerUpper: 'bike' },
-  },
-];
-
-/** The preset the app opens on: on first load, after New, and after restoring the built-ins. */
-export const DEFAULT_PRESET = 'Ball on a bridge';
-
 export function newId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
@@ -39,8 +23,15 @@ export function presetDefaults(): Pick<Params, PresetKey> {
   return pick(defaultParams(), PRESET_KEYS);
 }
 
-export function builtInPresets(): Preset[] {
-  return BUILT_IN_PRESETS.map((b) => ({ id: newId(), name: b.name, settings: { ...presetDefaults(), ...b.settings } }));
+/**
+ * The presets a fresh start uses (first load, New, Restore built-in presets) and which one is
+ * selected. The app takes them from default-setup.json (see defaults.ts).
+ */
+export interface BuiltIns { presets: Preset[]; active: number }
+
+/** Built-ins of last resort: one preset at the default settings. */
+export function plainBuiltIns(): BuiltIns {
+  return { presets: [{ id: newId(), name: 'Default', settings: presetDefaults() }], active: 0 };
 }
 
 /** Validate presets read from storage or a file; undefined if there are none worth keeping. */
@@ -69,7 +60,7 @@ export class PresetStore {
   presets: Preset[] = [];
   activeIndex = 0;
 
-  constructor(private storage?: KeyValueStorage) {
+  constructor(private storage?: KeyValueStorage, private builtIns: () => BuiltIns = plainBuiltIns) {
     this.load();
   }
 
@@ -102,8 +93,8 @@ export class PresetStore {
   }
 
   restoreBuiltIns() {
-    const presets = builtInPresets();
-    this.replaceAll(presets, Math.max(0, presets.findIndex((x) => x.name === DEFAULT_PRESET)));
+    const { presets, active } = this.builtIns();
+    this.replaceAll(presets, active);
   }
 
   select(i: number) {

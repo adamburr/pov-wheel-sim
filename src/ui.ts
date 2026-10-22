@@ -4,6 +4,7 @@ import {
   PATTERNS, PRESET_KEYS, SHUTTERS, WHEELS,
 } from './params';
 import type { PresetStore } from './presets';
+import { defaultDevice } from './defaults';
 
 export type Tab = 'presets' | 'hardware' | 'simulator' | 'stats';
 
@@ -251,8 +252,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const reset = { click: () => {} };
   const resetCtl = hg.add(reset, 'click').name('↺ Reset hardware');
   reset.click = confirmController(resetCtl, 'Click again to reset the hardware', () => {
-    const d = defaultParams();
-    for (const k of DEVICE_KEYS) (p as Record<string, unknown>)[k] = d[k];
+    Object.assign(p, defaultDevice());
     hooks.onDeviceEdit();
     refresh();
     hooks.onViewChange();

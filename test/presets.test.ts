@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, DEVICE_KEYS, PRESET_KEYS } from '../src/params';
-import { BUILT_IN_PRESETS, DEFAULT_PRESET, type KeyValueStorage, PresetStore } from '../src/presets';
+import raw from '../default-setup.json';
+import { DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from '../src/defaults';
+import { type BuiltIns, type KeyValueStorage, newId, presetDefaults, PresetStore } from '../src/presets';
 import { loadDevice, parseSetup, saveDevice, serializeSetup, setupFileName } from '../src/setupFile';
+
+// The store tests use their own built-ins, so they don't depend on what default-setup.json holds.
+const TEST_NAMES = ['Water', 'Smiley', 'Spiral', 'Clock', 'Heart', 'Banner', 'Ball'];
+const testBuiltIns = (): BuiltIns => ({
+  presets: TEST_NAMES.map((name) => ({ id: newId(), name, settings: presetDefaults() })),
+  active: TEST_NAMES.length - 1,
+});
+const store = (st?: KeyValueStorage) => new PresetStore(st, testBuiltIns);
 
 function memoryStorage(): KeyValueStorage & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -18,18 +28,14 @@ describe('setting groups', () => {
 });
 
 describe('preset store', () => {
-  it('seeds 5–8 built-in presets on first load, Water first, opening on the default', () => {
-    const s = new PresetStore(memoryStorage());
-    expect(s.presets.length).toBe(BUILT_IN_PRESETS.length);
-    expect(s.presets.length).toBeGreaterThanOrEqual(5);
-    expect(s.presets.length).toBeLessThanOrEqual(8);
-    expect(s.presets[0].name).toBe('Water');
-    expect(s.active.name).toBe(DEFAULT_PRESET);
-    expect(new Set(s.presets.map((x) => x.name)).size).toBe(s.presets.length);
+  it('seeds the built-in presets on first load and selects the chosen one', () => {
+    const s = store(memoryStorage());
+    expect(s.presets.map((x) => x.name)).toEqual(TEST_NAMES);
+    expect(s.active.name).toBe('Ball');
   });
 
   it('steps through presets with one button, wrapping round', () => {
-    const s = new PresetStore();
+    const s = store();
     s.select(0);
     const names = s.presets.map(() => s.next().name);
     expect(names.at(-1)).toBe('Water');
@@ -37,7 +43,7 @@ describe('preset store', () => {
   });
 
   it('adds a copy after the active preset, deletes, and moves', () => {
-    const s = new PresetStore();
+    const s = store();
     s.select(2);
     const copy = s.add();
     expect(s.activeIndex).toBe(3);
@@ -47,11 +53,11 @@ describe('preset store', () => {
     expect(s.active.name).toBe(`${s.presets[2].name} copy 2`); // the same preset stays active
     expect(s.activeIndex).toBe(3);
     expect(s.remove()?.name).toBe(`${s.presets[2].name} copy 2`);
-    expect(s.presets.length).toBe(BUILT_IN_PRESETS.length + 1);
+    expect(s.presets.length).toBe(TEST_NAMES.length + 1);
   });
 
   it('refuses to delete the last preset', () => {
-    const s = new PresetStore();
+    const s = store();
     while (s.presets.length > 1) s.remove();
     expect(s.remove()).toBeUndefined();
     expect(s.presets.length).toBe(1);
@@ -59,18 +65,18 @@ describe('preset store', () => {
 
   it('saves and loads, and falls back to the built-ins on bad data', () => {
     const st = memoryStorage();
-    const a = new PresetStore(st);
+    const a = store(st);
     a.select(4);
     a.rename('Mine');
-    const b = new PresetStore(st);
+    const b = store(st);
     expect(b.activeIndex).toBe(4);
     expect(b.active.name).toBe('Mine');
     st.data.set([...st.data.keys()][0], '{not json');
-    expect(new PresetStore(st).presets.map((x) => x.name)).toEqual(BUILT_IN_PRESETS.map((x) => x.name));
+    expect(store(st).presets.map((x) => x.name)).toEqual(TEST_NAMES);
   });
 
   it('captures and applies only preset values', () => {
-    const s = new PresetStore();
+    const s = store();
     const p = { ...defaultParams(), pattern: 'Smiley' as const, text: 'HI', speed: 25, chip: 'ESP32' };
     s.capture(p);
     expect(s.active.settings).not.toHaveProperty('speed');
@@ -84,15 +90,38 @@ describe('preset store', () => {
   });
 
   it('never turns media on for a preset without media', () => {
-    const s = new PresetStore();
+    const s = store();
     s.capture({ ...defaultParams(), useMedia: true });
     expect(s.active.settings.useMedia).toBe(false);
   });
 });
 
+describe('default setup file', () => {
+  it('is a valid setup the app can start from', () => {
+    expect(DEFAULT_SETUP.presets.length).toBeGreaterThan(0);
+    expect(DEFAULT_SETUP.activePreset).toBeGreaterThanOrEqual(0);
+    expect(DEFAULT_SETUP.activePreset).toBeLessThan(DEFAULT_SETUP.presets.length);
+    // Every hardware value in the file is valid (none dropped), and every preset's media is embedded.
+    expect(Object.keys(DEFAULT_SETUP.device).sort()).toEqual(Object.keys(raw.device).sort());
+    for (const pr of DEFAULT_SETUP.presets) if (pr.media) expect(DEFAULT_SETUP.media).toHaveProperty(pr.media.id);
+  });
+
+  it('seeds the presets and the selection, with fresh copies each time', () => {
+    const s = new PresetStore(memoryStorage(), defaultBuiltIns);
+    expect(s.presets.map((x) => x.name)).toEqual(DEFAULT_SETUP.presets.map((x) => x.name));
+    expect(s.activeIndex).toBe(DEFAULT_SETUP.activePreset);
+    s.rename('Changed');
+    expect(defaultBuiltIns().presets[s.activeIndex].name).toBe(DEFAULT_SETUP.presets[s.activeIndex].name);
+  });
+
+  it('supplies the default hardware', () => {
+    expect(defaultDevice()).toMatchObject(DEFAULT_SETUP.device);
+  });
+});
+
 describe('setup file', () => {
   it('round-trips the hardware, presets and embedded media', () => {
-    const s = new PresetStore();
+    const s = store();
     s.select(1);
     s.active.media = { id: 'm1', name: 'cat.gif', type: 'image/gif' };
     s.capture({ ...defaultParams(), useMedia: true });

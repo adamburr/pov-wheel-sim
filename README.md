@@ -55,11 +55,15 @@ Two views show the same moment and the same animation. The main view follows the
 
 ### Presets
 
-A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with seven: Water, Smiley, Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Delete, Restore, New and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The default setup has seven: Water, Smiley, Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Delete, Restore, New and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
 
 ### Setups
 
 A setup is the hardware build plus all the presets. It saves automatically in the browser, uploaded images included. **Save** downloads it as a `.json` file with images embedded, **Open…** (or dropping the file on the page) loads one, and **New** puts everything back to the defaults: the hardware, the built-in presets and the simulator settings. The setup file is also what a future version will flash to the wheel's controller.
+
+### Changing the defaults
+
+The defaults (the hardware, the presets and which preset the app opens on) are a setup file in the repo, [`default-setup.json`](default-setup.json). The app uses it on first load, for **New**, **Restore built-in presets** and **Reset hardware**. To change the defaults, set things up in the app, press **Save**, replace `default-setup.json` with the downloaded file, and commit. Uploaded images come along, embedded in the file. `npm test` checks that the file is a valid setup. Simulator settings (camera, units, the roadside strip) aren't part of a setup, so their defaults stay in `src/params.ts`.
 
 ## Running
 
@@ -161,6 +165,7 @@ LED PWM rates vary between datasheets and clone parts, so every value filled in 
 ## Layout
 
 - `src/params.ts`: parameters, the hardware lookup tables, and which settings belong to presets vs the hardware
+- `default-setup.json`, `src/defaults.ts`: the default setup and how the app loads it
 - `src/presets.ts`, `src/setupFile.ts`, `src/mediaStore.ts`: named presets, the setup file, and stored uploads
 - `src/ui.ts`: the settings panel and preset list
 - `src/sim/`: LED bus timing, wheel kinematics, hall-sensor firmware model, stats

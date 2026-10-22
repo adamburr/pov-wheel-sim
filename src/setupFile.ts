@@ -1,6 +1,6 @@
 // The setup file: the hardware build plus every preset (with uploaded media embedded), saved
 // as one JSON file. It is also the bundle that will later be flashed to the controller.
-import { defaultParams, DEVICE_KEYS, type DeviceKey, type Params, pick, sanitize } from './params';
+import { DEVICE_KEYS, type DeviceKey, type Params, pick, sanitize } from './params';
 import { type KeyValueStorage, type Preset, PresetStore, sanitizePresets } from './presets';
 
 export const SETUP_FORMAT = 'pov-wheel-setup';
@@ -73,11 +73,6 @@ export function parseSetup(text: string): Setup {
   const device = { ...sanitize(raw.device, DEVICE_KEYS) };
   if (typeof raw.name === 'string' && !device.setupName) device.setupName = raw.name.slice(0, 60);
   return { device, presets, activePreset: Number(raw.activePreset) || 0, media };
-}
-
-/** The hardware build at its defaults. */
-export function deviceDefaults(): Pick<Params, DeviceKey> {
-  return pick(defaultParams(), DEVICE_KEYS);
 }
 
 export function saveDevice(storage: KeyValueStorage | undefined, p: Params) {
