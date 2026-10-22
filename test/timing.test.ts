@@ -160,6 +160,35 @@ describe('animation frame selection', () => {
     const distinct = new Set(slices.map((s) => s.frame0));
     expect(distinct.size).toBeLessThanOrEqual(2);
   });
+
+  // Frames over [10, 14] s: they only ever step forward by one, and step about turns/revsPerFrame times.
+  const steps = (revsPerFrame: number) => {
+    const p = { ...defaultParams(), frameAdvance: 'revolution' as const, revsPerFrame, hallPollMs: 0 };
+    const f = buildSlices(p, d, motion, 10, 14, Math.PI * 2, 0, 1000).filter((s) => s.enabled).map((s) => s.frame0);
+    for (let i = 1; i < f.length; i++) expect([0, 1]).toContain(f[i] - f[i - 1]);
+    return f[f.length - 1] - f[0];
+  };
+
+  it('steps fractional revsPerFrame partway round', () => {
+    const turns = motion.passes(10, 14).length;
+    expect(Math.abs(steps(1.5) - turns / 1.5)).toBeLessThanOrEqual(1);
+  });
+
+  it('steps several frames per turn below one turn per frame', () => {
+    const turns = motion.passes(10, 14).length;
+    expect(Math.abs(steps(0.25) - turns * 4)).toBeLessThanOrEqual(4);
+  });
+
+  it('changes frames between columns, not mid-column', () => {
+    const p = { ...defaultParams(), frameAdvance: 'revolution' as const, revsPerFrame: 0.25, hallPollMs: 0 };
+    const slices = buildSlices(p, d, motion, 10, 12, Math.PI * 2, 0, 1000);
+    for (let i = 1; i < slices.length; i++) {
+      const s = slices[i];
+      if (!s.enabled || s.frame0 === slices[i - 1].frame0 || s.P < 0) continue;
+      const cols = (s.t0 - s.m) / s.P;
+      expect(Math.abs(cols - Math.round(cols))).toBeLessThan(1e-3);
+    }
+  });
 });
 
 describe('frame stacking', () => {

@@ -268,6 +268,15 @@ export function buildSlices(
     if (s.start > tA && s.start < tB) cuts.add(s.start);
     if (s.end > tA && s.end < tB) cuts.add(s.end);
   }
+  // Revolution-synced frames can also step partway through a turn (under one turn per frame).
+  if (!anim.timed && anim.frames > 1) {
+    for (const s of segs) {
+      const w0 = Math.max(tA, s.start), w1 = Math.min(tB, s.end);
+      if (w1 <= w0) continue;
+      const g = (t: number) => frameStep(p, anim, motion, s, t);
+      for (let n = g(w0) + 1; n <= g(w1) && cuts.size < MAX_SLICES; n++) cuts.add(WheelMotion.solve(g, n, w0, w1));
+    }
+  }
   const L = p.trackLengthM;
   const rideBy = p.view === 'ride-by';
   if (rideBy) {
@@ -332,18 +341,27 @@ export function buildSlices(
 
 /**
  * Animation frame at the start of a slice. Timed playback advances at the playback fps (and may change
- * mid-revolution); revolution-synced playback steps playbackRate frames every revsPerFrame turns, at the
- * firmware's sync point: the magnet detection, the true pass (ideal), or a full image cycle
- * (free-running).
+ * mid-revolution); revolution-synced playback steps playbackRate frames every revsPerFrame turns.
  */
 function frameAt(p: Params, anim: AnimSpec, motion: WheelMotion, seg: Segment | undefined, t0: number, mid: number): number {
   const frames = anim.frames;
   if (frames <= 1) return 0;
   const wrap = (x: number) => ((x % frames) + frames) % frames;
   if (anim.timed) return wrap(t0 * anim.fps);
-  let k = 0;
-  if (seg?.k !== undefined) k = seg.k;
-  else if (seg && seg.P < 0) k = Math.floor(motion.phi(mid) / TAU);
-  else if (seg) k = Math.floor(mid / (seg.P * p.columnsPerRev));
-  return wrap(Math.floor((k * anim.rate) / Math.max(1, anim.revsPerFrame)));
+  return wrap(Math.floor(frameStep(p, anim, motion, seg, mid) * anim.rate));
+}
+
+/**
+ * How many revsPerFrame steps the firmware has counted by time t. Whole turns count at its sync point:
+ * the magnet detection, the true pass (ideal), or a full image cycle (free-running). Between them it
+ * counts columns sent (or true angle when encoder-locked), so under one turn per frame the frame
+ * changes between two columns, partway round.
+ */
+function frameStep(p: Params, anim: AnimSpec, motion: WheelMotion, seg: Segment | undefined, t: number): number {
+  const C = p.columnsPerRev;
+  let turns = 0;
+  if (seg && seg.P < 0) turns = motion.phi(t) / TAU;
+  else if (seg?.k !== undefined) turns = seg.k + Math.min(Math.floor((t - seg.m) / seg.P), C - 1) / C;
+  else if (seg) turns = Math.round(seg.m / (seg.P * C)) + Math.floor((t - seg.m) / seg.P) / C;
+  return Math.floor(turns / Math.max(0.05, anim.revsPerFrame) + 1e-9);
 }
