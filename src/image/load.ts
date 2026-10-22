@@ -473,12 +473,20 @@ async function loadVideo(file: File, maxFrames: number, fps: number): Promise<An
   }
 }
 
-/** Square, centred, letterboxed copy for polar mapping. */
-export function squareImageData(src: ImageSource): ImageData {
+/** A dark picture: image mode before a file is chosen, or when the stored file is gone. */
+export function blankAnimation(): Animation {
+  const { c, g } = canvas();
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, SIZE, SIZE);
+  return { frames: [c], fps: 1 };
+}
+
+/** Square, centred copy for polar mapping: cropped to fill the square, or letterboxed whole. */
+export function squareImageData(src: ImageSource, crop = false): ImageData {
   const { g } = canvas();
   g.fillStyle = '#000';
   g.fillRect(0, 0, SIZE, SIZE);
-  const s = Math.min(SIZE / src.width, SIZE / src.height);
+  const s = (crop ? Math.max : Math.min)(SIZE / src.width, SIZE / src.height);
   const w = src.width * s, h = src.height * s;
   g.drawImage(src, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
   return g.getImageData(0, 0, SIZE, SIZE);

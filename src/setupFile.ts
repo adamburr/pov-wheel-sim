@@ -65,10 +65,10 @@ export function parseSetup(text: string): Setup {
     if (!m || typeof m.data !== 'string' || typeof m.type !== 'string') continue;
     try {
       media[id] = { name: String(m.name ?? 'media'), type: m.type, bytes: base64ToBytes(m.data) };
-    } catch { /* skip unreadable media; its presets fall back to their pattern */ }
+    } catch { /* skip unreadable media; its presets show dark until a file is chosen again */ }
   }
   for (const pr of presets) {
-    if (pr.media && !media[pr.media.id]) { delete pr.media; pr.settings.useMedia = false; }
+    if (pr.media && !media[pr.media.id]) delete pr.media; // shown dark until a file is chosen again
   }
   const device = { ...sanitize(raw.device, DEVICE_KEYS) };
   if (typeof raw.name === 'string' && !device.setupName) device.setupName = raw.name.slice(0, 60);

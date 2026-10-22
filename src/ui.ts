@@ -1,7 +1,7 @@
 import GUI, { type Controller } from 'lil-gui';
 import {
   CHIPS, defaultParams, DEVICE_KEYS, FIRMWARE, FLUIDS, LEDS, PACKAGES, type Params, PATTERN_LABELS, type PatternName,
-  PATTERNS, PRESET_KEYS, SHUTTERS, WHEELS,
+  PATTERNS, PRESET_KEYS, SHUTTERS, showPicture, WHEELS,
 } from './params';
 import type { PresetStore } from './presets';
 import { defaultDevice } from './defaults';
@@ -118,22 +118,17 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const content = {
     get show() { return p.useMedia ? MEDIA : p.pattern; },
     set show(v: string) {
-      if (v !== MEDIA) { p.useMedia = false; p.pattern = v as PatternName; }
-      else if (store.active.media) p.useMedia = true;
-      else mediaInput.click();
+      if (v === MEDIA) showPicture(p);
+      else { p.useMedia = false; p.pattern = v as PatternName; }
     },
   };
-  let mediaLabel = '';
-  const showOptions = () => {
-    const opts: Record<string, string> = {};
-    for (const name of PATTERNS) opts[PATTERN_LABELS[name]] = name;
-    opts[mediaLabel] = MEDIA;
-    return opts;
-  };
-  const currentMediaLabel = () => (store.active.media ? `🖼 ${store.active.media.name}` : '📂 Your image / video…');
-  mediaLabel = currentMediaLabel();
-  const showCtl = pg.add(content, 'show', showOptions()).name('Show');
-  const uploadCtl = pg.add({ upload: () => mediaInput.click() }, 'upload').name('📂 Upload image / GIF / video…');
+  const showOptions: Record<string, string> = {};
+  for (const name of PATTERNS) showOptions[PATTERN_LABELS[name]] = name;
+  showOptions['Image / video'] = MEDIA;
+  pg.add(content, 'show', showOptions).name('Show');
+  // Choosing a file is separate from the Show menu: it stores the file in this preset and shows it.
+  const fileLabel = () => (store.active.media ? `📂 ${store.active.media.name}` : '📂 Choose image / GIF / video…');
+  const fileCtl = pg.add({ file: () => mediaInput.click() }, 'file').name(fileLabel());
   const textCtl = pg.add(p, 'text').name('Text');
   pg.add(p, 'displayMode', { 'Turns with wheel': 'wheel', 'Banner on the road': 'banner' }).name('Mode');
   const upperCtl = pg.add(p, 'bannerUpper', { 'Pinned to the road': 'road', 'Rides with the bike': 'bike' }).name('Picture');
@@ -142,7 +137,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     'Arches': 'arches', 'Rainbow arches': 'rainbow', 'Scallops': 'scallops', 'Beads': 'beads', 'Truss bridge': 'bridge',
     'Picture (full height)': 'picture',
   }).name('Lower half');
-  const spinCtl = pg.add(p, 'spinSeconds', -60, 60, 1).name('Spin (s per turn, 0 = still)');
+  const spinCtl = pg.add(p, 'spinSeconds', -60, 60, 0.1).name('Spin (s per turn, 0 = still)');
   pg.add(p, 'globalBrightness', 1, 31, 1).name('Brightness');
 
   const smiley = pg.addFolder('Bouncing smiley');
@@ -177,6 +172,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
 
   const picture = pg.addFolder('Picture details').close();
   picture.add(p, 'mapping', { 'Picture (polar)': 'polar', 'Adafruit columns': 'columns' }).name('Layout');
+  const fillCtl = picture.add(p, 'pictureFill', { 'Crop to fill': 'crop', 'Whole picture': 'whole' }).name('Fill');
   picture.add(p, 'fit', { 'Whole disc': 'disc', 'LED ring only': 'annulus' }).name('Fit');
   picture.add(p, 'imageRotationDeg', -180, 180, 1).name('Rotation (°)');
 
@@ -321,11 +317,11 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     const live = isWater || isSmiley || isDryer;
     const animated = hooks.isAnimated();
     textCtl.show(!p.useMedia && (p.pattern === 'Text' || p.pattern === 'Wide text'));
-    uploadCtl.show(p.useMedia);
     upperCtl.show(p.displayMode === 'banner');
     spinCtl.show(p.displayMode === 'wheel' && !live);
     gapCtl.show(p.displayMode === 'banner' && p.bannerUpper === 'road');
-    lowerCtl.show(p.displayMode === 'banner');
+    lowerCtl.show(p.displayMode === 'banner' && !p.useMedia); // a picture always fills the banner's full height
+    fillCtl.show(p.useMedia && p.mapping === 'polar');
     water.show(isWater);
     smiley.show(isSmiley);
     dryer.show(isDryer);
@@ -430,8 +426,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   }
 
   function refresh() {
-    const label = currentMediaLabel();
-    if (label !== mediaLabel) { mediaLabel = label; showCtl.options(showOptions()); }
+    fileCtl.name(fileLabel());
     for (const g of guis) {
       for (const c of g.controllersRecursive() as Controller[]) {
         // Don't overwrite a field while someone is typing in it.

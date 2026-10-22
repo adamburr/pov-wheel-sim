@@ -29,7 +29,7 @@ These are all renders from the simulator, starting from the Water preset and the
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/dryer-ride.jpg" alt="Colourful ribbons tumbling up the rear side of the wheel"><br><sub><b>Tumble dryer preset,</b> 12 mph, 1/4 s: the paddles carry the ribbons up the rear side of the drum until they fall back, the nearer ribbons covering the ones behind.</sub></td>
-    <td width="50%"></td>
+    <td width="50%"><img src="docs/images/file-preset.jpg" alt="A painting of a cat cropped to fill the wheel"><br><sub><b>File preset,</b> 15 mph, 1/2 s: your own picture (here a painting of a cat, from <code>media/</code>), cropped to fill the wheel and shown as it is.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/shutter-1-30.jpg" alt="Three wedges at a 1/30 s shutter"><br><sub><b>1/30 s photo</b> at 10 mph: each of the 3 strips sweeps only 25°.</sub></td>
@@ -41,7 +41,7 @@ These are all renders from the simulator, starting from the Water preset and the
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/ride-by.jpg" alt="Cycloid streaks from a roadside camera"><br><sub><b>Ride-by,</b> 10 mph, 1/4 s, smiley: a fixed roadside camera sees the LEDs trace cycloids.</sub></td>
-    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO WORLD painted in the air above rainbow arches in banner mode"><br><sub><b>Text banner preset</b> (text set to HELLO WORLD), roadside, 10 mph, 2 s: the text is pinned to the road in the upper half, and rainbow arches outline the voids the strips never sweep below the hub.</sub></td>
+    <td width="50%"><img src="docs/images/banner-text.jpg" alt="Hi! painted in the air above rainbow arches in banner mode"><br><sub><b>Text banner preset,</b> roadside, 10 mph, 2 s: "Hi!" is pinned to the road in the upper half, and rainbow arches outline the voids the strips never sweep below the hub.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/banner-scallops.jpg" alt="Alternating coloured scallops around dark arch-shaped voids"><br><sub><b>Scallops lower half,</b> roadside, 10 mph, 2 s: the lit ground between the voids is filled in alternating colours, so the arch-shaped voids show plainly.</sub></td>
@@ -67,7 +67,9 @@ Two views show the same moment and the same animation. The main view follows the
 
 ### Presets
 
-A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The default setup has eight: Tumble dryer (colourful ribbons tumbling in a drum), Water, Smiley (a smiley loose inside the wheel that bounces around as you ride), Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, Text banner ("Hi!" painted in the air) and Ball on a bridge. A new setup always starts on the first preset. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Reset** (at the top of Settings) brings back the originals, along with the default hardware and simulator settings. Delete, Reset and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The default setup has nine: File (your own picture: a painting of a cat, until you choose another), Tumble dryer (colourful ribbons tumbling in a drum), Rainbow spiral (which turns slowly), Water, Smiley (a smiley loose inside the wheel that bounces around as you ride), Beating heart, Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Text banner ("Hi!" painted in the air) and Ball on a bridge. A new setup always starts on the first preset. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Reset** (at the top of Settings) brings back the originals, along with the default hardware and simulator settings. Delete, Reset and Reset hardware ask for a second click to confirm.
+
+To show your own picture, set **Show** to *Image / video* and pick a file with the button under it (an image, animated GIF/WebP/APNG, or video); dropping or pasting a file does the same. The file is stored in the selected preset. A picture is always shown as it is, whatever the preset showed before: it starts cropped to fill the wheel and turning with it, and you can then letterbox the whole picture instead (*Fill*, under *Picture details*), spin it, or make it a banner. As a banner it fills the full height, with no lower-half pattern.
 
 ### Setups
 
@@ -75,7 +77,7 @@ A setup is the hardware build plus all the presets. It saves automatically in th
 
 ### Changing the defaults
 
-The defaults (the hardware and the presets) are a setup file in the repo, [`default-setup.json`](default-setup.json). The app uses it on first load, for **Reset** and **Reset hardware**. To change the defaults, set things up in the app, press **Save**, replace `default-setup.json` with the downloaded file, and commit. Uploaded images come along, embedded in the file. A new setup always starts on the first preset, so put the look you want to start with at the top of the list. `npm test` checks that the file is a valid setup. Simulator settings (camera, units, the roadside strip) aren't part of a setup, so their defaults stay in `src/params.ts`.
+The defaults (the hardware and the presets) are a setup file in the repo, [`default-setup.json`](default-setup.json). The app uses it on first load, for **Reset** and **Reset hardware**. To change the defaults, set things up in the app, press **Save**, replace `default-setup.json` with the downloaded file, and commit. Uploaded images come along, embedded in the file. To keep the file small, an image can live in [`media/`](media) instead: replace its media entry's `"data"` with `"path": "media/name.jpg"`. The app serves the file along with the page (on GitHub Pages too) and fetches it at startup. The File preset's painting is stored this way, at 512 px across (the size the app squares pictures to, far more than the LEDs can show). A new setup always starts on the first preset, so put the look you want to start with at the top of the list. `npm test` checks that the file is a valid setup. Simulator settings (camera, units, the roadside strip) aren't part of a setup, so their defaults stay in `src/params.ts`.
 
 ## Running
 
@@ -114,8 +116,8 @@ In banner mode the frames advance as the bike travels, so the road becomes a fli
 
 The **Water** preset fills the bottom of the disc with simulated water (or choose *Water* under any preset's **Show** menu). Use the speed panel at the bottom of the screen to ride:
 - Drag the slider to change speed.
-- **🛑 Brake** stops the bike; **▶ Ride** sets off again.
-- **Stop-and-go** (on by default) rides through the city automatically: it pulls away to a top speed between half and one and a half times the stop-and-go cruise speed, cruises for 4–12 s, brakes for a light, and waits 1–3 s. Each light turns red at a random distance ahead (3–40 m), and the rider brakes just hard enough to stop there, so some stops are sharp and others a slow roll-down. Each pull-away varies too.
+- **Brake** stops the bike; **Ride** sets off again.
+- **Stop-and-go** (on by default) rides through the city automatically: it pulls away to a top speed between half and one and a half times the stop-and-go cruise speed, rides a block of 4–12 s, brakes for a light, and waits 1–3 s. Pulling away is strong at first and eases off as the speed builds, the way pedal power does, and each pull-away varies. Along the block the speed wanders around the trip's speed, with the odd slowdown. Each light turns red at a random distance ahead (3–40 m): if it's far, the rider coasts a moment, then brakes just hard enough to stop there and eases off at the very end. So some stops are sharp and others a slow roll-down.
 
 Each pedal stroke pulses the rider's push (*pedal surge*, default ±60%). The push comes from an estimate of the power needed: accelerating the bike and rider (85 kg) plus air drag and rolling resistance. So the surge is strong when pulling away, gentle when cruising, and absent when braking or coasting. The Stats tab shows the estimated rider power. The water surges against each speed change and sloshes back and forth afterwards. It's one body of water seen from both sides: from the non-drive side, braking pushes it to the viewer's left. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
 
@@ -173,7 +175,7 @@ So the lower half isn't a picture. It is a pattern drawn along the LEDs' own pat
 - **Truss bridge:** a deck just above the hub, a truss hanging below it whose big diagonals span each void, and a pier down to the road at every point where a strip points straight down (the only places the strips reach the ground). Unlike the other patterns, any strip may draw any part of it, so it uses all the coverage there is.
 - **Picture (full height):** the image fills the whole height, as before.
 
-Slow LEDs near the road dwell and look brighter, so the patterns dim each LED by its speed over the road. Text and Wide text put their words in the upper half; other patterns and uploaded images are fitted into it.
+Slow LEDs near the road dwell and look brighter, so the patterns dim each LED by its speed over the road. Text and Wide text put their words in the upper half, and other patterns are fitted into it. An uploaded image or video always fills the full height instead.
 
 Position comes from hall-sensor dead reckoning: whole turns at each magnet pass, plus the time since the pass divided by the last revolution period. Polling delay and pedal surges show up as a torn or doubled banner. *Predict motion* computes each update for the middle of the time it's displayed instead of when it's sent. The *ideal* sync mode shows the best case. LEDs near the ground move slowly relative to the road and leave bright cusps, while the top edge streaks past at about twice road speed. The bitmap is stored at about one pixel per LED pitch, as tall as the LEDs reach.
 
@@ -181,7 +183,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 
 | Where | Highlights |
 |---|---|
-| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, spin (the firmware turns a wheel-locked picture once every so many seconds by shifting the columns it sends, so it needs no extra frames), banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity and particle spacing. *Bouncing smiley:* bounce, wall grip, push. *Tumble dryer:* ribbons, drum turn, drum grip, push, layer shuffle. *Animation:* playback speed, timed or every-N-turns frame advance. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation. Presets hold only the look; hardware and simulator settings don't change when you switch presets |
+| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, spin (the firmware turns a wheel-locked picture once every so many seconds, fractions allowed, by shifting the columns it sends, so it needs no extra frames), banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture; your own pictures always fill the full height), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity and particle spacing. *Bouncing smiley:* bounce, wall grip, push. *Tumble dryer:* ribbons, drum turn, drum grip, push, layer shuffle. *Animation:* playback speed, timed or every-N-turns frame advance. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fill (crop to fill the wheel, or the whole picture letterboxed), fit, rotation. Presets hold only the look; hardware and simulator settings don't change when you switch presets |
 | Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma, bit depth and inner-LED dimming under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce, the animation import limits (max frames, video sample rate), and the firmware's physics simulation (sim rate and acceleration smoothing for the water and the bouncing smiley, plus the water's grid and pressure iterations) under the details folders |
 | Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1/8 s by default, like a phone camera at night), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
 
@@ -191,6 +193,7 @@ LED PWM rates vary between datasheets and clone parts, so every value filled in 
 
 - `src/params.ts`: parameters, the hardware lookup tables, and which settings belong to presets vs the hardware
 - `default-setup.json`, `src/defaults.ts`: the default setup and how the app loads it
+- `media/`: images the default presets show, referenced by path from `default-setup.json`
 - `src/presets.ts`, `src/setupFile.ts`, `src/mediaStore.ts`: named presets, the setup file, and stored uploads
 - `src/ui.ts`: the settings panel and preset list
 - `src/sim/`: LED bus timing, wheel kinematics, hall-sensor firmware model, stats

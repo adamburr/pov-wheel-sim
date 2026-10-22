@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { defaultParams, type Params, speedMps } from './params';
+import { bannerLowerOf, defaultParams, type Params, showPicture, speedMps } from './params';
 import { buildUi, type Ui } from './ui';
 import { newId, PresetStore } from './presets';
 import { loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, setupFileName } from './setupFile';
-import { DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from './defaults';
+import { DEFAULT_MEDIA_URLS, DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from './defaults';
 import { getMedia, pruneMedia, putMedia } from './mediaStore';
 import { derive, type Derived } from './sim/timing';
 import { type AnimSpec, animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
@@ -13,7 +13,7 @@ import { SmileySource } from './image/smileySource';
 import { CityRide } from './sim/city';
 import { pedalSurge, riderPower } from './sim/rider';
 import { computeStats, exposureSeconds } from './sim/stats';
-import { type Animation, bannerTile, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
+import { type Animation, bannerTile, blankAnimation, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
 import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } from './image/polarize';
 import { PovDisplay } from './render/povMaterial';
 import { WheelModel } from './render/wheelGeometry';
@@ -25,8 +25,15 @@ const storage = (() => { try { return window.localStorage; } catch { return unde
 const p = defaultParams();
 Object.assign(p, defaultDevice(), loadDevice(storage));
 const store = new PresetStore(storage, defaultBuiltIns);
-// Media embedded in default-setup.json, so the default presets that use it can find it.
-for (const [id, m] of Object.entries(DEFAULT_SETUP.media)) putMedia(id, new Blob([m.bytes as BlobPart], { type: m.type }));
+// Media for the default presets, so they can find it: embedded in default-setup.json, or fetched
+// from media/. Showing a preset's picture waits for this.
+const defaultMedia = Promise.all(Object.entries(DEFAULT_SETUP.media).map(async ([id, m]) => {
+  const url = DEFAULT_MEDIA_URLS[id];
+  try {
+    const bytes = url ? await (await fetch(url)).arrayBuffer() : m.bytes;
+    await putMedia(id, new Blob([bytes as BlobPart], { type: m.type }));
+  } catch { /* the preset shows dark, with a message, when it can't be found */ }
+}));
 /** Media to keep stored: what the presets use, plus the defaults' (for New and Restore). */
 const keptMedia = () => new Set([...store.mediaIds(), ...Object.keys(DEFAULT_SETUP.media)]);
 store.apply(p);
@@ -86,7 +93,7 @@ let imageKey = '';
 let rebuildTimer = 0;
 
 function imageKeyFor(d: Derived) {
-  return [sourceVersion, p.bannerLower === 'picture', p.mapping, p.fit, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
+  return [sourceVersion, bannerLowerOf(p) === 'picture', p.mapping, p.fit, p.pictureFill, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
     p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData, p.radialStagger].join('|');
 }
 
@@ -103,9 +110,9 @@ async function rebuildImage(d: Derived) {
   let budgetEnd = performance.now() + 30;
   for (const [i, frame] of source.frames.entries()) {
     const wheelFrame = source.wheelFrames?.[i] ?? frame;
-    const c = polarize(p.mapping === 'polar' ? squareImageData(wheelFrame) : rawImageData(frame), p, d);
+    const c = polarize(p.mapping === 'polar' ? squareImageData(wheelFrame, p.pictureFill === 'crop') : rawImageData(frame), p, d);
     cols.push(c);
-    const bannerFrame = p.bannerLower === 'picture' ? frame : source.bannerFrames?.[i] ?? bannerTile(frame);
+    const bannerFrame = bannerLowerOf(p) === 'picture' ? frame : source.bannerFrames?.[i] ?? bannerTile(frame);
     bans.push(bannerBitmap(rawImageData(bannerFrame), p, d));
     if (cols.length * c.data.length > MAX_TEXTURE_BYTES) break;
     if (performance.now() > budgetEnd) {
@@ -147,22 +154,23 @@ function setSource(src: Animation) {
 let ui: Ui | undefined;
 function refreshGui() { ui?.refresh(); }
 
-/** Show the active preset's content: its uploaded image/clip, or its pattern. */
+/** Show the active preset's content: its pattern, or its uploaded image/clip (dark until one is chosen). */
 let loadGen = 0;
 async function loadSource() {
   const gen = ++loadGen;
   const media = store.active.media;
-  if (!p.useMedia || !media) { setSource(makeAnimation(p.pattern, p.text, p.bannerUpper === 'bike')); return; }
+  if (!p.useMedia) { setSource(makeAnimation(p.pattern, p.text, p.bannerUpper === 'bike')); return; }
+  if (!media) { setSource(blankAnimation()); return; }
   try {
+    await defaultMedia;
     const blob = await getMedia(media.id);
     if (!blob) throw new Error('it is no longer stored in this browser');
     const anim = await loadMedia(new File([blob], media.name, { type: media.type }), p.maxFrames, p.videoFps);
     if (gen === loadGen) setSource(anim);
   } catch (err) {
     if (gen !== loadGen) return;
-    console.warn(`Couldn't load ${media.name}: ${(err as Error).message}`);
-    p.useMedia = false;
-    setSource(makeAnimation(p.pattern, p.text, p.bannerUpper === 'bike'));
+    ui?.notify(`Couldn't load ${media.name}: ${(err as Error).message}`);
+    setSource(blankAnimation());
   }
 }
 
@@ -206,7 +214,7 @@ const hooks = {
       const id = newId();
       await putMedia(id, file);
       store.active.media = { id, name: file.name, type: file.type };
-      p.useMedia = true;
+      showPicture(p);
       store.capture(p);
       loadGen++;
       setSource(anim);
@@ -287,7 +295,7 @@ rideSlider.addEventListener('input', () => {
   const v = Number(rideSlider.value);
   if (p.cityMode) {
     p.citySpeed = v;
-    if (city.phase === 'go' || city.phase === 'cruise') p.speed = v * city.fraction;
+    if (city.phase === 'go' || city.phase === 'cruise') p.speed = v * city.fraction * city.share;
   } else {
     p.speed = v; p.braking = false;
   }
@@ -392,6 +400,7 @@ function resize() {
   setFreeArea(camera, main.w, main.h, 0, freeBottom);
   if (strip) stripComposer.setSize(strip.w, strip.h);
   stripFrame.hidden = !strip;
+  document.body.style.setProperty('--view-top', `${main.y}px`); // the settings button sits on the follow view
   if (strip) Object.assign(stripFrame.style, { left: `${strip.x}px`, top: `${strip.y}px`, width: `${strip.w}px`, height: `${strip.h}px` });
   // Re-frame when a phone turns between portrait and landscape.
   if ((h > w) !== portrait) { portrait = h > w; placeCamera(camera, controls, p, derive(p)); }

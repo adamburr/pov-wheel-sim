@@ -50,7 +50,6 @@ export function sanitizePresets(raw: unknown): Preset[] | undefined {
     if (m && typeof m.id === 'string' && typeof m.name === 'string' && typeof m.type === 'string') {
       preset.media = { id: m.id, name: m.name, type: m.type };
     }
-    if (!preset.media) preset.settings.useMedia = false;
     out.push(preset);
   }
   return out.length ? out : undefined;
@@ -148,14 +147,12 @@ export class PresetStore {
   /** Copy the preset values of p into the active preset. */
   capture(p: Params) {
     this.active.settings = pick(p, PRESET_KEYS);
-    if (!this.active.media) this.active.settings.useMedia = false;
     this.save();
   }
 
   /** Load the active preset into p; only preset values change. */
   apply(p: Params) {
     Object.assign(p, presetDefaults(), this.active.settings);
-    if (!this.active.media) p.useMedia = false;
   }
 
   /** Media ids still used by some preset. */

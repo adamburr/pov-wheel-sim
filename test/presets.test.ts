@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { defaultParams, DEVICE_KEYS, PRESET_KEYS } from '../src/params';
+import { bannerLowerOf, defaultParams, DEVICE_KEYS, PRESET_KEYS, showPicture } from '../src/params';
 import raw from '../default-setup.json';
-import { DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from '../src/defaults';
+import { readFileSync } from 'node:fs';
+import { DEFAULT_MEDIA_URLS, DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from '../src/defaults';
 import { type BuiltIns, type KeyValueStorage, newId, presetDefaults, PresetStore } from '../src/presets';
 import { loadDevice, parseSetup, saveDevice, serializeSetup, setupFileName } from '../src/setupFile';
 
@@ -89,10 +90,30 @@ describe('preset store', () => {
     expect(q.chip).toBe('RP2350');
   });
 
-  it('never turns media on for a preset without media', () => {
+  it('keeps image mode on a preset with no file yet (it shows dark until one is chosen)', () => {
     const s = store();
     s.capture({ ...defaultParams(), useMedia: true });
-    expect(s.active.settings.useMedia).toBe(false);
+    expect(s.active.settings.useMedia).toBe(true);
+  });
+});
+
+describe('pictures', () => {
+  it('start the same way whatever the preset showed before: cropped to fill the wheel, turning with it', () => {
+    const p = { ...defaultParams(), pattern: 'Bouncing ball (animated)' as const, displayMode: 'banner' as const,
+      bannerUpper: 'bike' as const, bannerLower: 'bridge' as const, spinSeconds: 16, fit: 'annulus' as const, pictureFill: 'whole' as const };
+    showPicture(p);
+    expect(p.useMedia).toBe(true);
+    expect(p).toMatchObject({ displayMode: 'wheel', bannerUpper: 'road', spinSeconds: 0, fit: 'disc', pictureFill: 'crop', mapping: 'polar' });
+    // Already showing a picture: its settings stay as the rider set them.
+    p.displayMode = 'banner'; p.spinSeconds = 8;
+    showPicture(p);
+    expect(p).toMatchObject({ displayMode: 'banner', spinSeconds: 8 });
+  });
+
+  it('fill a banner\'s full height, unchanged, while patterns keep their lower-half decoration', () => {
+    const p = { ...defaultParams(), bannerLower: 'bridge' as const };
+    expect(bannerLowerOf(p)).toBe('bridge');
+    expect(bannerLowerOf({ ...p, useMedia: true })).toBe('picture');
   });
 });
 
@@ -101,8 +122,19 @@ describe('default setup file', () => {
     expect(DEFAULT_SETUP.presets.length).toBeGreaterThan(0);
     expect(DEFAULT_SETUP.activePreset).toBeGreaterThanOrEqual(0);
     expect(DEFAULT_SETUP.activePreset).toBeLessThan(DEFAULT_SETUP.presets.length);
-    // Every hardware value in the file is valid (none dropped), and every preset's media is embedded.
+    // Every hardware value in the file is valid (none dropped), and every preset's media is there:
+    // embedded, or read from the file in media/ its "path" names.
     expect(Object.keys(DEFAULT_SETUP.device).sort()).toEqual(Object.keys(raw.device).sort());
+    for (const pr of DEFAULT_SETUP.presets) if (pr.media) expect(DEFAULT_SETUP.media).toHaveProperty(pr.media.id);
+  });
+
+  it('finds the media it names by path in media/', () => {
+    for (const [id, m] of Object.entries<{ path?: string; type: string }>(raw.media ?? {})) {
+      if (!m.path) continue;
+      expect(DEFAULT_MEDIA_URLS[id], m.path).toBeDefined(); // served with the app
+      if (m.type === 'image/jpeg') expect([...readFileSync(m.path).slice(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+    }
+    // The presets keep their media, to be fetched at startup.
     for (const pr of DEFAULT_SETUP.presets) if (pr.media) expect(DEFAULT_SETUP.media).toHaveProperty(pr.media.id);
   });
 
@@ -161,6 +193,7 @@ describe('setup file', () => {
     expect(a.settings.bannerLower).toBe(defaultParams().bannerLower);
     expect(a.settings).not.toHaveProperty('view');
     expect(a.media).toBeUndefined();
+    expect(a.settings.useMedia).toBe(false);
   });
 
   it('names the file after the setup', () => {

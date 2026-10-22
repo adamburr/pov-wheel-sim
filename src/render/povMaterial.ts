@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import fragmentShader from './pov.frag.glsl?raw';
-import { BANNER_LOWER, LEDS, type Params, SHUTTERS, speedMps } from '../params';
+import { BANNER_LOWER, bannerLowerOf, LEDS, type Params, SHUTTERS, speedMps } from '../params';
 import type { Derived } from '../sim/timing';
 import { animSpecFor, type AnimSpec, MAX_SLICES, type Slice } from '../sim/firmware';
 import { bannerTileM, type FrameStack } from '../image/polarize';
@@ -242,7 +242,7 @@ export class PovDisplay {
     }
     u.uBannerMirror.value = independent ? 1 : 0;
     u.uPredict.value = p.predictMotion ? 1 : 0;
-    u.uLower.value = BANNER_LOWER.indexOf(p.bannerLower);
+    u.uLower.value = BANNER_LOWER.indexOf(bannerLowerOf(p));
     u.uBannerRide.value = p.bannerUpper === 'bike' ? 1 : 0;
     // Spin applies to wheel-locked pictures (not live water or banners).
     const spin = p.displayMode === 'wheel' && !spec.live && p.spinSeconds !== 0 ? 1 / p.spinSeconds : 0;
