@@ -8,7 +8,8 @@ const FARTHEST_LIGHT_M = 40; // spotted far off: a long, gentle roll-down
 const MAX_BRAKE_G = 0.7;
 const MIN_BRAKE_G = 0.03;
 const COAST_G = 0.04;        // slowing with the pedals still, before braking
-const EASE_MPS = 1.2;        // below this the rider eases off the brakes to stop smoothly
+const FINAL_MPS = 1.5;       // below this (about 3 mph) the rider brakes firmly to a stop, not creeping
+const FINAL_G = 0.15;        // the least braking for that last stretch
 
 /** One stretch of a trip: ramp at g towards `share` of the trip's top speed, and stay at least `hold` s. */
 interface Leg { share: number; g: number; hold: number }
@@ -18,8 +19,9 @@ interface Leg { share: number; g: number; hold: number }
  * tops out at a different speed (half to one and a half times the cruise speed). Pulling away is
  * strong at first and eases off as the speed builds, the way pedal power does; along the block
  * the speed wanders, with the odd slowdown; each light turns red at a random distance ahead,
- * and the rider coasts a moment if it's far, brakes just hard enough to stop there (v²/2d) and
- * eases off at the very end. So some stops are sharp and others slow.
+ * and the rider coasts a moment if it's far, then brakes just hard enough to stop there (v²/2d),
+ * firming up over the last few metres per second instead of creeping. So some stops are sharp
+ * and others slow.
  * It only sets the target speed and the ramp rate, so the bike, the magnet firmware and the
  * water all respond exactly as they do to a rider.
  */
@@ -92,25 +94,30 @@ export class CityRide {
         p.braking = true;
         const v = p.speed * toMps;
         // Equally likely to be near or far (log-uniform). A far light gets a moment of coasting
-        // first; then the rider brakes to stop right there, easing off at the very end.
+        // first; then the rider brakes to stop right there, firmly over the last stretch.
         this.lightM = Math.exp(this.between(Math.log(NEAREST_LIGHT_M), Math.log(FARTHEST_LIGHT_M)));
-        const coastS = this.lightM > 12 ? this.between(0.4, 1.2) : 0;
-        const v1 = Math.max(0, v - COAST_G * G * coastS);
-        const left = Math.max(1, this.lightM - 0.5 * (v + v1) * coastS);
-        // Brake at decel down to `ease`, then at half of it (but no gentler than MIN_BRAKE_G).
-        const ease = Math.min(v1, EASE_MPS), min = MIN_BRAKE_G * G;
-        const easeDecel = (d: number) => Math.max(min, d / 2);
-        const stopping = (d: number) => (v1 * v1 - ease * ease) / (2 * d) + (ease * ease) / (2 * easeDecel(d));
-        let decel = (v1 * v1 + ease * ease) / (2 * left); // with the ease at half: (v1² − e²)/2d + e²/d
-        if (decel < 2 * min) decel = (v1 * v1 - ease * ease) / (2 * Math.max(0.5, left - (ease * ease) / (2 * min)));
-        decel = Math.min(MAX_BRAKE_G * G, Math.max(min, decel));
-        // Slow, with the light far off: even the gentlest braking would stop short, so ride on first.
-        const rollS = v1 > 0.1 ? Math.max(0, left - stopping(decel)) / v1 : 0;
+        const plan = (coastS: number) => {
+          const v1 = Math.max(0, v - COAST_G * G * coastS);
+          const left = Math.max(1, this.lightM - 0.5 * (v + v1) * coastS);
+          // Brake at decel down to `last`, then at least FINAL_G to the stop.
+          const last = Math.min(v1, FINAL_MPS), firm = FINAL_G * G;
+          const lastDecel = (d: number) => Math.max(firm, d);
+          let decel = (v1 * v1) / (2 * left); // braking that hard all the way already beats FINAL_G
+          if (decel < firm) decel = (v1 * v1 - last * last) / (2 * Math.max(0.5, left - (last * last) / (2 * firm)));
+          decel = Math.min(MAX_BRAKE_G * G, Math.max(MIN_BRAKE_G * G, decel));
+          // Slow, with the light far off: even the gentlest braking would stop short, so ride on first.
+          const stopping = (v1 * v1 - last * last) / (2 * decel) + (last * last) / (2 * lastDecel(decel));
+          const rollS = v1 > 0.1 ? Math.max(0, left - stopping) / v1 : 0;
+          return { coastS, v1, last, decel, lastDecel: lastDecel(decel), rollS };
+        };
+        let b = plan(this.lightM > 12 ? this.between(0.4, 1.2) : 0);
+        if (b.rollS > 0.05 && b.coastS) b = plan(0); // riding on: keep pedalling at the trip's pace, no coasting
+        const { coastS, v1, last, decel, rollS } = b;
         this.legs = [
           ...(coastS ? [{ share: v1 / topMps, g: COAST_G, hold: 0 }] : []),
           ...(rollS > 0.05 ? [{ share: v1 / topMps, g: COAST_G, hold: rollS }] : []),
-          { share: ease / topMps, g: decel / G, hold: 0 },
-          { share: 0, g: easeDecel(decel) / G, hold: 0.3 },
+          { share: last / topMps, g: decel / G, hold: 0 },
+          { share: 0, g: b.lastDecel / G, hold: 0.3 },
         ];
         break;
       }

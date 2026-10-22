@@ -64,12 +64,12 @@ describe('city stop-and-go', () => {
     expect(shares.some((s) => s < 0.8)).toBe(true); // the odd slowdown
   });
 
-  it('stops at the light that turned red, sharply or slowly, easing off at the end', () => {
+  it('stops at the light that turned red, sharply or slowly, braking firmly over the last stretch', () => {
     const p = { ...defaultParams(), speed: 12, citySpeed: 12, speedUnit: 'mph' as const, speedRampG: 0.3 };
     const c = new CityRide(9), m = new WheelMotion();
     c.start(0, p);
-    const misses: number[] = [], decels: number[] = [];
-    let from = 0, light = 0, hardest = 0, last = c.phase;
+    const misses: number[] = [], decels: number[] = [], creeps: number[] = [];
+    let from = 0, light = 0, hardest = 0, slowSince = -1, last = c.phase;
     for (let t = 0; t < 1500; t += 1 / 60) {
       c.update(t, p);
       if (c.phase === 'brake' && last !== 'brake') { from = m.dist(t); light = c.lightM; hardest = 0; }
@@ -77,6 +77,10 @@ describe('city stop-and-go', () => {
       // A light too close to stop for even at the hardest braking (0.7 g) is overrun a little.
       if (c.phase === 'stopped' && last === 'brake' && hardest < 0.7) misses.push(m.dist(t) - from - light);
       m.configure(p.speed * MPH, 0.34, 0, 2, t, c.rampG * 9.81, 0);
+      // How long the bike takes from 1.5 m/s (about 3 mph) to a standstill while stopping.
+      const v = m.speed(t);
+      if (c.phase === 'brake' && v < 1.5 && v > 0 && slowSince < 0) slowSince = t;
+      if (slowSince >= 0 && v === 0) { creeps.push(t - slowSince); slowSince = -1; }
       expect(c.lightM === 0 || (c.lightM >= 3 && c.lightM <= 40)).toBe(true);
       last = c.phase;
     }
@@ -85,5 +89,8 @@ describe('city stop-and-go', () => {
     expect(Math.min(...decels)).toBeLessThan(0.08);  // some slow roll-downs
     expect(Math.max(...decels)).toBeGreaterThan(0.2); // some sharp stops
     expect(Math.max(...decels)).toBeLessThanOrEqual(0.7);
+    // No creeping to a stop: the last 1.5 m/s goes at 0.15 g or more, about a second at most.
+    expect(creeps.length).toBeGreaterThan(10);
+    for (const s of creeps) expect(s).toBeLessThan(1.1);
   });
 });
