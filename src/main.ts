@@ -21,10 +21,15 @@ import { createPost } from './render/post';
 import { createCamera, createStripCamera, placeCamera, placeStripCamera, setFreeArea } from './render/camera';
 
 // The saved setup: the hardware build and the presets (the active one is loaded into p).
+// Reloading the page (plainly or forced) starts over from the defaults, like Reset; opening it
+// afresh (a new tab, a link) restores the saved setup.
 const storage = (() => { try { return window.localStorage; } catch { return undefined; } })();
+const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+const reloaded = navigation?.type === 'reload';
 const p = defaultParams();
-Object.assign(p, defaultDevice(), loadDevice(storage));
+Object.assign(p, defaultDevice(), reloaded ? {} : loadDevice(storage));
 const store = new PresetStore(storage, defaultBuiltIns);
+if (reloaded) { saveDevice(storage, p); store.restoreBuiltIns(); }
 // Media for the default presets, so they can find it: embedded in default-setup.json, or fetched
 // from media/. Showing a preset's picture waits for this.
 const defaultMedia = Promise.all(Object.entries(DEFAULT_SETUP.media).map(async ([id, m]) => {
@@ -36,6 +41,7 @@ const defaultMedia = Promise.all(Object.entries(DEFAULT_SETUP.media).map(async (
 }));
 /** Media to keep stored: what the presets use, plus the defaults' (for New and Restore). */
 const keptMedia = () => new Set([...store.mediaIds(), ...Object.keys(DEFAULT_SETUP.media)]);
+if (reloaded) pruneMedia(keptMedia()); // uploads only the old presets used
 store.apply(p);
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });

@@ -73,7 +73,7 @@ To show your own picture, set **Show** to *Image / video* and pick a file with t
 
 ### Setups
 
-A setup is the hardware build plus all the presets. It saves automatically in the browser, uploaded images included. **Save** downloads it as a `.json` file with images embedded, **Open** (or dropping the file on the page) loads one, and **Reset** puts everything back to the defaults: the hardware, the built-in presets and the simulator settings. The setup file is also what a future version will flash to the wheel's controller.
+A setup is the hardware build plus all the presets. It saves automatically in the browser, uploaded images included, and comes back when you open the page again (a new tab, a link or a bookmark). Reloading the page, plainly or forced, starts over from the defaults instead, like **Reset**. **Save** downloads it as a `.json` file with images embedded, **Open** (or dropping the file on the page) loads one, and **Reset** puts everything back to the defaults: the hardware, the built-in presets and the simulator settings. The setup file is also what a future version will flash to the wheel's controller.
 
 ### Changing the defaults
 
