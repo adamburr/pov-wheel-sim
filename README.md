@@ -41,7 +41,7 @@ These are all renders from the simulator, starting from the Water preset and the
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/ride-by.jpg" alt="Cycloid streaks from a roadside camera"><br><sub><b>Ride-by,</b> 10 mph, 1/4 s, smiley: a fixed roadside camera sees the LEDs trace cycloids.</sub></td>
-    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO WORLD painted in the air above rainbow arches in banner mode"><br><sub><b>HELLO banner preset,</b> roadside, 10 mph, 2 s: the text is pinned to the road in the upper half, and rainbow arches outline the voids the strips never sweep below the hub.</sub></td>
+    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO WORLD painted in the air above rainbow arches in banner mode"><br><sub><b>Text banner preset</b> (text set to HELLO WORLD), roadside, 10 mph, 2 s: the text is pinned to the road in the upper half, and rainbow arches outline the voids the strips never sweep below the hub.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/banner-scallops.jpg" alt="Alternating coloured scallops around dark arch-shaped voids"><br><sub><b>Scallops lower half,</b> roadside, 10 mph, 2 s: the lit ground between the voids is filled in alternating colours, so the arch-shaped voids show plainly.</sub></td>
@@ -67,7 +67,7 @@ Two views show the same moment and the same animation. The main view follows the
 
 ### Presets
 
-A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The default setup has eight: Water, Smiley (a smiley loose inside the wheel that bounces around as you ride), Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, HELLO banner, Ball on a bridge and Tumble dryer (colourful ribbons tumbling in a drum). A new setup always starts on the first preset. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Delete, Restore, New and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The default setup has eight: Tumble dryer (colourful ribbons tumbling in a drum), Water, Smiley (a smiley loose inside the wheel that bounces around as you ride), Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, Text banner ("Hi!" painted in the air) and Ball on a bridge. A new setup always starts on the first preset. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Delete, Restore, New and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
 
 ### Setups
 
@@ -159,7 +159,7 @@ Its look settings are **Ribbons** (3–10), **Drum turn** (the drum's spin as a 
 
 ### Banner mode
 
-Set a preset's **Mode** to *Banner on the road* (or pick the *HELLO banner* preset) and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. Give the roadside strip a long exposure (1–2 s) and the bike paints the whole banner as it rides by; at the default 1/8 s, like a phone at night, it shows the stretch the bike has just passed.
+Set a preset's **Mode** to *Banner on the road* (or pick the *Text banner* preset) and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. Give the roadside strip a long exposure (1–2 s) and the bike paints the whole banner as it rides by; at the default 1/8 s, like a phone at night, it shows the stretch the bike has just passed.
 
 Set the preset's **Picture** to *Rides with the bike* and the picture is drawn around the hub instead, upright and not turning with the wheel, so it travels with the bike while the lower-half pattern stays on the road. In a long roadside exposure it then smears along the road, as anything riding with the bike would.
 
