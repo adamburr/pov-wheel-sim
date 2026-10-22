@@ -194,8 +194,7 @@ export function defaultParams() {
     waterGain: 2,             // firmware exaggerates the sensed acceleration so the slosh reads at POV refresh rates
     // Bouncing smiley (rigid body): a disc three quarters the wheel's size loose inside it
     smileyBounce: 0.9,        // restitution against the wall
-    smileyGrip: 0.1,          // friction with the turning wall
-    smileySides: 8,           // the wall is a polygon turning with the wheel: its facets knock the smiley (fewer = livelier)
+    smileyGrip: 0.45,         // friction with the turning wall: just short of flipping the smiley (from about 0.5 it does)
     smileyGain: 2,            // exaggerates the sensed acceleration, like the water's slosh
     pattern: 'Water (fluid sim)' as PatternName,
     text: 'HELLO',
@@ -241,7 +240,7 @@ export const PRESET_KEYS = [
   'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'imageRotationDeg',
   'globalBrightness',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
-  'smileyBounce', 'smileyGrip', 'smileyGain', 'smileySides',
+  'smileyBounce', 'smileyGrip', 'smileyGain',
   'frameAdvance', 'playbackRate', 'revsPerFrame',
 ] as const satisfies readonly (keyof Params)[];
 export type PresetKey = (typeof PRESET_KEYS)[number];

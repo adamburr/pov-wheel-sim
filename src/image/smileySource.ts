@@ -58,7 +58,6 @@ export class SmileySource {
     const body = this.body!;
     body.bounce = p.smileyBounce;
     body.grip = p.smileyGrip;
-    body.sides = p.smileySides;
     this.wallWidth = d.pitch * 1.5;
 
     const hz = p.waterHz, dt = 1 / hz;
@@ -68,9 +67,8 @@ export class SmileySource {
     const changed: number[] = [];
     for (let k = this.lastStep + 1; k <= target; k++) {
       this.aEstimate += (magnetAccel(p, motion, k * dt) - this.aEstimate) * smooth;
-      // Braking (negative acceleration) throws the smiley forward. The wall turns clockwise with
-      // the wheel, as the firmware measures it: its sides knock the smiley and drag it where they
-      // touch. Drawn at that speed, the walls blur, as a real wheel would show them.
+      // Braking (negative acceleration) throws the smiley forward. The round wall turns clockwise
+      // with the wheel, as the firmware measures it, and drags the smiley where they touch.
       body.step(dt, -this.aEstimate * p.smileyGain, -GRAVITY, magnetOmega(p, motion, k * dt));
       const layer = ((k % FRAMES) + FRAMES) % FRAMES;
       this.paint(p, d, layer);
@@ -95,7 +93,9 @@ export class SmileySource {
     const out = this.data.subarray(layer * size, (layer + 1) * size);
     const b = this.body!, pos = this.pos!, img = this.image!;
     const cos = Math.cos(b.angle), sin = Math.sin(b.angle), inv = 1 / b.r;
-    // The walls, drawn light blue under the smiley.
+    // The face is centred on the disc's middle (its centre of mass sits lower, near the mouth).
+    const mid = b.centre();
+    // The wall, drawn as a light blue ring under the smiley.
     const wall = [0.35, 0.7, 1.0].map((c) => Math.pow(c, p.gamma)), half = this.wallWidth / 2;
     const C = p.columnsPerRev, n = d.ledsPerStrip;
     const lut = new Float32Array(256);
@@ -104,7 +104,7 @@ export class SmileySource {
     for (let idx = 0; idx < pos.length / 2; idx++) {
       const o = idx * 4;
       // Into the smiley's own frame: relative to its centre, turned back by its angle.
-      const dx = pos[idx * 2] - b.x, dy = pos[idx * 2 + 1] - b.y;
+      const dx = pos[idx * 2] - mid.x, dy = pos[idx * 2 + 1] - mid.y;
       const u = (cos * dx + sin * dy) * inv, v = (-sin * dx + cos * dy) * inv;
       if (u * u + v * v > 1) {
         const onWall = Math.abs(b.wallDistance(pos[idx * 2], pos[idx * 2 + 1]) + half) < half;

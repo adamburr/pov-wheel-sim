@@ -147,8 +147,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
 
   const smiley = pg.addFolder('Bouncing smiley');
   smiley.add(p, 'smileyBounce', 0, 0.95, 0.05).name('Bounce');
-  smiley.add(p, 'smileyGrip', 0, 1, 0.05).name('Wall grip');
-  smiley.add(p, 'smileySides', 5, 32, 1).name('Wall sides (fewer = livelier)');
+  smiley.add(p, 'smileyGrip', 0, 2, 0.05).name('Wall grip');
   smiley.add(p, 'smileyGain', 0, 5, 0.1).name('Push ×');
 
   const water = pg.addFolder('Water');

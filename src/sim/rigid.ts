@@ -1,34 +1,51 @@
 // A rigid disc (the bouncing smiley) loose inside the wheel: the firmware's second physics look,
 // stepped like the water from what the magnet tells it. No DOM here, so it can be tested.
 //
-// Frame: upright and centred on the hub, x forward, y up, metres. The wall is a regular polygon
-// whose corners touch the circle the LEDs reach (or that circle itself, with fewer than 4 sides),
-// turning with the wheel. The disc is pushed by gravity and by the opposite of the bike's
-// acceleration, bounces off the wall, and is knocked by its moving facets and dragged along where
-// they touch.
+// Frame: upright and centred on the hub, x forward, y up, metres. The wall is the circle the LEDs
+// reach, turning with the wheel. The disc is pushed by gravity and by the opposite of the bike's
+// acceleration, bounces off the wall, and is dragged along by the wall's moving surface where they
+// touch. Its centre of mass sits below its middle, near the mouth, so it is bottom-heavy: contacts
+// that don't pass through the centre of mass turn it, and it rocks back upright like a weeble.
 
 /** Contacts that close slower than this settle instead of bouncing (m/s), so a resting disc doesn't jitter. */
 const REST_SPEED = 0.08;
 
 export class SmileyBody {
+  // The centre of mass and its motion (unit mass).
   x = 0;
   y: number;
   vx = 0;
   vy = 0;
-  angle = 0;   // radians, anticlockwise
+  angle = 0;   // radians, anticlockwise; 0 = upright, mouth down
   spin = 0;    // rad/s, anticlockwise
-  wallAngle = 0;     // the polygon's turn, anticlockwise (the wheel turns clockwise riding forward)
-  sides = 8;         // the wall polygon's sides; its facets knock the disc (a circle if the polygon has no room for it)
   bounce = 0.9;      // restitution against the wall (0 = dead, 1 = perfectly elastic)
-  grip = 0.1;        // friction coefficient with the wall
+  grip = 0.45;       // friction coefficient with the wall: just short of flipping the bottom-heavy disc
   linearDamping = 0.05;   // per second: air drag
   // Per second. Without it the wall spins the disc up to its own speed (several turns a second at
   // riding speed) and the face blurs; with it, light grip settles at a readable turn or so a second.
   spinDamping = 3;
+  /** How far below the disc's middle its centre of mass sits, as a fraction of its radius (near the mouth). */
+  readonly massOffset = 0.45;
 
-  /** r: the disc's radius; R: the radius the wall's corners reach (m). Starts resting at the bottom. */
+  /** r: the disc's radius; R: the wall's (m). Starts resting upright at the bottom. */
   constructor(public r: number, public R: number) {
-    this.y = -(R - r);
+    this.y = -(R - r) - this.massOffset * r;
+  }
+
+  /** The disc's middle, where the face and its outline are centred. */
+  centre(): { x: number; y: number } {
+    const d = this.massOffset * this.r;
+    // The middle is d "up" from the centre of mass in the disc's own frame.
+    return { x: this.x - Math.sin(this.angle) * d, y: this.y + Math.cos(this.angle) * d };
+  }
+
+  /** Place the disc's middle at (cx, cy), turned by angle, at rest. */
+  place(cx: number, cy: number, angle = 0) {
+    const d = this.massOffset * this.r;
+    this.angle = angle;
+    this.x = cx + Math.sin(angle) * d;
+    this.y = cy - Math.cos(angle) * d;
+    this.vx = this.vy = this.spin = 0;
   }
 
   /**
@@ -45,63 +62,45 @@ export class SmileyBody {
       this.x += this.vx * h;
       this.y += this.vy * h;
       this.angle += this.spin * h;
-      this.wallAngle -= omega * h;
-      if (this.polygonFits()) {
-        // Each side is a line at the polygon's inradius; the disc must stay r inside all of them.
-        const inner = this.R * Math.cos(Math.PI / this.sides) - this.r;
-        for (let s = 0; s < this.sides; s++) {
-          const a = this.wallAngle + ((s + 0.5) * 2 * Math.PI) / this.sides;
-          const nx = Math.cos(a), ny = Math.sin(a);
-          const depth = this.x * nx + this.y * ny - inner;
-          if (depth > 0) this.collide(nx, ny, depth, omega);
-        }
-      } else {
-        const dist = Math.hypot(this.x, this.y), inner = this.R - this.r;
-        if (dist > inner) this.collide(this.x / dist, this.y / dist, dist - inner, omega);
-      }
+      const c = this.centre(), dist = Math.hypot(c.x, c.y), inner = this.R - this.r;
+      if (dist > inner) this.collide(c.x / dist, c.y / dist, dist - inner, omega);
     }
   }
 
-  /** Whether the polygon leaves the disc room to move; with too few sides it doesn't, and the wall is round. */
-  polygonFits(): boolean {
-    return this.sides >= 3 && this.R * Math.cos(Math.PI / this.sides) - this.r > 0.02 * this.R;
-  }
-
-  /**
-   * How far (x, y) lies outside the wall (m): negative inside, 0 on it. For the polygon this is the
-   * distance past the nearest side's line, exact along the sides, which is what drawing them needs.
-   */
+  /** How far (x, y) lies outside the wall (m): negative inside, 0 on it. Used to draw the wall. */
   wallDistance(x: number, y: number): number {
-    if (!this.polygonFits()) return Math.hypot(x, y) - this.R;
-    let out = -Infinity;
-    for (let s = 0; s < this.sides; s++) {
-      const a = this.wallAngle + ((s + 0.5) * 2 * Math.PI) / this.sides;
-      out = Math.max(out, x * Math.cos(a) + y * Math.sin(a));
-    }
-    return out - this.R * Math.cos(Math.PI / this.sides);
+    return Math.hypot(x, y) - this.R;
   }
 
-  /** Resolve contact with the wall along outward normal n, the disc `depth` too far out. */
+  /** Resolve contact with the wall along outward normal n, the disc's edge `depth` too far out. */
   private collide(nx: number, ny: number, depth: number, omega: number) {
     this.x -= nx * depth;
     this.y -= ny * depth;
-    // The wall turns clockwise at omega, so its surface at the contact point c moves at
-    // omega·(c_y, −c_x). Work with the disc's velocity relative to it.
-    const cx = this.x + nx * this.r, cy = this.y + ny * this.r;
-    const wx = omega * cy, wy = -omega * cx;
-    const tx = -ny, ty = nx;
-    const vn = (this.vx - wx) * nx + (this.vy - wy) * ny;
+    const c = this.centre();
+    // The contact point, and its lever arm from the centre of mass.
+    const px = c.x + nx * this.r, py = c.y + ny * this.r;
+    const rx = px - this.x, ry = py - this.y;
+    // Moment of inertia about the centre of mass: a solid disc's r²/2 about its middle, plus the offset².
+    const d = this.massOffset * this.r, inertia = this.r * this.r / 2 + d * d;
+    // The wall turns clockwise at omega, so its surface at the contact moves at omega·(p_y, −p_x).
+    const wx = omega * py, wy = -omega * px;
+    const relative = () => ({ x: this.vx - this.spin * ry - wx, y: this.vy + this.spin * rx - wy });
+    const apply = (j: number, ex: number, ey: number) => {
+      this.vx += j * ex;
+      this.vy += j * ey;
+      this.spin += (j * (rx * ey - ry * ex)) / inertia;
+    };
+    const before = relative(), vn = before.x * nx + before.y * ny;
     if (vn <= 0) return;
-    // Normal impulse (unit mass): bounce, or settle if it's barely moving into the wall.
-    const jn = (1 + (vn > REST_SPEED ? this.bounce : 0)) * vn;
-    this.vx -= jn * nx;
-    this.vy -= jn * ny;
-    // Friction: the disc's surface at the contact against the wall's. A solid disc has I = r²/2,
-    // so a tangential impulse j changes the slip by 3j; Coulomb limits it to grip·jn.
-    const slip = (this.vx - wx) * tx + (this.vy - wy) * ty + this.spin * this.r;
-    const jt = Math.max(-this.grip * jn, Math.min(this.grip * jn, -slip / 3));
-    this.vx += jt * tx;
-    this.vy += jt * ty;
-    this.spin += (2 * jt) / this.r;
+    // Normal impulse: bounce, or settle if it's barely moving into the wall. An off-centre contact
+    // also turns the disc, so the impulse is shared with the extra rotational inertia.
+    const armN = rx * ny - ry * nx;
+    const jn = ((1 + (vn > REST_SPEED ? this.bounce : 0)) * vn) / (1 + (armN * armN) / inertia);
+    apply(-jn, nx, ny);
+    // Friction against the wall's moving surface, limited by Coulomb to grip·jn.
+    const tx = -ny, ty = nx, armT = rx * ty - ry * tx;
+    const rel = relative(), slip = rel.x * tx + rel.y * ty;
+    const jt = Math.max(-this.grip * jn, Math.min(this.grip * jn, -slip / (1 + (armT * armT) / inertia)));
+    apply(jt, tx, ty);
   }
 }
