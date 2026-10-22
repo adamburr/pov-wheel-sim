@@ -50,6 +50,42 @@
  },
  "presets": [
   {
+   "id": "xcc2ib1mmvjkmxvw",
+   "name": "Tumble dryer",
+   "settings": {
+    "pattern": "Tumble dryer",
+    "useMedia": false,
+    "text": "HELLO",
+    "displayMode": "wheel",
+    "tileGapM": 0,
+    "bannerLower": "arches",
+    "bannerUpper": "road",
+    "spinSeconds": 0,
+    "mapping": "polar",
+    "fit": "disc",
+    "imageRotationDeg": 0,
+    "globalBrightness": 31,
+    "waterFill": 0.4,
+    "fluid": "Water",
+    "waterFlip": 0.97,
+    "waterViscosity": 0,
+    "waterSeparation": 1,
+    "rimFriction": 0.05,
+    "waterGain": 2,
+    "smileyBounce": 0.9,
+    "smileyGrip": 0.45,
+    "smileyGain": 2,
+    "dryerRibbons": 6,
+    "dryerDrumTurn": 0.25,
+    "dryerGrip": 0.4,
+    "dryerGain": 2,
+    "dryerShuffle": 0.5,
+    "frameAdvance": "timed",
+    "playbackRate": 1,
+    "revsPerFrame": 1
+   }
+  },
+  {
    "id": "rlu96jimmvj0x85e",
    "name": "Water",
    "settings": {
@@ -231,11 +267,11 @@
   },
   {
    "id": "g7lg82sdmvj0x85e",
-   "name": "HELLO banner",
+   "name": "Text banner",
    "settings": {
     "pattern": "Wide text",
     "useMedia": false,
-    "text": "HELLO WORLD",
+    "text": "Hi!",
     "displayMode": "banner",
     "tileGapM": 0,
     "bannerLower": "rainbow",
@@ -300,44 +336,8 @@
     "playbackRate": 1,
     "revsPerFrame": 1
    }
-  },
-  {
-   "id": "xcc2ib1mmvjkmxvw",
-   "name": "Tumble dryer",
-   "settings": {
-    "pattern": "Tumble dryer",
-    "useMedia": false,
-    "text": "HELLO",
-    "displayMode": "wheel",
-    "tileGapM": 0,
-    "bannerLower": "arches",
-    "bannerUpper": "road",
-    "spinSeconds": 0,
-    "mapping": "polar",
-    "fit": "disc",
-    "imageRotationDeg": 0,
-    "globalBrightness": 31,
-    "waterFill": 0.4,
-    "fluid": "Water",
-    "waterFlip": 0.97,
-    "waterViscosity": 0,
-    "waterSeparation": 1,
-    "rimFriction": 0.05,
-    "waterGain": 2,
-    "smileyBounce": 0.9,
-    "smileyGrip": 0.45,
-    "smileyGain": 2,
-    "dryerRibbons": 6,
-    "dryerDrumTurn": 0.25,
-    "dryerGrip": 0.4,
-    "dryerGain": 2,
-    "dryerShuffle": 0.5,
-    "frameAdvance": "timed",
-    "playbackRate": 1,
-    "revsPerFrame": 1
-   }
   }
  ],
- "activePreset": 0,
+ "activePreset": 6,
  "media": {}
 }
