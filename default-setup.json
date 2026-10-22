@@ -295,9 +295,9 @@
     "dryerGrip": 0.4,
     "dryerGain": 2,
     "dryerShuffle": 0.5,
-    "frameAdvance": "timed",
+    "frameAdvance": "revolution",
     "playbackRate": 1,
-    "revsPerFrame": 1
+    "revsPerFrame": 0.2
    }
   },
   {
