@@ -282,6 +282,33 @@ const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRe
   },
 };
 
+/**
+ * Banner frames for the bouncing ball: it bounces on the deck of the truss-bridge lower half,
+ * flattening as it lands. The deck itself comes from that pattern; its top edge is DECK_TOP of the
+ * way down the banner (0.19 of the half height above the hub).
+ */
+const DECK_TOP = 0.405;
+function ballBanner(frames: number): HTMLCanvasElement[] {
+  const H = SIZE, W = Math.round(H * 0.75), ball = H * 0.055;
+  // The top of the bounce stays below the very top of the LEDs' reach, where the outer LEDs
+  // leave gaps (above ~0.8 of the reach).
+  const floor = H * DECK_TOP, apex = H * 0.11 + ball, rest = floor - ball;
+  return Array.from({ length: frames }, (_, i) => {
+    const { c, g } = canvas(W, H);
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, W, H);
+    // Two bounces per loop under gravity: a parabola in time, squashed on the landing frame.
+    const u = ((2 * i) / frames) % 1;
+    const squash = u === 0 ? 0.7 : 1;
+    const y = u === 0 ? floor - ball * squash : rest - 4 * u * (1 - u) * (rest - apex);
+    g.fillStyle = '#ff5a1f';
+    g.beginPath();
+    g.ellipse(W / 2, y, ball / squash, ball * squash, 0, 0, Math.PI * 2);
+    g.fill();
+    return c;
+  });
+}
+
 /** Built-in patterns as animations (stills have one frame). */
 export function makeAnimation(name: PatternName, text: string): Animation {
   const anim = ANIMATED[name];
@@ -300,7 +327,9 @@ export function makeAnimation(name: PatternName, text: string): Animation {
     anim.draw(g, i / anim.frames, i);
     frames.push(c);
   }
-  return { frames, fps: anim.fps };
+  // The wheel-locked ball stays inside its rim; on a banner it bounces on a bridge deck instead.
+  const bannerFrames = name === 'Bouncing ball (animated)' ? ballBanner(anim.frames) : undefined;
+  return { frames, fps: anim.fps, bannerFrames };
 }
 
 /** Copy a decoded frame onto a canvas no bigger than SIZE on its long side. */

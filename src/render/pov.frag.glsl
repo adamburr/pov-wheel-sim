@@ -48,7 +48,7 @@ uniform float uBannerTile;   // image width + gap (m)
 uniform float uBannerHalfH;  // half the banner height (m), centred on the hub
 uniform int uBannerMirror;   // independent back strips paint a mirrored banner
 uniform int uPredict;        // compute each update for its mid-display time
-uniform int uLower;          // banner lower half: 0 picture, 1 arches, 2 rainbow arches, 3 scallops, 4 beads
+uniform int uLower;          // banner lower half: 0 picture, 1 arches, 2 rainbow arches, 3 scallops, 4 beads, 5 truss bridge
 uniform int uFrames;         // animation frames
 uniform int uFrameTimed;     // 1: frames advance at uFps; 0: per slice (revolution-synced)
 uniform float uFps;
@@ -80,6 +80,38 @@ int frameAt(float tSend, vec4 A, vec4 D) {
 
 vec3 hue(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
 
+float segDist(vec2 p, vec2 a, vec2 b) {
+  vec2 ab = b - a;
+  return length(p - a - ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0));
+}
+
+// The truss bridge's deck: a band just above the hub (as fractions of the banner's half height),
+// where the strips sweep without gaps. It is the top of the lower-half pattern, so a banner
+// picture (the bouncing ball) can stand on it.
+const float DECK_LO = 0.15, DECK_HI = 0.19;
+
+// Truss bridge: the deck, a truss hanging below it and a pier down to the road under each point
+// where a strip points straight down (the only places the strips reach the ground). The truss's
+// bottom nodes sit where a strip is at ±π/N from straight down, so its diagonals follow strips and
+// land on covered ground. Any strip may draw any member, so it uses all the coverage there is.
+// Xn: position along the road from the nearest bottom pass; Y: height above the hub.
+vec3 bridgeDuty(float Xn, float Y, float halfP, float rOuter, float dim) {
+  float y0 = DECK_LO * uBannerHalfH, y1 = DECK_HI * uBannerHalfH;
+  if (Y >= y0 && Y <= y1) return vec3(0.55, 0.75, 1.0) * dim;
+  float a = min(PI / float(uStrips), PI / 3.0);
+  float d = uRRoll * a - rOuter * sin(a), yb = -rOuter * cos(a);
+  vec2 p = vec2(abs(Xn), Y);                     // the truss is symmetric about each pier
+  float m = min(segDist(p, vec2(halfP, y0), vec2(d, yb)),  // outer diagonal
+            min(segDist(p, vec2(d, yb), vec2(0.0, yb)),    // bottom chord
+            min(segDist(p, vec2(d, yb), vec2(d, y0)),      // vertical
+            min(segDist(p, vec2(0.0, yb), vec2(0.0, y0)),  // centre post
+                segDist(p, vec2(d, y0), vec2(0.0, yb)))))); // inner diagonal
+  float t = 0.7 * uPitch;
+  if (m < t) return vec3(0.25, 0.5, 1.0) * dim;
+  if (p.x < 2.0 * t && Y < yb) return vec3(0.25, 0.5, 1.0) * 0.7 * dim; // pier
+  return vec3(0.0);
+}
+
 // Banner lower half, drawn along the LEDs' own paths so it only lands where LEDs really pass.
 // Below the hub the strips leave voids: arches standing between the points where each strip
 // points straight down. Near the ground their edge is the outer LED's path; higher up it is the
@@ -90,11 +122,15 @@ vec3 lowerDuty(float th, float hub, float rk) {
   float Rt = uRRoll;
   float halfP = PI * Rt / float(uStrips);       // half the road between bottom passes
   float X = Rt * dd - rk * sin(dd);             // position relative to this strip's lowest point
+  float rOuter = uRStart + (float(uLeds) - 0.5) * uPitch;
+  float q = rk / Rt;
+  float ledSpeed = sqrt(max(0.0, 1.0 + q * q - 2.0 * q * cos(dd)));
+  float dimLed = clamp(ledSpeed / 1.5, 0.1, 1.0);
+  if (uLower == 5) return bridgeDuty(X - 2.0 * halfP * floor(X / (2.0 * halfP) + 0.5), -rk * cos(dd), halfP, rOuter, dimLed);
   if (abs(X) >= halfP) return vec3(0.0);        // the next strip owns this stretch of road
   float strip = floor((hub - Rt * dd) / (2.0 * halfP) + 0.5); // which bottom pass this is
   float voidIdx = strip - (X < 0.0 ? 1.0 : 0.0);  // the void this side of the pass borders
   vec3 voidHue = hue(fract(voidIdx / 6.0));
-  float rOuter = uRStart + (float(uLeds) - 0.5) * uPitch;
   float rimEdge = Rt * cos(dd);
   bool outerPart = rimEdge >= rOuter;           // near the ground the outer LED draws the edge
   float edge = min(rOuter, rimEdge);
@@ -102,9 +138,6 @@ vec3 lowerDuty(float th, float hub, float rk) {
   float onEdge = edge > uRStart && abs(rk - edge) < (outerPart ? 1.5 : 4.0) * uPitch ? 1.0 : 0.0;
   // Keep the brightness even: an LED (or edge point) that moves slowly over the road dwells and
   // looks brighter, so scale by how fast it travels. The edge point moves at 2·sin(dd)·v.
-  float q = rk / Rt;
-  float ledSpeed = sqrt(max(0.0, 1.0 + q * q - 2.0 * q * cos(dd)));
-  float dimLed = clamp(ledSpeed / 1.5, 0.1, 1.0);
   float dimEdge = clamp((outerPart ? ledSpeed : 2.0 * abs(sin(dd))) / 1.5, 0.1, 1.0);
   if (uLower == 1) return voidHue * onEdge * dimEdge;
   if (uLower == 2) {
@@ -132,7 +165,8 @@ vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk, int frame) {
   float th = A.z + A.w * dt + dl + offAng;      // believed clockwise angle of this strip
   float hub = D.z + uRRoll * (A.w * dt + dl);   // believed hub position along the road
   vec2 pos = vec2(hub + rk * cos(th), -rk * sin(th));
-  if (uLower > 0 && pos.y < 0.0) return lowerDuty(th, hub, rk);
+  float lowerTop = uLower == 5 ? DECK_HI * uBannerHalfH : 0.0; // the bridge's deck sits just above the hub
+  if (uLower > 0 && pos.y < lowerTop) return lowerDuty(th, hub, rk);
   float x = mod(pos.x + 0.5 * uBannerW, uBannerTile);
   if (x >= uBannerW) return vec3(0.0);
   if (uBannerMirror == 1 && uSide < 0.0) x = uBannerW - x;

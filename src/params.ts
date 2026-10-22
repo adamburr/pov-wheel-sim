@@ -98,7 +98,7 @@ export type PatternName = (typeof PATTERNS)[number];
  * they never pass over; the patterns are drawn along the LEDs' own paths, around those voids.
  * 'picture' uses the whole height for the image instead.
  */
-export const BANNER_LOWER = ['picture', 'arches', 'rainbow', 'scallops', 'beads'] as const;
+export const BANNER_LOWER = ['picture', 'arches', 'rainbow', 'scallops', 'beads', 'bridge'] as const;
 export type BannerLower = (typeof BANNER_LOWER)[number];
 
 export const MPH = 0.44704; // m/s

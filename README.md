@@ -89,7 +89,7 @@ Frames can advance on a timer (at the clip's fps) or every N wheel revolutions:
 - **Timed** keeps the clip's speed. A frame can change mid-revolution, so different sectors show different frames (visible seams).
 - **Revolution-synced** switches cleanly at the magnet, but the playback rate rises and falls with the bike's speed.
 
-In banner mode the frames advance as the bike travels, so the road becomes a flip-book.
+In banner mode the frames advance as the bike travels, so the road becomes a flip-book. On a banner the bouncing ball has its own layout: it bounces on the deck of the *Truss bridge* lower half (the Flip-book ball preset), so the road becomes a ball bouncing along a bridge.
 
 ### Water mode
 
@@ -136,6 +136,7 @@ So the lower half isn't a picture. It is a pattern drawn along the LEDs' own pat
 - **Rainbow arches:** a white outline with nested rainbow lines inside, one LED radius each.
 - **Scallops:** the lit ground between voids in alternating colours, with a bright edge.
 - **Beads:** round dots along each void's edge.
+- **Truss bridge:** a deck just above the hub, a truss hanging below it whose big diagonals span each void, and a pier down to the road at every point where a strip points straight down (the only places the strips reach the ground). Unlike the other patterns, any strip may draw any part of it, so it uses all the coverage there is.
 - **Picture (full height):** the image fills the whole height, as before.
 
 Slow LEDs near the road dwell and look brighter, so the patterns dim each LED by its speed over the road. Text and Wide text put their words in the upper half; other patterns and uploaded images are fitted into it.
@@ -146,7 +147,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 
 | Where | Highlights |
 |---|---|
-| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, banner gap, the banner's lower-half pattern (arches, rainbow arches, scallops, beads or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
+| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, banner gap, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
 | Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma and bit depth under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce under the details folders |
 | Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1 s by default), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
 

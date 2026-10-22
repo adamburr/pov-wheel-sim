@@ -104,7 +104,8 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   pg.add(p, 'displayMode', { 'Turns with wheel': 'wheel', 'Banner on the road': 'banner' }).name('Mode');
   const gapCtl = pg.add(p, 'tileGapM', 0, 3, 0.05).name('Banner gap (m)');
   const lowerCtl = pg.add(p, 'bannerLower', {
-    'Arches': 'arches', 'Rainbow arches': 'rainbow', 'Scallops': 'scallops', 'Beads': 'beads', 'Picture (full height)': 'picture',
+    'Arches': 'arches', 'Rainbow arches': 'rainbow', 'Scallops': 'scallops', 'Beads': 'beads', 'Truss bridge': 'bridge',
+    'Picture (full height)': 'picture',
   }).name('Lower half');
   pg.add(p, 'globalBrightness', 1, 31, 1).name('Brightness');
 

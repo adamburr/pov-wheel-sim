@@ -28,7 +28,7 @@ export const BUILT_IN_PRESETS: { name: string; settings: PresetSettings }[] = [
   { name: 'Clock face', settings: { pattern: 'Clock face' } },
   { name: 'Beating heart', settings: { pattern: 'Beating heart (animated)' } },
   { name: 'HELLO banner', settings: { pattern: 'Wide text', text: 'HELLO', displayMode: 'banner', bannerLower: 'rainbow' } },
-  { name: 'Flip-book ball', settings: { pattern: 'Bouncing ball (animated)', displayMode: 'banner', bannerLower: 'beads' } },
+  { name: 'Flip-book ball', settings: { pattern: 'Bouncing ball (animated)', displayMode: 'banner', bannerLower: 'bridge' } },
 ];
 
 export function newId(): string {
