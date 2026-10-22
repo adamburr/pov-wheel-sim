@@ -18,7 +18,7 @@ export interface UiHooks {
   onDeviceEdit: (key?: string) => void;
   onViewChange: () => void;
   onUpload: (file: File) => void;
-  onNewSetup: () => void;
+  onResetSetup: () => void;
   onOpenSetup: (file: File) => void;
   onSaveSetup: () => void;
   /** The screen layout changed: the settings panel opened, closed or resized, or the strip moved. */
@@ -179,14 +179,6 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   picture.add(p, 'mapping', { 'Picture (polar)': 'polar', 'Adafruit columns': 'columns' }).name('Layout');
   picture.add(p, 'fit', { 'Whole disc': 'disc', 'LED ring only': 'annulus' }).name('Fit');
   picture.add(p, 'imageRotationDeg', -180, 180, 1).name('Rotation (°)');
-
-  const pgMore = pg.addFolder('Manage presets').close();
-  const restore = { click: () => {} };
-  const restoreCtl = pgMore.add(restore, 'click').name('↺ Restore built-in presets');
-  restore.click = confirmController(restoreCtl, 'Click again: replaces all presets', () => {
-    store.restoreBuiltIns();
-    hooks.onPresetSelected();
-  });
 
   // lil-gui calls the GUI-level handler before the control's own one (which may seed other
   // values), so report the change once both have run.
@@ -421,7 +413,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   for (const b of document.querySelectorAll<HTMLElement>('[data-tab]')) b.onclick = () => openTab(b.dataset.tab as Tab);
   $('panel-toggle').onclick = () => setOpen(!isOpen());
   $('panel-close').onclick = () => setOpen(false);
-  confirmButton($('setup-new'), 'Reset all?', hooks.onNewSetup);
+  confirmButton($('setup-reset'), 'Reset all?', hooks.onResetSetup);
   $('setup-open').onclick = () => setupInput.click();
   $('setup-save').onclick = hooks.onSaveSetup;
   sheetQuery.addEventListener('change', hooks.onLayout);

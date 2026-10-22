@@ -215,7 +215,7 @@ const hooks = {
       ui?.notify(`Couldn't load ${file.name}: ${(err as Error).message}`);
     }
   },
-  onNewSetup: () => {
+  onResetSetup: () => {
     Object.assign(p, defaultParams(), defaultDevice());
     saveDevice(storage, p);
     store.restoreBuiltIns();

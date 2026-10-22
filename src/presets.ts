@@ -24,7 +24,7 @@ export function presetDefaults(): Pick<Params, PresetKey> {
 }
 
 /**
- * The presets a fresh start uses (first load, New, Restore built-in presets) and which one is
+ * The presets a fresh start uses (first load and Reset) and which one is
  * selected. The app takes them from default-setup.json (see defaults.ts).
  */
 export interface BuiltIns { presets: Preset[]; active: number }
