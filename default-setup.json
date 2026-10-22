@@ -39,7 +39,14 @@
   "predictMotion": true,
   "freeRunColsPerSec": 540,
   "gamma": 2.2,
-  "colorBits": 8
+  "colorBits": 8,
+  "radialCompensation": false,
+  "waterGrid": 24,
+  "waterHz": 30,
+  "waterIters": 20,
+  "accelSmoothMs": 50,
+  "maxFrames": 48,
+  "videoFps": 12
  },
  "presets": [
   {
@@ -58,7 +65,6 @@
     "fit": "disc",
     "imageRotationDeg": 0,
     "globalBrightness": 31,
-    "radialCompensation": false,
     "waterFill": 0.4,
     "fluid": "Water",
     "waterFlip": 0.97,
@@ -66,15 +72,9 @@
     "waterSeparation": 1,
     "rimFriction": 0.05,
     "waterGain": 2,
-    "waterGrid": 24,
-    "waterHz": 30,
-    "waterIters": 20,
-    "accelSmoothMs": 50,
     "frameAdvance": "timed",
     "playbackRate": 1,
-    "revsPerFrame": 1,
-    "maxFrames": 48,
-    "videoFps": 12
+    "revsPerFrame": 1
    }
   },
   {
@@ -93,7 +93,6 @@
     "fit": "disc",
     "imageRotationDeg": 0,
     "globalBrightness": 31,
-    "radialCompensation": false,
     "waterFill": 0.4,
     "fluid": "Water",
     "waterFlip": 0.97,
@@ -101,15 +100,9 @@
     "waterSeparation": 1,
     "rimFriction": 0.05,
     "waterGain": 2,
-    "waterGrid": 24,
-    "waterHz": 30,
-    "waterIters": 20,
-    "accelSmoothMs": 50,
     "frameAdvance": "timed",
     "playbackRate": 1,
-    "revsPerFrame": 1,
-    "maxFrames": 48,
-    "videoFps": 12
+    "revsPerFrame": 1
    }
   },
   {
@@ -128,7 +121,6 @@
     "fit": "disc",
     "imageRotationDeg": 0,
     "globalBrightness": 31,
-    "radialCompensation": false,
     "waterFill": 0.4,
     "fluid": "Water",
     "waterFlip": 0.97,
@@ -136,15 +128,9 @@
     "waterSeparation": 1,
     "rimFriction": 0.05,
     "waterGain": 2,
-    "waterGrid": 24,
-    "waterHz": 30,
-    "waterIters": 20,
-    "accelSmoothMs": 50,
     "frameAdvance": "timed",
     "playbackRate": 1,
-    "revsPerFrame": 1,
-    "maxFrames": 48,
-    "videoFps": 12
+    "revsPerFrame": 1
    }
   },
   {
@@ -163,7 +149,6 @@
     "fit": "disc",
     "imageRotationDeg": 0,
     "globalBrightness": 31,
-    "radialCompensation": false,
     "waterFill": 0.4,
     "fluid": "Water",
     "waterFlip": 0.97,
@@ -171,15 +156,9 @@
     "waterSeparation": 1,
     "rimFriction": 0.05,
     "waterGain": 2,
-    "waterGrid": 24,
-    "waterHz": 30,
-    "waterIters": 20,
-    "accelSmoothMs": 50,
     "frameAdvance": "timed",
     "playbackRate": 1,
-    "revsPerFrame": 1,
-    "maxFrames": 48,
-    "videoFps": 12
+    "revsPerFrame": 1
    }
   },
   {
@@ -198,7 +177,6 @@
     "fit": "disc",
     "imageRotationDeg": 0,
     "globalBrightness": 31,
-    "radialCompensation": false,
     "waterFill": 0.4,
     "fluid": "Water",
     "waterFlip": 0.97,
@@ -206,15 +184,9 @@
     "waterSeparation": 1,
     "rimFriction": 0.05,
     "waterGain": 2,
-    "waterGrid": 24,
-    "waterHz": 30,
-    "waterIters": 20,
-    "accelSmoothMs": 50,
     "frameAdvance": "timed",
     "playbackRate": 1,
-    "revsPerFrame": 1,
-    "maxFrames": 48,
-    "videoFps": 12
+    "revsPerFrame": 1
    }
   },
   {
@@ -233,7 +205,6 @@
     "fit": "disc",
     "imageRotationDeg": 0,
     "globalBrightness": 31,
-    "radialCompensation": false,
     "waterFill": 0.4,
     "fluid": "Water",
     "waterFlip": 0.97,
@@ -241,15 +212,9 @@
     "waterSeparation": 1,
     "rimFriction": 0.05,
     "waterGain": 2,
-    "waterGrid": 24,
-    "waterHz": 30,
-    "waterIters": 20,
-    "accelSmoothMs": 50,
     "frameAdvance": "timed",
     "playbackRate": 1,
-    "revsPerFrame": 1,
-    "maxFrames": 48,
-    "videoFps": 12
+    "revsPerFrame": 1
    }
   },
   {
@@ -268,7 +233,6 @@
     "fit": "disc",
     "imageRotationDeg": 0,
     "globalBrightness": 31,
-    "radialCompensation": false,
     "waterFill": 0.4,
     "fluid": "Water",
     "waterFlip": 0.97,
@@ -276,18 +240,12 @@
     "waterSeparation": 1,
     "rimFriction": 0.05,
     "waterGain": 2,
-    "waterGrid": 24,
-    "waterHz": 30,
-    "waterIters": 20,
-    "accelSmoothMs": 50,
     "frameAdvance": "timed",
     "playbackRate": 1,
-    "revsPerFrame": 1,
-    "maxFrames": 48,
-    "videoFps": 12
+    "revsPerFrame": 1
    }
   }
  ],
- "activePreset": 6,
+ "activePreset": 0,
  "media": {}
 }

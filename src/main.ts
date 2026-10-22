@@ -182,12 +182,15 @@ const hooks = {
     if (key === 'name') return; // renamed in the store already
     store.capture(p);
     if (key === 'show' || key === 'text' || key === 'bannerUpper') loadSource();
+  },
+  onDeviceEdit: (key?: string) => {
+    saveDevice(storage, p);
+    // The import limits decide how an uploaded clip is decoded, so decode it again.
     if ((key === 'maxFrames' || key === 'videoFps') && p.useMedia) {
       clearTimeout(reloadTimer);
       reloadTimer = window.setTimeout(loadSource, 400);
     }
   },
-  onDeviceEdit: () => saveDevice(storage, p),
   onViewChange: () => placeCamera(camera, controls, p, derive(p)),
   onUpload: async (file: File) => {
     try {

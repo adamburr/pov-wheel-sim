@@ -4,7 +4,7 @@ A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel
 
 **Live demo:** https://adamburr.github.io/pov-wheel-sim/
 
-![The default Ball on a bridge preset at 10 mph: a ball bouncing above the hub, riding with the bike, over a truss bridge pinned to the road, in the roadside strip (top) and the follow view](docs/images/hero-bridge.jpg)
+![The Ball on a bridge preset at 10 mph: a ball bouncing above the hub, riding with the bike, over a truss bridge pinned to the road, in the roadside strip (top) and the follow view](docs/images/hero-bridge.jpg)
 
 ## Examples
 
@@ -36,13 +36,13 @@ These are all renders from the simulator, starting from the Water preset and the
     <td width="50%"><img src="docs/images/banner-surge.jpg" alt="Torn banner while pulling away"><br><sub><b>Banner while pulling away</b> from 4 to 16 mph, with 4 ms hall polling and no motion prediction: dead-reckoning errors from the pedal surges tear the text and fling the arches.</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/images/banner-bridge.jpg" alt="A ball bouncing along above a truss bridge"><br><sub><b>Ball on a bridge</b> (the default preset), roadside, 10 mph, 1/2 s: the truss bridge is pinned to the road while the ball rides with the bike, showing each time a strip sweeps over it.</sub></td>
+    <td colspan="2"><img src="docs/images/banner-bridge.jpg" alt="A ball bouncing along above a truss bridge"><br><sub><b>Ball on a bridge preset,</b> roadside, 10 mph, 1/2 s: the truss bridge is pinned to the road while the ball rides with the bike, showing each time a strip sweeps over it.</sub></td>
   </tr>
 </table>
 
 ## Using the app
 
-Two views show the same moment and the same animation. The main view follows the bike, and a narrow **roadside strip** above it watches the bike ride past as a fixed camera would, with a 1 s exposure by default. You can move the strip below the main view, give it its own exposure, or hide it under *Simulator → Camera*. The panel at the bottom is for riding: the current **preset** with a **Next ▶** button (or press **N**), then the speed, **🛑 Brake**, **▶ Ride** and **Stop-and-go**.
+Two views show the same moment and the same animation. The main view follows the bike, and a narrow **roadside strip** above it watches the bike ride past like a basic phone camera at night, without flash (a 1/8 s exposure by default). The main view mimics the human eye. You can move the strip below the main view, give it its own exposure, or hide it under *Simulator → Camera*. The panel at the bottom is for riding: the current **preset** with a **Next ▶** button (or press **N**), then the speed, **🛑 Brake**, **▶ Ride** and **Stop-and-go**.
 
 **⚙️ Settings** opens a panel: on the right on a computer, or from the bottom on a phone. Every section starts with just a few choices, and its **Details** folders hold the rest.
 
@@ -55,7 +55,7 @@ Two views show the same moment and the same animation. The main view follows the
 
 ### Presets
 
-A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The default setup has seven: Water, Smiley, Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Delete, Restore, New and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The default setup has seven: Water, Smiley, Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, HELLO banner and Ball on a bridge. A new setup always starts on the first preset. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Delete, Restore, New and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
 
 ### Setups
 
@@ -63,7 +63,7 @@ A setup is the hardware build plus all the presets. It saves automatically in th
 
 ### Changing the defaults
 
-The defaults (the hardware, the presets and which preset the app opens on) are a setup file in the repo, [`default-setup.json`](default-setup.json). The app uses it on first load, for **New**, **Restore built-in presets** and **Reset hardware**. To change the defaults, set things up in the app, press **Save**, replace `default-setup.json` with the downloaded file, and commit. Uploaded images come along, embedded in the file. `npm test` checks that the file is a valid setup. Simulator settings (camera, units, the roadside strip) aren't part of a setup, so their defaults stay in `src/params.ts`.
+The defaults (the hardware and the presets) are a setup file in the repo, [`default-setup.json`](default-setup.json). The app uses it on first load, for **New**, **Restore built-in presets** and **Reset hardware**. To change the defaults, set things up in the app, press **Save**, replace `default-setup.json` with the downloaded file, and commit. Uploaded images come along, embedded in the file. A new setup always starts on the first preset, so put the look you want to start with at the top of the list. `npm test` checks that the file is a valid setup. Simulator settings (camera, units, the roadside strip) aren't part of a setup, so their defaults stay in `src/params.ts`.
 
 ## Running
 
@@ -134,7 +134,7 @@ The **Stats** tab shows:
 
 ### Banner mode
 
-Set a preset's **Mode** to *Banner on the road* (or pick the *HELLO banner* preset) and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. In the roadside strip's long exposure, the bike paints the banner as it rides by.
+Set a preset's **Mode** to *Banner on the road* (or pick the *HELLO banner* preset) and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. Give the roadside strip a long exposure (1–2 s) and the bike paints the whole banner as it rides by; at the default 1/8 s, like a phone at night, it shows the stretch the bike has just passed.
 
 Set the preset's **Picture** to *Rides with the bike* and the picture is drawn around the hub instead, upright and not turning with the wheel, so it travels with the bike while the lower-half pattern stays on the road. In a long roadside exposure it then smears along the road, as anything riding with the bike would.
 
@@ -156,9 +156,9 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 
 | Where | Highlights |
 |---|---|
-| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, spin (the firmware turns a wheel-locked picture once every so many seconds by shifting the columns it sends, so it needs no extra frames), banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
-| Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma and bit depth under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce under the details folders |
-| Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1 s by default), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
+| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, spin (the firmware turns a wheel-locked picture once every so many seconds by shifting the columns it sends, so it needs no extra frames), banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity and particle spacing. *Animation:* playback speed, timed or every-N-turns frame advance. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation. Presets hold only the look; hardware and simulator settings don't change when you switch presets |
+| Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma, bit depth and inner-LED dimming under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce, the animation import limits (max frames, video sample rate), and the firmware's water simulation (grid, sim rate, pressure iterations, acceleration smoothing) under the details folders |
+| Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1/8 s by default, like a phone camera at night), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
 
 LED PWM rates vary between datasheets and clone parts, so every value filled in from the LED and chip tables can still be edited.
 

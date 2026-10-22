@@ -206,7 +206,7 @@ export function defaultParams() {
     // `view` and `trackLengthM` are set per render (see main.ts), not by the user.
     view: 'chase' as 'chase' | 'ride-by',
     strip: 'above' as 'above' | 'below' | 'off',
-    stripShutter: '1 s',      // the roadside strip is a long-exposure photo, so a banner shows whole
+    stripShutter: '1/8 s',    // the roadside strip mimics a basic phone camera at night, no flash or night mode
     side: 'drive' as 'drive' | 'non-drive',
     exposureModel: 'eye' as 'camera' | 'eye',
     shutter: '1/4 s',
@@ -226,16 +226,17 @@ export function defaultParams() {
 }
 export type Params = ReturnType<typeof defaultParams>;
 
-// Every saved value belongs to one of two groups. Preset keys are what the wheel shows, so each
-// named preset has its own; device keys describe the physical build. Together they make up the
+// Every saved value belongs to one of two groups. Preset keys are the look, which the rider
+// switches between on the bike, so each named preset has its own; device keys describe the
+// physical build and its firmware, including how hard the water simulation works, how much
+// animation it stores and display corrections like gamma. Together they make up the
 // setup file (and, later, what gets flashed to the controller). Everything else only drives the
 // simulation: riding, camera, exposure and rendering.
 export const PRESET_KEYS = [
   'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'imageRotationDeg',
-  'globalBrightness', 'radialCompensation',
+  'globalBrightness',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
-  'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs',
-  'frameAdvance', 'playbackRate', 'revsPerFrame', 'maxFrames', 'videoFps',
+  'frameAdvance', 'playbackRate', 'revsPerFrame',
 ] as const satisfies readonly (keyof Params)[];
 export type PresetKey = (typeof PRESET_KEYS)[number];
 
@@ -246,7 +247,8 @@ export const DEVICE_KEYS = [
   'stripLengthMm', 'doubleSided', 'backData', 'radialStagger',
   'chip', 'ledType', 'clockMHz', 'lanes', 'overheadUs', 'pwmHz', 'gbPwmHz', 'batteryMah',
   'firmware', 'python', 'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs',
-  'overflow', 'predictMotion', 'freeRunColsPerSec', 'gamma', 'colorBits',
+  'overflow', 'predictMotion', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
+  'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];
 

@@ -1,5 +1,5 @@
-// The defaults the app starts from (the hardware, the presets and which preset is selected)
-// come from default-setup.json in the repo: a setup file exactly as the app's Save writes it.
+// The defaults the app starts from (the hardware and the presets) come from default-setup.json
+// in the repo: a setup file exactly as the app's Save writes it.
 // To change them, set things up in the app, press Save, and replace that file with the download.
 // Simulator settings (camera, units, the roadside strip) aren't part of a setup; their defaults
 // stay in params.ts.
@@ -25,8 +25,11 @@ export function defaultDevice(): Pick<Params, DeviceKey> {
   return { ...pick(defaultParams(), DEVICE_KEYS), ...DEFAULT_SETUP.device };
 }
 
-/** Fresh copies of the default presets and the one to select. */
+/**
+ * Fresh copies of the default presets. A new setup always starts on the first preset, whichever
+ * one was selected when the file was saved; reorder the presets to choose the starting look.
+ */
 export function defaultBuiltIns(): BuiltIns {
   if (!DEFAULT_SETUP.presets.length) return plainBuiltIns();
-  return { presets: structuredClone(DEFAULT_SETUP.presets), active: DEFAULT_SETUP.activePreset };
+  return { presets: structuredClone(DEFAULT_SETUP.presets), active: 0 };
 }

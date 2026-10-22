@@ -14,7 +14,8 @@ export interface UiHooks {
   onPresetSelected: () => void;
   /** A value of the active preset changed in p; `key` is the property that changed. */
   onPresetEdit: (key: string) => void;
-  onDeviceEdit: () => void;
+  /** A hardware value changed in p; `key` is the property, when known. */
+  onDeviceEdit: (key?: string) => void;
   onViewChange: () => void;
   onUpload: (file: File) => void;
   onNewSetup: () => void;
@@ -156,24 +157,16 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   waterMore.add(p, 'waterFlip', 0, 1, 0.01).name('Liveliness (FLIP)');
   waterMore.add(p, 'waterViscosity', 0, 1, 0.05).name('Viscosity');
   waterMore.add(p, 'waterSeparation', 0, 1, 0.05).name('Particle spacing');
-  waterMore.add(p, 'waterGrid', 12, 64, 2).name('Grid (cells across)');
-  waterMore.add(p, 'waterHz', 10, 60, 5).name('Sim rate (Hz)');
-  waterMore.add(p, 'waterIters', 5, 60, 1).name('Pressure iterations');
-  waterMore.add(p, 'accelSmoothMs', 0, 1000, 10).name('Accel smoothing (ms)');
 
   const anim = pg.addFolder('Animation');
   anim.add(p, 'playbackRate', 0.1, 4, 0.05).name('Speed ×');
   anim.add(p, 'frameAdvance', { 'Timed': 'timed', 'Every N turns': 'revolution' }).name('Advance');
   const revsCtl = anim.add(p, 'revsPerFrame', 1, 16, 1).name('Turns / frame');
-  const animMore = anim.addFolder('Details').close();
-  animMore.add(p, 'maxFrames', 1, 120, 1).name('Max frames (import)');
-  animMore.add(p, 'videoFps', 1, 30, 1).name('Video sample fps');
 
   const picture = pg.addFolder('Picture details').close();
   picture.add(p, 'mapping', { 'Picture (polar)': 'polar', 'Adafruit columns': 'columns' }).name('Layout');
   picture.add(p, 'fit', { 'Whole disc': 'disc', 'LED ring only': 'annulus' }).name('Fit');
   picture.add(p, 'imageRotationDeg', -180, 180, 1).name('Rotation (°)');
-  picture.add(p, 'radialCompensation').name('Dim inner LEDs');
 
   const pgMore = pg.addFolder('Manage presets').close();
   const restore = { click: () => {} };
@@ -220,6 +213,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   ledMore.add(p, 'radialStagger').name('Radial stagger');
   ledMore.add(p, 'gamma', 1, 3, 0.05).name('Gamma');
   ledMore.add(p, 'colorBits', 1, 8, 1).name('Bits / channel');
+  ledMore.add(p, 'radialCompensation').name('Dim inner LEDs');
 
   const ctl = hg.addFolder('Controller');
   ctl.add(p, 'chip', Object.keys(CHIPS)).name('Chip').onChange(() => applyElectronics(p));
@@ -248,6 +242,14 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   fwMore.add(p, 'overflow', { 'Wrap around': 'wrap', 'Blank': 'blank' }).name('After last column');
   fwMore.add(p, 'predictMotion').name('Banner: predict motion');
   const freeCtl = fwMore.add(p, 'freeRunColsPerSec', 50, 20000, 10).name('Free-run cols/s');
+  fwMore.add(p, 'maxFrames', 1, 120, 1).name('Max frames (import)');
+  fwMore.add(p, 'videoFps', 1, 30, 1).name('Video sample fps');
+  // How hard the firmware's water simulation works: the same for every look that shows water.
+  const waterSim = ctl.addFolder('Water simulation').close();
+  waterSim.add(p, 'waterGrid', 12, 64, 2).name('Grid (cells across)');
+  waterSim.add(p, 'waterHz', 10, 60, 5).name('Sim rate (Hz)');
+  waterSim.add(p, 'waterIters', 5, 60, 1).name('Pressure iterations');
+  waterSim.add(p, 'accelSmoothMs', 0, 1000, 10).name('Accel smoothing (ms)');
 
   const reset = { click: () => {} };
   const resetCtl = hg.add(reset, 'click').name('↺ Reset hardware');
@@ -257,7 +259,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     refresh();
     hooks.onViewChange();
   });
-  hg.onChange(() => queueMicrotask(() => { hooks.onDeviceEdit(); refresh(); }));
+  hg.onChange((e) => queueMicrotask(() => { hooks.onDeviceEdit(e.property); refresh(); }));
 
   // ---------- Simulator tab: how the simulation looks and rides (never sent to the wheel) ----------
   const sg = tabGui('simulator');

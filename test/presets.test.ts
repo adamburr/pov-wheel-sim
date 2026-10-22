@@ -106,10 +106,10 @@ describe('default setup file', () => {
     for (const pr of DEFAULT_SETUP.presets) if (pr.media) expect(DEFAULT_SETUP.media).toHaveProperty(pr.media.id);
   });
 
-  it('seeds the presets and the selection, with fresh copies each time', () => {
+  it('seeds the presets, starting on the first, with fresh copies each time', () => {
     const s = new PresetStore(memoryStorage(), defaultBuiltIns);
     expect(s.presets.map((x) => x.name)).toEqual(DEFAULT_SETUP.presets.map((x) => x.name));
-    expect(s.activeIndex).toBe(DEFAULT_SETUP.activePreset);
+    expect(s.activeIndex).toBe(0);
     s.rename('Changed');
     expect(defaultBuiltIns().presets[s.activeIndex].name).toBe(DEFAULT_SETUP.presets[s.activeIndex].name);
   });
