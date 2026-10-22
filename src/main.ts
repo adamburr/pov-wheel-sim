@@ -8,6 +8,7 @@ import { getMedia, pruneMedia, putMedia } from './mediaStore';
 import { derive, type Derived } from './sim/timing';
 import { type AnimSpec, animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
 import { WaterSource } from './image/waterSource';
+import { SmileySource } from './image/smileySource';
 import { CityRide } from './sim/city';
 import { pedalSurge, riderPower } from './sim/rider';
 import { computeStats, exposureSeconds } from './sim/stats';
@@ -71,9 +72,13 @@ let sourceVersion = 0;
 let buffer: FrameStack | undefined;
 let banner: (FrameStack & { pixelM: number }) | undefined;
 let buildGen = 0;
+// Physics looks: the firmware simulates them live instead of storing frames.
 const water = new WaterSource();
+const smiley = new SmileySource();
 const isWater = () => !p.useMedia && p.pattern === 'Water (fluid sim)';
-let waterShown = false;
+const isSmiley = () => !p.useMedia && p.pattern === 'Bouncing smiley';
+const liveSource = () => (isWater() ? water : isSmiley() ? smiley : undefined);
+let liveShown = false;
 let imageKey = '';
 let rebuildTimer = 0;
 
@@ -333,10 +338,11 @@ function updateStats(d: Derived, now: number) {
   if (!ui!.statsVisible() || now - lastStats < 300) return;
   lastStats = now;
   const w = isWater() && water.sim ? water : undefined;
-  const bannerMode = p.displayMode === 'banner' && banner && !w;
-  const s = computeStats(p, d, (w ? w.meanDuty : bannerMode ? banner?.meanDuty : buffer?.meanDuty) ?? 0,
+  const live = liveSource();
+  const bannerMode = p.displayMode === 'banner' && banner && !live;
+  const s = computeStats(p, d, (live ? live.meanDuty : bannerMode ? banner?.meanDuty : buffer?.meanDuty) ?? 0,
     bannerMode && banner ? { width: banner.width, height: banner.height, tileM: bannerTileM(banner, p.tileGapM) } : undefined,
-    w ? 1 : buffer?.frames ?? 1,
+    live ? 1 : buffer?.frames ?? 1,
     w && w.sim ? {
       grid: w.sim.n, particles: w.sim.count, flopsPerStep: w.sim.flopsPerStep(), ramBytes: w.ramBytes(),
       aEstimate: w.aEstimate, aTrue: w.aTrue, wallSpeed: w.wallSpeed,
@@ -416,15 +422,16 @@ function frame(now: number) {
   const surge = pedalSurge(p.pedalSurgePct / 100, motion.speed(simTime), vTarget, rampG * 9.81, 2 * Math.PI * strokeHz);
   motion.configure(vTarget, d.tireRadius, surge.cruise, strokeHz, simTime, rampG * 9.81, surge.ramp);
 
-  // Content: live water frames, or the converted image/animation.
+  // Content: live frames from a physics look (water, bouncing smiley), or the converted image/animation.
   let anim = animSpecFor(p, buffer?.frames ?? 1);
-  if (isWater()) {
-    const changed = water.sync(p, d, motion, simTime);
-    pov.setLiveLayers(water.data, water.width, water.height, water.spec(p).frames, changed);
-    anim = water.spec(p);
-    waterShown = true;
-  } else if (waterShown) {
-    waterShown = false;
+  const live = liveSource();
+  if (live) {
+    const changed = live.sync(p, d, motion, simTime);
+    pov.setLiveLayers(live.data, live.width, live.height, live.spec(p).frames, changed);
+    anim = live.spec(p);
+    liveShown = true;
+  } else if (liveShown) {
+    liveShown = false;
     if (buffer) pov.setColumns(buffer);
   }
 

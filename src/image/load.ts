@@ -97,7 +97,8 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
   g.lineCap = 'round';
 
   switch (name) {
-    case 'Smiley': {
+    case 'Smiley':
+    case 'Bouncing smiley': { // the bouncing smiley's face; the live simulation moves it
       g.fillStyle = '#ffd21f';
       g.beginPath(); g.arc(cx, cy, R * 0.92, 0, Math.PI * 2); g.fill();
       g.fillStyle = '#000';

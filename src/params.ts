@@ -90,7 +90,7 @@ export const SHUTTERS: Record<string, number> = {
 };
 
 export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel', 'Rainbow spiral', 'Checkerboard', 'Text', 'Wide text',
-  'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)', 'Water (fluid sim)'] as const;
+  'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)', 'Water (fluid sim)', 'Bouncing smiley'] as const;
 export type PatternName = (typeof PATTERNS)[number];
 
 /**
@@ -192,6 +192,11 @@ export function defaultParams() {
     rimFriction: 0.05,        // spinning rim drags the water; ~0.2+ carries it round into a ring
     accelSmoothMs: 50,        // low-pass on the firmware's acceleration estimate (it is already held per revolution)
     waterGain: 2,             // firmware exaggerates the sensed acceleration so the slosh reads at POV refresh rates
+    // Bouncing smiley (rigid body): a disc three quarters the wheel's size loose inside it
+    smileyBounce: 0.9,        // restitution against the wall
+    smileyGrip: 0.1,          // friction with the turning wall
+    smileySides: 8,           // the wall is a polygon turning with the wheel: its facets knock the smiley (fewer = livelier)
+    smileyGain: 2,            // exaggerates the sensed acceleration, like the water's slosh
     pattern: 'Water (fluid sim)' as PatternName,
     text: 'HELLO',
     mapping: 'polar' as 'polar' | 'columns',
@@ -236,6 +241,7 @@ export const PRESET_KEYS = [
   'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'imageRotationDeg',
   'globalBrightness',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
+  'smileyBounce', 'smileyGrip', 'smileyGain', 'smileySides',
   'frameAdvance', 'playbackRate', 'revsPerFrame',
 ] as const satisfies readonly (keyof Params)[];
 export type PresetKey = (typeof PRESET_KEYS)[number];
@@ -257,7 +263,7 @@ export const PATTERN_LABELS: Record<PatternName, string> = {
   'Water (fluid sim)': 'Water', 'Smiley': 'Smiley', 'Polar test grid': 'Test grid', 'Clock face': 'Clock face',
   'Color wheel': 'Color wheel', 'Rainbow spiral': 'Rainbow spiral', 'Checkerboard': 'Checkerboard',
   'Text': 'Text', 'Wide text': 'Wide text', 'Bouncing ball (animated)': 'Bouncing ball',
-  'Beating heart (animated)': 'Beating heart', 'Counter (animated)': 'Counter',
+  'Beating heart (animated)': 'Beating heart', 'Counter (animated)': 'Counter', 'Bouncing smiley': 'Bouncing smiley',
 };
 
 // Allowed values for the string settings that pick from a list.

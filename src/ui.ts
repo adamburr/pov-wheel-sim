@@ -145,6 +145,12 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const spinCtl = pg.add(p, 'spinSeconds', -60, 60, 1).name('Spin (s per turn, 0 = still)');
   pg.add(p, 'globalBrightness', 1, 31, 1).name('Brightness');
 
+  const smiley = pg.addFolder('Bouncing smiley');
+  smiley.add(p, 'smileyBounce', 0, 0.95, 0.05).name('Bounce');
+  smiley.add(p, 'smileyGrip', 0, 1, 0.05).name('Wall grip');
+  smiley.add(p, 'smileySides', 5, 32, 1).name('Wall sides (fewer = livelier)');
+  smiley.add(p, 'smileyGain', 0, 5, 0.1).name('Push ×');
+
   const water = pg.addFolder('Water');
   water.add(p, 'fluid', Object.keys(FLUIDS)).name('Fluid').onChange((k: string) => {
     const f = FLUIDS[k];
@@ -244,11 +250,11 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const freeCtl = fwMore.add(p, 'freeRunColsPerSec', 50, 20000, 10).name('Free-run cols/s');
   fwMore.add(p, 'maxFrames', 1, 120, 1).name('Max frames (import)');
   fwMore.add(p, 'videoFps', 1, 30, 1).name('Video sample fps');
-  // How hard the firmware's water simulation works: the same for every look that shows water.
-  const waterSim = ctl.addFolder('Water simulation').close();
-  waterSim.add(p, 'waterGrid', 12, 64, 2).name('Grid (cells across)');
+  // How hard the firmware's physics looks (water, bouncing smiley) work: the same for every look.
+  const waterSim = ctl.addFolder('Physics simulation').close();
+  waterSim.add(p, 'waterGrid', 12, 64, 2).name('Water grid (cells across)');
   waterSim.add(p, 'waterHz', 10, 60, 5).name('Sim rate (Hz)');
-  waterSim.add(p, 'waterIters', 5, 60, 1).name('Pressure iterations');
+  waterSim.add(p, 'waterIters', 5, 60, 1).name('Water pressure iterations');
   waterSim.add(p, 'accelSmoothMs', 0, 1000, 10).name('Accel smoothing (ms)');
 
   const reset = { click: () => {} };
@@ -312,17 +318,20 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   /** Show only the controls that matter for the current choices. */
   function syncVisibility() {
     const isWater = !p.useMedia && p.pattern === 'Water (fluid sim)';
+    const isSmiley = !p.useMedia && p.pattern === 'Bouncing smiley';
+    const live = isWater || isSmiley;
     const animated = hooks.isAnimated();
     textCtl.show(!p.useMedia && (p.pattern === 'Text' || p.pattern === 'Wide text'));
     uploadCtl.show(p.useMedia);
     upperCtl.show(p.displayMode === 'banner');
-    spinCtl.show(p.displayMode === 'wheel' && !isWater);
+    spinCtl.show(p.displayMode === 'wheel' && !live);
     gapCtl.show(p.displayMode === 'banner' && p.bannerUpper === 'road');
     lowerCtl.show(p.displayMode === 'banner');
     water.show(isWater);
-    anim.show(!isWater && animated);
+    smiley.show(isSmiley);
+    anim.show(!live && animated);
     revsCtl.show(p.frameAdvance === 'revolution');
-    picture.show(!isWater);
+    picture.show(!live);
     lengthCtl.show(!p.autoLength);
     backCtl.show(p.doubleSided);
     clockCtl.show(LEDS[p.ledType].protocol === 'clocked');
