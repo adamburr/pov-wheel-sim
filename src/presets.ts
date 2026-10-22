@@ -20,7 +20,7 @@ export const BUILT_IN_PRESETS: { name: string; settings: PresetSettings }[] = [
   { name: 'Rainbow spiral', settings: { pattern: 'Rainbow spiral', spinSeconds: 16 } },
   { name: 'Clock face', settings: { pattern: 'Clock face' } },
   { name: 'Beating heart', settings: { pattern: 'Beating heart (animated)' } },
-  { name: 'HELLO banner', settings: { pattern: 'Wide text', text: 'HELLO', displayMode: 'banner', bannerLower: 'rainbow' } },
+  { name: 'HELLO banner', settings: { pattern: 'Wide text', text: 'HELLO WORLD', displayMode: 'banner', bannerLower: 'rainbow' } },
   {
     name: 'Ball on a bridge',
     settings: { pattern: 'Bouncing ball (animated)', displayMode: 'banner', bannerLower: 'bridge', bannerUpper: 'bike' },

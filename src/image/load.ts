@@ -238,9 +238,18 @@ export function bannerTile(src: ImageSource): HTMLCanvasElement {
   return c;
 }
 
-/** A 4:1 banner: a rainbow stripe and the text in the upper half, decoration in the lower half. */
+/**
+ * A banner at least 4:1: a rainbow stripe and the text in the upper half, decoration in the lower
+ * half. Longer text makes a longer banner (up to 16:1), so the letters keep their full height.
+ */
 function wideText(text: string): HTMLCanvasElement {
-  const { c, g } = canvas(SIZE * 4, SIZE);
+  const label = text || ' ';
+  const bandTop = SIZE * 0.12, bandBottom = SIZE * 0.46;
+  const fullSize = (bandBottom - bandTop) / 0.72; // cap height ≈ 0.72 em fills the band
+  const measure = canvas(1, 1).g;
+  measure.font = `900 ${fullSize}px sans-serif`;
+  const width = Math.round(Math.min(SIZE * 16, Math.max(SIZE * 4, measure.measureText(label).width / 0.92)));
+  const { c, g } = canvas(width, SIZE);
   g.fillStyle = '#000';
   g.fillRect(0, 0, c.width, c.height);
   const stripe = g.createLinearGradient(0, 0, c.width, 0);
@@ -252,9 +261,7 @@ function wideText(text: string): HTMLCanvasElement {
   g.fillStyle = '#ffffff';
   g.textAlign = 'center';
   g.textBaseline = 'alphabetic';
-  const label = text || ' ';
-  const bandTop = SIZE * 0.12, bandBottom = SIZE * 0.46;
-  let size = (bandBottom - bandTop) / 0.72; // cap height ≈ 0.72 em fills the band
+  let size = fullSize;
   g.font = `900 ${size}px sans-serif`;
   while (g.measureText(label).width > c.width * 0.92 && size > 10) { size *= 0.9; g.font = `900 ${size}px sans-serif`; }
   g.fillText(label, c.width / 2, bandBottom - (bandBottom - bandTop - size * 0.72) / 2);

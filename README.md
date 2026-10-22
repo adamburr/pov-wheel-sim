@@ -29,7 +29,7 @@ These are all renders from the simulator, starting from the Water preset and the
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/ride-by.jpg" alt="Cycloid streaks from a roadside camera"><br><sub><b>Ride-by,</b> 10 mph, 1/4 s, smiley: a fixed roadside camera sees the LEDs trace cycloids.</sub></td>
-    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO painted in the air above rainbow arches in banner mode"><br><sub><b>HELLO banner preset,</b> roadside, 10 mph, 2 s: the text is pinned to the road in the upper half, and rainbow arches outline the voids the strips never sweep below the hub.</sub></td>
+    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO WORLD painted in the air above rainbow arches in banner mode"><br><sub><b>HELLO banner preset,</b> roadside, 10 mph, 2 s: the text is pinned to the road in the upper half, and rainbow arches outline the voids the strips never sweep below the hub.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/banner-scallops.jpg" alt="Alternating coloured scallops around dark arch-shaped voids"><br><sub><b>Scallops lower half,</b> roadside, 10 mph, 2 s: the lit ground between the voids is filled in alternating colours, so the arch-shaped voids show plainly.</sub></td>
