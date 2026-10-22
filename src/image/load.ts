@@ -259,7 +259,9 @@ function wideText(text: string): HTMLCanvasElement {
   const fullSize = (bandBottom - bandTop) / 0.72; // cap height ≈ 0.72 em fills the band
   const measure = canvas(1, 1).g;
   measure.font = `900 ${fullSize}px sans-serif`;
-  const width = Math.round(Math.min(SIZE * 16, Math.max(SIZE * 4, measure.measureText(label).width / 0.92)));
+  // The tile fits the text plus half an em of space, so short text repeats often along the road.
+  const gap = 0.5 * fullSize;
+  const width = Math.round(Math.min(SIZE * 16, measure.measureText(label).width + gap));
   const { c, g } = canvas(width, SIZE);
   g.fillStyle = '#000';
   g.fillRect(0, 0, c.width, c.height);
@@ -274,7 +276,7 @@ function wideText(text: string): HTMLCanvasElement {
   g.textBaseline = 'alphabetic';
   let size = fullSize;
   g.font = `900 ${size}px sans-serif`;
-  while (g.measureText(label).width > c.width * 0.92 && size > 10) { size *= 0.9; g.font = `900 ${size}px sans-serif`; }
+  while (g.measureText(label).width > c.width - gap && size > 10) { size *= 0.9; g.font = `900 ${size}px sans-serif`; }
   g.fillText(label, c.width / 2, bandBottom - (bandBottom - bandTop - size * 0.72) / 2);
   return c;
 }
