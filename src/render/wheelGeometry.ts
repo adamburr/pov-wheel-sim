@@ -35,9 +35,9 @@ function rod(a: THREE.Vector3, b: THREE.Vector3, radius: number, segments = 5, c
 export class WheelModel {
   readonly group = new THREE.Group();
   private material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
-  // The fork has its own material so it can stay solid (and hide the LEDs behind it) while
-  // the spinning parts are drawn as see-through blur copies.
-  private forkMaterial = this.material.clone();
+  // The fork and the round parts (tire, rim, hub) have their own material so they can stay
+  // solid (and hide what's behind them) while the spokes and strips are see-through blur copies.
+  private fixedMaterial = this.material.clone();
   private rotating?: THREE.InstancedMesh;
   private fixed?: THREE.InstancedMesh;
   private key = '';
@@ -56,16 +56,11 @@ export class WheelModel {
     }
 
     const parts: THREE.BufferGeometry[] = [];
+    // Round parts look the same at every angle, so they need no blur copies and go with the fork.
+    // Blur copies can't write depth, which would let the rim paint over the tire in front of it.
+    const fixedParts: THREE.BufferGeometry[] = [];
     const tireTube = p.tireMm / 2000;
-    parts.push(colored(new THREE.TorusGeometry(d.rimRadius + tireTube, tireTube, 14, 96), 0x1b1b1d));
-    // Tread blocks so tire rotation is visible in daylight.
-    for (let i = 0; i < 48; i++) {
-      const a = (i / 48) * Math.PI * 2;
-      const b = new THREE.BoxGeometry(0.012, 0.004, p.tireMm / 1000 * 0.7);
-      b.translate(0, d.tireRadius - 0.001, 0);
-      b.rotateZ(a);
-      parts.push(colored(b, 0x2c2c30));
-    }
+    fixedParts.push(colored(new THREE.TorusGeometry(d.rimRadius + tireTube, tireTube, 14, 96), 0x1b1b1d));
     const rimInner = d.rimRadius - p.rimDepthMm / 1000;
     const rimShape = new THREE.Shape();
     rimShape.absarc(0, 0, d.rimRadius, 0, Math.PI * 2, false);
@@ -74,16 +69,16 @@ export class WheelModel {
     rimShape.holes.push(hole);
     const rim = new THREE.ExtrudeGeometry(rimShape, { depth: 0.02, bevelEnabled: false, curveSegments: 96 });
     rim.translate(0, 0, -0.01);
-    parts.push(colored(rim, 0x8a8f98));
+    fixedParts.push(colored(rim, 0x8a8f98));
 
     const hub = new THREE.CylinderGeometry(0.018, 0.018, 0.1, 20);
     hub.rotateX(Math.PI / 2);
-    parts.push(colored(hub, 0x9aa0a8));
+    fixedParts.push(colored(hub, 0x9aa0a8));
     for (const z of [-0.035, 0.035]) {
       const flange = new THREE.CylinderGeometry(0.03, 0.03, 0.004, 24);
       flange.rotateX(Math.PI / 2);
       flange.translate(0, 0, z);
-      parts.push(colored(flange, 0x9aa0a8));
+      fixedParts.push(colored(flange, 0x9aa0a8));
     }
     // 3-cross lacing: rim holes alternate between flanges; on each flange spokes alternate leading
     // and trailing, leaving the hub 4π·crosses/N from their rim hole, which keeps the hub holes
@@ -130,7 +125,6 @@ export class WheelModel {
     // and the electronics behind the spokes, so neither is drawn.
     // Typical road geometry: the steering axis leans back at 73° from horizontal and passes 45 mm
     // behind the axle (fork offset). The crown sits on that axis at the axle-to-crown length.
-    const forkParts: THREE.BufferGeometry[] = [];
     const head = (73 * Math.PI) / 180, offset = 0.045, axleToCrown = d.tireRadius + 0.03;
     const up = new THREE.Vector2(-Math.cos(head), Math.sin(head));     // along the steering axis
     const fwd = new THREE.Vector2(Math.sin(head), Math.cos(head));     // perpendicular, forward
@@ -141,13 +135,13 @@ export class WheelModel {
     // The legs end on its axis, inside the tube, so the joint is closed from every angle.
     const crownR = 0.01;
     const crownAxis = crown.clone().addScaledVector(up, crownR);
-    forkParts.push(colored(rod(new THREE.Vector3(crownAxis.x, crownAxis.y, -0.054), new THREE.Vector3(crownAxis.x, crownAxis.y, 0.054), crownR, 16, true), 0x3a5a8a));
+    fixedParts.push(colored(rod(new THREE.Vector3(crownAxis.x, crownAxis.y, -0.054), new THREE.Vector3(crownAxis.x, crownAxis.y, 0.054), crownR, 16, true), 0x3a5a8a));
     const legTop = crownAxis;
     for (const z of [-0.055, 0.055]) {
-      forkParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(legTop.x, legTop.y, z * 0.8), 0.008, 12, true), 0x3a5a8a));
+      fixedParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(legTop.x, legTop.y, z * 0.8), 0.008, 12, true), 0x3a5a8a));
     }
-    const forkGeo = mergeGeometries(forkParts.map((g) => (g.index ? g.toNonIndexed() : g)));
-    this.fixed = new THREE.InstancedMesh(forkGeo, this.forkMaterial, MAX_COPIES);
+    const fixedGeo = mergeGeometries(fixedParts.map((g) => (g.index ? g.toNonIndexed() : g)));
+    this.fixed = new THREE.InstancedMesh(fixedGeo, this.fixedMaterial, MAX_COPIES);
     this.group.add(this.rotating, this.fixed);
   }
 
@@ -164,16 +158,16 @@ export class WheelModel {
       q.identity();
       this.fixed.setMatrixAt(i, this.m.compose(pos, q, one));
     }
-    // The fork only needs blur copies when it moves during the exposure (ride-by). Otherwise one
-    // solid copy is exact, and it writes depth so the LED light behind it is hidden.
+    // The fixed parts only need blur copies when they move during the exposure (ride-by). Otherwise
+    // one solid copy is exact, and it writes depth so the spokes and LED light behind it are hidden.
     const hub0 = hubAt(times[0]);
-    const forkMoves = times.slice(0, k).some((t) => Math.abs(hubAt(t) - hub0) > 1e-4);
-    const forkCopies = forkMoves ? k : 1;
+    const moves = times.slice(0, k).some((t) => Math.abs(hubAt(t) - hub0) > 1e-4);
+    const fixedCopies = moves ? k : 1;
     this.rotating.count = k;
-    this.fixed.count = forkCopies;
+    this.fixed.count = fixedCopies;
     this.rotating.instanceMatrix.needsUpdate = this.fixed.instanceMatrix.needsUpdate = true;
     setBlur(this.material, k);
-    setBlur(this.forkMaterial, forkCopies);
+    setBlur(this.fixedMaterial, fixedCopies);
   }
 }
 
