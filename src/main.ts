@@ -292,23 +292,16 @@ rideSlider.addEventListener('input', () => {
     p.speed = v; p.braking = false;
   }
 });
-function cityText(): string {
-  switch (city.phase) {
-    case 'go': return `pulling away to ${p.speed.toFixed(1)} at ${city.rampG.toFixed(2)} g`;
-    case 'cruise': return 'cruising';
-    case 'brake': return `red light ${city.lightM.toFixed(0)} m ahead · braking ${city.rampG.toFixed(2)} g`;
-    default: return 'waiting at a light';
-  }
-}
 function updateRidePanel(actualMps: number) {
   const mph = p.speedUnit === 'mph';
   rideSpeed.textContent = (actualMps / (mph ? 0.44704 : 1 / 3.6)).toFixed(1);
   rideUnit.textContent = p.speedUnit;
   rideSlider.max = mph ? '40' : '65';
-  if (document.activeElement !== rideSlider) rideSlider.value = String(p.cityMode ? p.citySpeed : p.speed);
-  rideCity.checked = p.cityMode;
+  // The slider sets the target: the cruise speed in stop-and-go, otherwise the riding speed.
   const target = p.cityMode ? p.citySpeed : p.speed;
-  rideStatus.textContent = p.cityMode ? cityText() : p.braking ? 'braking' : `target ${target.toFixed(1)}`;
+  if (document.activeElement !== rideSlider) rideSlider.value = String(target);
+  rideCity.checked = p.cityMode;
+  rideStatus.textContent = `target ${target.toFixed(1)}`;
 }
 ui = buildUi(p, hooks);
 loadSource();
