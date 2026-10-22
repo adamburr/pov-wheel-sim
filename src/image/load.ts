@@ -232,8 +232,10 @@ const HEART_FIT = (() => {
   return best;
 })();
 
+// Lub-dub: a strong swell, then a smaller second beat. The heart fills the rim at its peak, so at
+// rest it is about 70% of that size.
 const heartBeat = (t: number) =>
-  1 + 0.18 * Math.max(Math.sin(t * Math.PI * 2), 0) ** 3 + 0.08 * Math.max(Math.sin(t * Math.PI * 2 - 1.2), 0) ** 3;
+  1 + 0.4 * Math.max(Math.sin(t * Math.PI * 2), 0) ** 3 + 0.18 * Math.max(Math.sin(t * Math.PI * 2 - 1.2), 0) ** 3;
 const HEART_FRAMES = 16;
 const HEART_BEAT_MAX = Math.max(...Array.from({ length: HEART_FRAMES }, (_, i) => heartBeat(i / HEART_FRAMES)));
 
