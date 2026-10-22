@@ -51,7 +51,7 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   // Water mode renders each column on the fly from the simulation, so it stores no frames.
   const imageBytes = water ? water.ramBytes : physics ? physics.ramBytes : frameBytes * frames;
   const targetFps = playbackFps(p);
-  const playFps = p.frameAdvance === 'timed' ? targetFps : (rps * p.playbackRate) / Math.max(0.05, p.revsPerFrame);
+  const playFps = p.frameAdvance === 'timed' ? targetFps : (rps * p.playbackRate) / Math.max(0.01, p.revsPerFrame);
   const usableRam = chip.ramKB * 1024 * (p.python ? 0.45 : 0.8);
 
   const lines: StatLine[] = [

@@ -363,5 +363,5 @@ function frameStep(p: Params, anim: AnimSpec, motion: WheelMotion, seg: Segment 
   if (seg && seg.P < 0) turns = motion.phi(t) / TAU;
   else if (seg?.k !== undefined) turns = seg.k + Math.min(Math.floor((t - seg.m) / seg.P), C - 1) / C;
   else if (seg) turns = Math.round(seg.m / (seg.P * C)) + Math.floor((t - seg.m) / seg.P) / C;
-  return Math.floor(turns / Math.max(0.05, anim.revsPerFrame) + 1e-9);
+  return Math.floor(turns / Math.max(0.01, anim.revsPerFrame) + 1e-9);
 }

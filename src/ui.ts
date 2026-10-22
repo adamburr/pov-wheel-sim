@@ -168,7 +168,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const anim = pg.addFolder('Animation');
   anim.add(p, 'playbackRate', 0.1, 4, 0.05).name('Speed ×');
   anim.add(p, 'frameAdvance', { 'Timed': 'timed', 'Every N turns': 'revolution' }).name('Advance');
-  const revsCtl = anim.add(p, 'revsPerFrame', 0.05, 16, 0.01).name('Turns / frame');
+  const revsCtl = anim.add(p, 'revsPerFrame', 0.01, 16, 0.01).name('Turns / frame');
 
   const picture = pg.addFolder('Picture details').close();
   picture.add(p, 'mapping', { 'Picture (polar)': 'polar', 'Adafruit columns': 'columns' }).name('Layout');
