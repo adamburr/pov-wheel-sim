@@ -71,7 +71,7 @@ A real wheel has one button that steps through its presets in order while you ri
 
 ### Setups
 
-A setup is the hardware build plus all the presets. It saves automatically in the browser, uploaded images included. **Save** downloads it as a `.json` file with images embedded, **Open…** (or dropping the file on the page) loads one, and **Reset** puts everything back to the defaults: the hardware, the built-in presets and the simulator settings. The setup file is also what a future version will flash to the wheel's controller.
+A setup is the hardware build plus all the presets. It saves automatically in the browser, uploaded images included. **Save** downloads it as a `.json` file with images embedded, **Open** (or dropping the file on the page) loads one, and **Reset** puts everything back to the defaults: the hardware, the built-in presets and the simulator settings. The setup file is also what a future version will flash to the wheel's controller.
 
 ### Changing the defaults
 
