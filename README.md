@@ -55,7 +55,7 @@ Two views show the same moment and the same animation. The main view follows the
 
 ### Presets
 
-A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with seven: Water, Smiley, Rainbow spiral (which turns slowly), Clock face, Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Dropping or pasting an image puts it in the selected preset.
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with seven: Water, Smiley, Rainbow spiral (which turns slowly), Clock face (an old Roman-numeral dial whose hands spin in opposite directions), Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Delete, Restore, New and Reset hardware ask for a second click to confirm. Dropping or pasting an image puts it in the selected preset.
 
 ### Setups
 

@@ -33,6 +33,8 @@ export interface Ui {
   isSheet: () => boolean;
   openTab: (tab: Tab) => void;
   pickMedia: () => void;
+  /** Show a short message on the page (instead of alert(), which some browsers never show). */
+  notify: (message: string) => void;
   guis: GUI[];
 }
 
@@ -62,6 +64,36 @@ function fileInput(accept: string, onFile: (f: File) => void) {
   input.onchange = () => { if (input.files?.[0]) onFile(input.files[0]); input.value = ''; };
   document.body.appendChild(input);
   return input;
+}
+
+/**
+ * Confirm a destructive action with a second click instead of a confirm() dialog. Some embedded
+ * browsers never show dialogs, so confirm() returns false and the action silently does nothing.
+ * The first click arms it for 4 s (show() relabels the button); a second click carries it out.
+ */
+function twoStep(show: (armed: boolean) => void, action: () => void): () => void {
+  let timer = 0;
+  return () => {
+    if (!timer) {
+      show(true);
+      timer = window.setTimeout(() => { timer = 0; show(false); }, 4000);
+      return;
+    }
+    clearTimeout(timer);
+    timer = 0;
+    show(false);
+    action();
+  };
+}
+
+function confirmButton(el: HTMLElement, armedText: string, action: () => void) {
+  const text = el.textContent;
+  el.onclick = twoStep((armed) => { el.textContent = armed ? armedText : text; el.classList.toggle('armed', armed); }, action);
+}
+
+function confirmController(ctl: Controller, armedText: string, action: () => void) {
+  const text = ctl._name;
+  return twoStep((armed) => { ctl.name(armed ? armedText : text); ctl.domElement.classList.toggle('armed', armed); }, action);
 }
 
 /** A lil-gui without its own title bar, placed in one of the panel's tabs. */
@@ -143,13 +175,12 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   picture.add(p, 'radialCompensation').name('Dim inner LEDs');
 
   const pgMore = pg.addFolder('Manage presets').close();
-  pgMore.add({
-    restore: () => {
-      if (!confirm('Replace all presets with the built-in ones? Your own presets will be deleted.')) return;
-      store.restoreBuiltIns();
-      hooks.onPresetSelected();
-    },
-  }, 'restore').name('↺ Restore built-in presets');
+  const restore = { click: () => {} };
+  const restoreCtl = pgMore.add(restore, 'click').name('↺ Restore built-in presets');
+  restore.click = confirmController(restoreCtl, 'Click again: replaces all presets', () => {
+    store.restoreBuiltIns();
+    hooks.onPresetSelected();
+  });
 
   // lil-gui calls the GUI-level handler before the control's own one (which may seed other
   // values), so report the change once both have run.
@@ -217,16 +248,15 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   fwMore.add(p, 'predictMotion').name('Banner: predict motion');
   const freeCtl = fwMore.add(p, 'freeRunColsPerSec', 50, 20000, 10).name('Free-run cols/s');
 
-  hg.add({
-    reset: () => {
-      if (!confirm('Reset the hardware to the defaults?')) return;
-      const d = defaultParams();
-      for (const k of DEVICE_KEYS) (p as Record<string, unknown>)[k] = d[k];
-      hooks.onDeviceEdit();
-      refresh();
-      hooks.onViewChange();
-    },
-  }, 'reset').name('↺ Reset hardware');
+  const reset = { click: () => {} };
+  const resetCtl = hg.add(reset, 'click').name('↺ Reset hardware');
+  reset.click = confirmController(resetCtl, 'Click again to reset the hardware', () => {
+    const d = defaultParams();
+    for (const k of DEVICE_KEYS) (p as Record<string, unknown>)[k] = d[k];
+    hooks.onDeviceEdit();
+    refresh();
+    hooks.onViewChange();
+  });
   hg.onChange(() => queueMicrotask(() => { hooks.onDeviceEdit(); refresh(); }));
 
   // ---------- Simulator tab: how the simulation looks and rides (never sent to the wheel) ----------
@@ -341,10 +371,9 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     ($('preset-delete') as HTMLButtonElement).disabled = store.presets.length <= 1;
   }
   $('preset-add').onclick = () => { store.add(); hooks.onPresetSelected(); };
-  $('preset-delete').onclick = () => {
-    if (!confirm(`Delete the preset “${store.active.name}”?`)) return;
+  confirmButton($('preset-delete'), 'Click again to delete', () => {
     if (store.remove()) hooks.onPresetSelected();
-  };
+  });
   $('preset-next').onclick = () => { store.next(); hooks.onPresetSelected(); };
   presetName.onclick = () => openTab('presets');
   window.addEventListener('keydown', (e) => {
@@ -373,12 +402,21 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   for (const b of document.querySelectorAll<HTMLElement>('[data-tab]')) b.onclick = () => openTab(b.dataset.tab as Tab);
   $('panel-toggle').onclick = () => setOpen(!isOpen());
   $('panel-close').onclick = () => setOpen(false);
-  $('setup-new').onclick = hooks.onNewSetup;
+  confirmButton($('setup-new'), 'Reset all?', hooks.onNewSetup);
   $('setup-open').onclick = () => setupInput.click();
   $('setup-save').onclick = hooks.onSaveSetup;
   sheetQuery.addEventListener('change', hooks.onLayout);
   openTab('presets');
   setOpen(false);
+
+  const toast = $('toast');
+  let toastTimer = 0;
+  function notify(message: string) {
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => { toast.hidden = true; }, 6000);
+  }
 
   function refresh() {
     const label = currentMediaLabel();
@@ -402,6 +440,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     isSheet: () => sheetQuery.matches,
     openTab,
     pickMedia: () => mediaInput.click(),
+    notify,
     guis,
   };
 }

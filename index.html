@@ -16,6 +16,10 @@
       #strip-frame { position: fixed; box-sizing: border-box; border-bottom: 1px solid var(--line); border-top: 1px solid var(--line); }
       #strip-frame[hidden] { display: none; }
       #strip-frame span { position: absolute; left: 8px; bottom: 6px; padding: 2px 8px; border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 12px; pointer-events: none; }
+      /* A destructive button armed by its first click; a second click within 4 s carries it out. */
+      body .armed, body .lil-gui .controller.armed button { background: #6a1f2a !important; border-color: #b03a4a !important; color: #fff !important; }
+      #toast { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; box-sizing: border-box; max-width: min(520px, calc(100% - 32px)); padding: 10px 14px; border-radius: 10px; background: #3a1d24; border: 1px solid #a03a4a; font-size: 14px; }
+      #toast[hidden] { display: none; }
       #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; font-size: 20px; background: rgba(0, 120, 255, 0.15); border: 3px dashed var(--accent); pointer-events: none; }
 
       /* Ride panel: the preset button (the wheel's one hardware button), then speed and riding. */
@@ -152,6 +156,7 @@
         <div id="stats"></div>
       </div>
     </aside>
+    <div id="toast" role="status" hidden></div>
     <div id="drop">Drop an image, clip or setup file</div>
     <script type="module" src="/src/main.ts"></script>
   </body>

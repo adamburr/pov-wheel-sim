@@ -196,11 +196,10 @@ const hooks = {
       setSource(anim);
       pruneMedia(store.mediaIds());
     } catch (err) {
-      alert(`Couldn't load ${file.name}: ${(err as Error).message}`);
+      ui?.notify(`Couldn't load ${file.name}: ${(err as Error).message}`);
     }
   },
   onNewSetup: () => {
-    if (!confirm('Start a new setup? Everything goes back to the defaults: the hardware, the presets and the simulator settings.')) return;
     Object.assign(p, defaultParams());
     saveDevice(storage, p);
     store.restoreBuiltIns();
@@ -211,7 +210,6 @@ const hooks = {
   onOpenSetup: async (file: File) => {
     try {
       const setup = parseSetup(await file.text());
-      if (!confirm(`Replace the current hardware and presets with “${setup.device.setupName || file.name}”?`)) return;
       for (const [id, m] of Object.entries(setup.media)) await putMedia(id, new Blob([m.bytes as BlobPart], { type: m.type }));
       Object.assign(p, deviceDefaults(), setup.device);
       saveDevice(storage, p);
@@ -219,7 +217,7 @@ const hooks = {
       hooks.onPresetSelected();
       hooks.onViewChange();
     } catch (err) {
-      alert(`Couldn't open ${file.name}: ${(err as Error).message}`);
+      ui?.notify(`Couldn't open ${file.name}: ${(err as Error).message}`);
     }
   },
   onSaveSetup: async () => {

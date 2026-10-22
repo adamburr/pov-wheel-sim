@@ -20,6 +20,56 @@ function canvas(w = SIZE, h = SIZE) {
   return { c, g: c.getContext('2d')! };
 }
 
+const ROMAN = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+
+/**
+ * An old-fashioned clock dial in white on black, after the clock in a 1960s TV anthology's
+ * opening: double rim, minute and hour ticks, Roman numerals, a spade hour hand and an arrow
+ * minute hand. Hand angles are clockwise from twelve, in radians.
+ */
+function drawClock(g: CanvasRenderingContext2D, minute: number, hour: number) {
+  const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
+  const ink = '#f4f1e8';
+  g.strokeStyle = ink;
+  g.lineWidth = R * 0.035;
+  g.beginPath(); g.arc(cx, cy, R * 0.95, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = R * 0.015;
+  g.beginPath(); g.arc(cx, cy, R * 0.88, 0, Math.PI * 2); g.stroke();
+  for (let m = 0; m < 60; m++) {
+    const a = (m / 60) * Math.PI * 2, major = m % 5 === 0;
+    const r0 = R * (major ? 0.8 : 0.84), r1 = R * 0.88;
+    g.lineWidth = R * (major ? 0.03 : 0.012);
+    g.beginPath();
+    g.moveTo(cx + Math.sin(a) * r0, cy - Math.cos(a) * r0);
+    g.lineTo(cx + Math.sin(a) * r1, cy - Math.cos(a) * r1);
+    g.stroke();
+  }
+  g.fillStyle = ink;
+  g.font = `bold ${R * 0.13}px Georgia, 'Times New Roman', serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  ROMAN.forEach((numeral, h) => {
+    const a = (h / 12) * Math.PI * 2;
+    g.fillText(numeral, cx + Math.sin(a) * R * 0.66, cy - Math.cos(a) * R * 0.66);
+  });
+  // Hands, drawn pointing up from the centre and turned into place.
+  const hand = (angle: number, path: [number, number][]) => {
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(angle);
+    g.beginPath();
+    path.forEach(([x, y], i) => (i ? g.lineTo(x * R, -y * R) : g.moveTo(x * R, -y * R)));
+    g.closePath();
+    g.fill();
+    g.restore();
+  };
+  // Hour: a broad blade ending in a spade.
+  hand(hour, [[-0.035, -0.1], [-0.03, 0.3], [-0.08, 0.36], [0, 0.48], [0.08, 0.36], [0.03, 0.3], [0.035, -0.1]]);
+  // Minute: long and slim with an arrow tip.
+  hand(minute, [[-0.02, -0.14], [-0.018, 0.6], [-0.05, 0.6], [0, 0.72], [0.05, 0.6], [0.018, 0.6], [0.02, -0.14]]);
+  g.beginPath(); g.arc(cx, cy, R * 0.06, 0, Math.PI * 2); g.fill();
+}
+
 /** Four rainbow arms spiralling out from the centre. */
 function drawSpiral(g: CanvasRenderingContext2D) {
   const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
@@ -76,19 +126,7 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
       break;
     }
     case 'Clock face': {
-      g.strokeStyle = '#7fd7ff'; g.lineWidth = R * 0.05;
-      g.beginPath(); g.arc(cx, cy, R * 0.94, 0, Math.PI * 2); g.stroke();
-      g.fillStyle = '#fff'; g.font = `bold ${R * 0.17}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      for (let h = 1; h <= 12; h++) {
-        const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
-        g.fillText(String(h), cx + Math.cos(a) * R * 0.74, cy + Math.sin(a) * R * 0.74);
-      }
-      const hand = (a: number, len: number, w: number, col: string) => {
-        g.strokeStyle = col; g.lineWidth = w;
-        g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a - Math.PI / 2) * len, cy + Math.sin(a - Math.PI / 2) * len); g.stroke();
-      };
-      hand((10.2 / 12) * Math.PI * 2, R * 0.45, R * 0.07, '#ffb000');
-      hand((2 / 12) * Math.PI * 2, R * 0.62, R * 0.045, '#ffffff');
+      drawClock(g, (2 / 12) * Math.PI * 2, (10.2 / 12) * Math.PI * 2);
       break;
     }
     case 'Color wheel': {
@@ -247,6 +285,12 @@ const HEART_FRAMES = 16;
 const HEART_BEAT_MAX = Math.max(...Array.from({ length: HEART_FRAMES }, (_, i) => heartBeat(i / HEART_FRAMES)));
 
 const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRenderingContext2D, t: number, i: number) => void }> = {
+  // The hands spin in opposite directions, one full turn each per loop: minute hand anticlockwise,
+  // hour hand clockwise.
+  'Clock face': {
+    frames: 24, fps: 12,
+    draw: (g, t) => drawClock(g, (2 / 12 - t) * Math.PI * 2, (10.2 / 12 + t) * Math.PI * 2),
+  },
   'Bouncing ball (animated)': {
     frames: 24, fps: 12,
     draw: (g, t) => {
