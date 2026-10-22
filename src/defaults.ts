@@ -39,6 +39,16 @@ function load(): Setup {
 
 export const DEFAULT_SETUP = load();
 
+/** A short fingerprint of a setup file's contents (FNV-1a), to notice when it changes. */
+export function fingerprint(file: unknown): string {
+  let h = 0x811c9dc5;
+  for (const ch of JSON.stringify(file)) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
+  return (h >>> 0).toString(36);
+}
+
+/** Which defaults this build ships: browsers that saved a setup from other defaults start over. */
+export const DEFAULTS_ID = fingerprint(raw);
+
 /** The default hardware: the code's defaults with default-setup.json's values on top. */
 export function defaultDevice(): Pick<Params, DeviceKey> {
   return { ...pick(defaultParams(), DEVICE_KEYS), ...DEFAULT_SETUP.device };

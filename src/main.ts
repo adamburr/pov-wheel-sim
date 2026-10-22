@@ -3,7 +3,7 @@ import { bannerLowerOf, defaultParams, type Params, showPicture, speedMps } from
 import { buildUi, type Ui } from './ui';
 import { newId, PresetStore } from './presets';
 import { loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, setupFileName } from './setupFile';
-import { DEFAULT_MEDIA_URLS, DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from './defaults';
+import { DEFAULT_MEDIA_URLS, DEFAULT_SETUP, defaultBuiltIns, defaultDevice, DEFAULTS_ID } from './defaults';
 import { getMedia, pruneMedia, putMedia } from './mediaStore';
 import { derive, type Derived } from './sim/timing';
 import { type AnimSpec, animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
@@ -22,14 +22,18 @@ import { createCamera, createStripCamera, placeCamera, placeStripCamera, setFree
 
 // The saved setup: the hardware build and the presets (the active one is loaded into p).
 // Reloading the page (plainly or forced) starts over from the defaults, like Reset; opening it
-// afresh (a new tab, a link) restores the saved setup.
+// afresh (a new tab, a link) restores the saved setup. So does a saved setup that began from
+// other defaults: when default-setup.json changes (a new built-in preset, say), every browser
+// starts over from the new defaults once, on its next visit.
 const storage = (() => { try { return window.localStorage; } catch { return undefined; } })();
+const DEFAULTS_KEY = 'pov-wheel-sim.defaults';
 const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-const reloaded = navigation?.type === 'reload';
+const startOver = navigation?.type === 'reload' || (() => { try { return storage?.getItem(DEFAULTS_KEY) !== DEFAULTS_ID; } catch { return false; } })();
 const p = defaultParams();
-Object.assign(p, defaultDevice(), reloaded ? {} : loadDevice(storage));
+Object.assign(p, defaultDevice(), startOver ? {} : loadDevice(storage));
 const store = new PresetStore(storage, defaultBuiltIns);
-if (reloaded) { saveDevice(storage, p); store.restoreBuiltIns(); }
+if (startOver) { saveDevice(storage, p); store.restoreBuiltIns(); }
+try { storage?.setItem(DEFAULTS_KEY, DEFAULTS_ID); } catch { /* blocked storage: nothing was saved anyway */ }
 // Media for the default presets, so they can find it: embedded in default-setup.json, or fetched
 // from media/. Showing a preset's picture waits for this.
 const defaultMedia = Promise.all(Object.entries(DEFAULT_SETUP.media).map(async ([id, m]) => {
@@ -41,7 +45,7 @@ const defaultMedia = Promise.all(Object.entries(DEFAULT_SETUP.media).map(async (
 }));
 /** Media to keep stored: what the presets use, plus the defaults' (for New and Restore). */
 const keptMedia = () => new Set([...store.mediaIds(), ...Object.keys(DEFAULT_SETUP.media)]);
-if (reloaded) pruneMedia(keptMedia()); // uploads only the old presets used
+if (startOver) pruneMedia(keptMedia()); // uploads only the old presets used
 store.apply(p);
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });

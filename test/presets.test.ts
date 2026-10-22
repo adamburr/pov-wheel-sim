@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bannerLowerOf, defaultParams, DEVICE_KEYS, PRESET_KEYS, showPicture } from '../src/params';
 import raw from '../default-setup.json';
 import { readFileSync } from 'node:fs';
-import { DEFAULT_MEDIA_URLS, DEFAULT_SETUP, defaultBuiltIns, defaultDevice } from '../src/defaults';
+import { DEFAULT_MEDIA_URLS, DEFAULT_SETUP, defaultBuiltIns, defaultDevice, DEFAULTS_ID, fingerprint } from '../src/defaults';
 import { type BuiltIns, type KeyValueStorage, newId, presetDefaults, PresetStore } from '../src/presets';
 import { loadDevice, parseSetup, saveDevice, serializeSetup, setupFileName } from '../src/setupFile';
 
@@ -126,6 +126,14 @@ describe('default setup file', () => {
     // embedded, or read from the file in media/ its "path" names.
     expect(Object.keys(DEFAULT_SETUP.device).sort()).toEqual(Object.keys(raw.device).sort());
     for (const pr of DEFAULT_SETUP.presets) if (pr.media) expect(DEFAULT_SETUP.media).toHaveProperty(pr.media.id);
+  });
+
+  it('has a fingerprint that changes with its contents, so browsers notice new defaults', () => {
+    expect(DEFAULTS_ID).toBe(fingerprint(raw));
+    expect(fingerprint(structuredClone(raw))).toBe(DEFAULTS_ID); // the same contents, the same id
+    const renamed = structuredClone(raw);
+    renamed.presets[0].name += ' 2';
+    expect(fingerprint(renamed)).not.toBe(DEFAULTS_ID);
   });
 
   it('finds the media it names by path in media/', () => {
