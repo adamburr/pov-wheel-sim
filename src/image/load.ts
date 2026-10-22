@@ -6,8 +6,10 @@ export type ImageSource = HTMLCanvasElement | ImageBitmap;
 export interface Animation {
   frames: ImageSource[];
   fps: number;
-  /** Optional frames laid out for the wheel-locked display; `frames` is used for banner mode. */
+  /** Optional frames laid out for the wheel-locked display. */
   wheelFrames?: ImageSource[];
+  /** Optional frames already laid out for banner mode; otherwise `bannerTile` lays out `frames`. */
+  bannerFrames?: ImageSource[];
 }
 
 const SIZE = 512;
@@ -125,7 +127,6 @@ export function makePattern(name: PatternName, text: string): HTMLCanvasElement 
   return c;
 }
 
-/** A 4:1 banner with rainbow stripes and the text in the top half, made for banner mode where the image tiles along the road. */
 /**
  * Wide text laid out for the wheel-locked display: rainbow lines above and below the text,
  * the whole block in the upper half of the wheel, clear of the dark hub. The text is centred
@@ -163,6 +164,36 @@ function wideTextWheel(text: string): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * Decoration for the lower half of a banner: coloured bands running along the road. Near the
+ * ground the LEDs barely move along the road, so they resolve little detail across it (and smear
+ * into bright cusps), but bands that don't change along the road still read cleanly.
+ */
+function bannerDecoration(g: CanvasRenderingContext2D, w: number, top: number, h: number) {
+  const bands = [[0.14, 0.1, 55], [0.36, 0.08, 46], [0.56, 0.06, 38], [0.74, 0.045, 30], [0.9, 0.035, 24]];
+  bands.forEach(([y, bandH, light], i) => {
+    const grad = g.createLinearGradient(0, 0, w, 0);
+    for (let k = 0; k <= 6; k++) grad.addColorStop(k / 6, `hsl(${k * 60 + i * 50}, 100%, ${light}%)`);
+    g.fillStyle = grad;
+    g.fillRect(0, top + y * h, w, bandH * h);
+  });
+}
+
+/**
+ * Lay out a picture for banner mode: fitted into the upper half, where the LEDs sweep along the
+ * road and resolve detail. The lower half is left dark for a pattern drawn around the voids.
+ */
+export function bannerTile(src: ImageSource): HTMLCanvasElement {
+  const H = SIZE, top = H * 0.04, contentH = H * 0.42;
+  const contentW = Math.max(1, Math.round((contentH * src.width) / src.height));
+  const { c, g } = canvas(Math.round(contentW + H * 0.25), H);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, c.width, H);
+  g.drawImage(src, (c.width - contentW) / 2, top, contentW, contentH);
+  return c;
+}
+
+/** A 4:1 banner: a rainbow stripe and the text in the upper half, decoration in the lower half. */
 function wideText(text: string): HTMLCanvasElement {
   const { c, g } = canvas(SIZE * 4, SIZE);
   g.fillStyle = '#000';
@@ -171,9 +202,8 @@ function wideText(text: string): HTMLCanvasElement {
   for (let i = 0; i <= 6; i++) stripe.addColorStop(i / 6, `hsl(${i * 60}, 100%, 50%)`);
   g.fillStyle = stripe;
   g.fillRect(0, 0, c.width, SIZE * 0.08);
-  g.fillRect(0, SIZE * 0.92, c.width, SIZE * 0.08);
-  // Text sits in the top half, between the top stripe and the hub line. In banner mode the
-  // lower half is painted by LEDs near the ground, which smear into bright cusps.
+  bannerDecoration(g, c.width, SIZE / 2, SIZE / 2);
+  // Text sits in the top half, between the top stripe and the hub line.
   g.fillStyle = '#ffffff';
   g.textAlign = 'center';
   g.textBaseline = 'alphabetic';
@@ -253,7 +283,12 @@ const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRe
 /** Built-in patterns as animations (stills have one frame). */
 export function makeAnimation(name: PatternName, text: string): Animation {
   const anim = ANIMATED[name];
-  if (name === 'Wide text') return { frames: [wideText(text)], fps: 1, wheelFrames: [wideTextWheel(text)] };
+  if (name === 'Wide text') {
+    const banner = wideText(text);
+    return { frames: [banner], fps: 1, wheelFrames: [wideTextWheel(text)], bannerFrames: [banner] };
+  }
+  // In banner mode, text goes in the upper half with decoration below, like wide text.
+  if (name === 'Text') return { frames: [makePattern(name, text)], fps: 1, bannerFrames: [wideText(text)] };
   if (!anim) return { frames: [makePattern(name, text)], fps: 1 };
   const frames: HTMLCanvasElement[] = [];
   for (let i = 0; i < anim.frames; i++) {

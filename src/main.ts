@@ -1,20 +1,28 @@
 import * as THREE from 'three';
-import { defaultParams, speedMps } from './params';
-import { buildGui } from './ui';
+import { defaultParams, type Params, speedMps } from './params';
+import { buildUi, type Ui } from './ui';
+import { newId, PresetStore } from './presets';
+import { deviceDefaults, loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, setupFileName } from './setupFile';
+import { getMedia, pruneMedia, putMedia } from './mediaStore';
 import { derive, type Derived } from './sim/timing';
-import { animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
+import { type AnimSpec, animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
 import { WaterSource } from './image/waterSource';
 import { CityRide } from './sim/city';
 import { pedalSurge, riderPower } from './sim/rider';
 import { computeStats, exposureSeconds } from './sim/stats';
-import { type Animation, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
+import { type Animation, bannerTile, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
 import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } from './image/polarize';
 import { PovDisplay } from './render/povMaterial';
 import { WheelModel } from './render/wheelGeometry';
 import { createPost } from './render/post';
-import { createCamera, placeCamera, setFreeArea } from './render/camera';
+import { createCamera, createStripCamera, placeCamera, placeStripCamera, setFreeArea } from './render/camera';
 
+// The saved setup: the hardware build and the presets (the active one is loaded into p).
+const storage = (() => { try { return window.localStorage; } catch { return undefined; } })();
 const p = defaultParams();
+Object.assign(p, loadDevice(storage));
+const store = new PresetStore(storage);
+store.apply(p);
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -45,7 +53,11 @@ scene.add(laneMarks);
 const wheel = new WheelModel();
 const pov = new PovDisplay();
 scene.add(wheel.group, pov.group);
+// Two views of the same moment: the main one follows the bike, a narrow strip watches it ride
+// past from the roadside.
 const { composer, bloom } = createPost(renderer, scene, camera);
+const stripCamera = createStripCamera();
+const { composer: stripComposer, bloom: stripBloom } = createPost(renderer, scene, stripCamera);
 const motion = new WheelMotion();
 
 // ---- Image source and firmware column buffer ----
@@ -55,13 +67,13 @@ let buffer: FrameStack | undefined;
 let banner: (FrameStack & { pixelM: number }) | undefined;
 let buildGen = 0;
 const water = new WaterSource();
-const isWater = () => p.pattern === 'Water (fluid sim)';
+const isWater = () => !p.useMedia && p.pattern === 'Water (fluid sim)';
 let waterShown = false;
 let imageKey = '';
 let rebuildTimer = 0;
 
 function imageKeyFor(d: Derived) {
-  return [sourceVersion, p.mapping, p.fit, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
+  return [sourceVersion, p.bannerLower === 'picture', p.mapping, p.fit, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
     p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData, p.radialStagger].join('|');
 }
 
@@ -80,7 +92,8 @@ async function rebuildImage(d: Derived) {
     const wheelFrame = source.wheelFrames?.[i] ?? frame;
     const c = polarize(p.mapping === 'polar' ? squareImageData(wheelFrame) : rawImageData(frame), p, d);
     cols.push(c);
-    bans.push(bannerBitmap(rawImageData(frame), p, d));
+    const bannerFrame = p.bannerLower === 'picture' ? frame : source.bannerFrames?.[i] ?? bannerTile(frame);
+    bans.push(bannerBitmap(rawImageData(bannerFrame), p, d));
     if (cols.length * c.data.length > MAX_TEXTURE_BYTES) break;
     if (performance.now() > budgetEnd) {
       await new Promise((r) => setTimeout(r, 0));
@@ -113,40 +126,122 @@ function drawBuffer() {
 function setSource(src: Animation) {
   source = src;
   sourceVersion++;
-  if (src.frames.length > 1) {
-    p.animFps = Math.round(src.fps * 10) / 10;
-    gui.controllersRecursive().forEach((c) => c.updateDisplay());
+  if (src.frames.length > 1) p.animFps = Math.round(src.fps * 10) / 10;
+  refreshGui();
+}
+
+// ---- Presets and the setup file ----
+let ui: Ui | undefined;
+function refreshGui() { ui?.refresh(); }
+
+/** Show the active preset's content: its uploaded image/clip, or its pattern. */
+let loadGen = 0;
+async function loadSource() {
+  const gen = ++loadGen;
+  const media = store.active.media;
+  if (!p.useMedia || !media) { setSource(makeAnimation(p.pattern, p.text)); return; }
+  try {
+    const blob = await getMedia(media.id);
+    if (!blob) throw new Error('it is no longer stored in this browser');
+    const anim = await loadMedia(new File([blob], media.name, { type: media.type }), p.maxFrames, p.videoFps);
+    if (gen === loadGen) setSource(anim);
+  } catch (err) {
+    if (gen !== loadGen) return;
+    console.warn(`Couldn't load ${media.name}: ${(err as Error).message}`);
+    p.useMedia = false;
+    setSource(makeAnimation(p.pattern, p.text));
   }
 }
 
+let reloadTimer = 0;
+async function readMedia(): Promise<Record<string, MediaBytes>> {
+  const out: Record<string, MediaBytes> = {};
+  for (const pr of store.presets) {
+    const m = pr.media;
+    if (!m || out[m.id]) continue;
+    const blob = await getMedia(m.id);
+    if (blob) out[m.id] = { name: m.name, type: m.type, bytes: new Uint8Array(await blob.arrayBuffer()) };
+  }
+  return out;
+}
+
 const hooks = {
-  onImageFile: async (file: File) => {
+  store,
+  onPresetSelected: () => {
+    store.apply(p);
+    loadSource();
+    refreshGui();
+    pruneMedia(store.mediaIds());
+  },
+  onPresetEdit: (key: string) => {
+    if (key === 'name') return; // renamed in the store already
+    store.capture(p);
+    if (key === 'show' || key === 'text') loadSource();
+    if ((key === 'maxFrames' || key === 'videoFps') && p.useMedia) {
+      clearTimeout(reloadTimer);
+      reloadTimer = window.setTimeout(loadSource, 400);
+    }
+  },
+  onDeviceEdit: () => saveDevice(storage, p),
+  onViewChange: () => placeCamera(camera, controls, p, derive(p)),
+  onUpload: async (file: File) => {
     try {
-      setSource(await loadMedia(file, p.maxFrames, p.videoFps));
+      const anim = await loadMedia(file, p.maxFrames, p.videoFps);
+      const id = newId();
+      await putMedia(id, file);
+      store.active.media = { id, name: file.name, type: file.type };
+      p.useMedia = true;
+      store.capture(p);
+      loadGen++;
+      setSource(anim);
+      pruneMedia(store.mediaIds());
     } catch (err) {
       alert(`Couldn't load ${file.name}: ${(err as Error).message}`);
     }
   },
-  onPattern: () => setSource(makeAnimation(p.pattern, p.text)),
-  onViewChange: () => placeCamera(camera, controls, p, derive(p)),
-  onBrake: () => {
-    if (p.cityMode) setCity(false);
-    if (p.speed > 0) p.resumeSpeed = p.speed;
-    p.speed = 0; p.braking = true;
-    refreshGui();
+  onNewSetup: () => {
+    if (!confirm('Start a new setup? Everything goes back to the defaults: the hardware, the presets and the simulator settings.')) return;
+    Object.assign(p, defaultParams());
+    saveDevice(storage, p);
+    store.restoreBuiltIns();
+    if (p.cityMode) city.start(simTime, p);
+    hooks.onPresetSelected();
+    hooks.onLayout();
   },
-  onRide: () => {
-    if (p.cityMode) setCity(false);
-    p.speed = p.resumeSpeed || 10; p.braking = false;
-    refreshGui();
+  onOpenSetup: async (file: File) => {
+    try {
+      const setup = parseSetup(await file.text());
+      if (!confirm(`Replace the current hardware and presets with “${setup.device.setupName || file.name}”?`)) return;
+      for (const [id, m] of Object.entries(setup.media)) await putMedia(id, new Blob([m.bytes as BlobPart], { type: m.type }));
+      Object.assign(p, deviceDefaults(), setup.device);
+      saveDevice(storage, p);
+      store.replaceAll(setup.presets, setup.activePreset);
+      hooks.onPresetSelected();
+      hooks.onViewChange();
+    } catch (err) {
+      alert(`Couldn't open ${file.name}: ${(err as Error).message}`);
+    }
   },
-  onCity: (on: boolean) => setCity(on),
+  onSaveSetup: async () => {
+    const text = serializeSetup(p, store, await readMedia());
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = setupFileName(p.setupName);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+  onLayout: () => {
+    if (!ui) return; // buildUi reports its initial (closed) state before the page is set up
+    resize();
+    placeCamera(camera, controls, p, derive(p));
+  },
+  isAnimated: () => source.frames.length > 1,
 };
 
 // ---- Riding: stop-and-go automation and the large speed control ----
 // A fresh seed each page load, so the trips (including the first) differ every visit.
 const city = new CityRide(1 + Math.floor(Math.random() * 2147483645));
-function refreshGui() { gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
 function setCity(on: boolean) {
   p.cityMode = on;
   if (on) {
@@ -155,15 +250,24 @@ function setCity(on: boolean) {
   } else {
     p.speed = p.citySpeed; p.braking = false;
   }
-  refreshGui();
 }
+function brake() {
+  if (p.cityMode) setCity(false);
+  if (p.speed > 0) p.resumeSpeed = p.speed;
+  p.speed = 0; p.braking = true;
+}
+function rideOn() {
+  if (p.cityMode) setCity(false);
+  p.speed = p.resumeSpeed || 10; p.braking = false;
+}
+const rideEl = document.getElementById('ride')!;
 const rideSpeed = document.getElementById('ride-speed')!;
 const rideUnit = document.getElementById('ride-unit')!;
 const rideStatus = document.getElementById('ride-status')!;
 const rideSlider = document.getElementById('ride-slider') as HTMLInputElement;
 const rideCity = document.getElementById('ride-city') as HTMLInputElement;
-document.getElementById('ride-brake')!.addEventListener('click', () => hooks.onBrake());
-document.getElementById('ride-go')!.addEventListener('click', () => hooks.onRide());
+document.getElementById('ride-brake')!.addEventListener('click', brake);
+document.getElementById('ride-go')!.addEventListener('click', rideOn);
 rideCity.addEventListener('change', () => setCity(rideCity.checked));
 rideSlider.addEventListener('input', () => {
   const v = Number(rideSlider.value);
@@ -173,7 +277,6 @@ rideSlider.addEventListener('input', () => {
   } else {
     p.speed = v; p.braking = false;
   }
-  refreshGui();
 });
 function cityText(): string {
   switch (city.phase) {
@@ -193,11 +296,12 @@ function updateRidePanel(actualMps: number) {
   const target = p.cityMode ? p.citySpeed : p.speed;
   rideStatus.textContent = p.cityMode ? cityText() : p.braking ? 'braking' : `target ${target.toFixed(1)}`;
 }
-const { gui, stats: statsFolder } = buildGui(p, hooks);
+ui = buildUi(p, hooks);
+loadSource();
 // Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
-Object.assign(window, { povSim: { p, gui, hooks, camera, controls } });
+Object.assign(window, { povSim: { p, ui, store, hooks, camera, controls } });
 
-// Drag-and-drop and paste.
+// Drag-and-drop and paste: images and clips go into the active preset; a .json opens as a setup.
 const drop = document.getElementById('drop')!;
 window.addEventListener('dragover', (e) => { e.preventDefault(); drop.style.display = 'flex'; });
 window.addEventListener('dragleave', () => { drop.style.display = 'none'; });
@@ -205,24 +309,22 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   drop.style.display = 'none';
   const f = e.dataTransfer?.files[0];
-  if (f && (f.type.startsWith('image/') || f.type.startsWith('video/'))) hooks.onImageFile(f);
+  if (!f) return;
+  if (f.type === 'application/json' || f.name.endsWith('.json')) hooks.onOpenSetup(f);
+  else if (f.type.startsWith('image/') || f.type.startsWith('video/')) hooks.onUpload(f);
 });
 window.addEventListener('paste', (e) => {
   const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'));
   const f = item?.getAsFile();
-  if (f) hooks.onImageFile(f);
+  if (f) hooks.onUpload(f);
 });
 
-// ---- Stats panel ----
-// The live stats table lives in the settings menu's "Build stats" folder; it only redraws
-// while that folder is open.
-const statsEl = document.createElement('div');
-statsEl.id = 'stats';
-statsFolder.$children.appendChild(statsEl);
-statsFolder.onOpenClose(() => { lastStats = 0; });
+// ---- Stats ----
+// The live stats table lives in the settings panel's Stats tab; it only redraws while shown.
+const statsEl = ui.statsEl;
 let lastStats = 0;
 function updateStats(d: Derived, now: number) {
-  if (gui._closed || statsFolder._closed || now - lastStats < 300) return;
+  if (!ui!.statsVisible() || now - lastStats < 300) return;
   lastStats = now;
   const w = isWater() && water.sim ? water : undefined;
   const bannerMode = p.displayMode === 'banner' && banner && !w;
@@ -243,17 +345,42 @@ function updateStats(d: Derived, now: number) {
 }
 
 // ---- Frame loop ----
+interface Rect { x: number; y: number; w: number; h: number }
+/** Where each view is drawn, in CSS pixels from the top-left. No strip when it is turned off. */
+const layout: { main: Rect; strip?: Rect } = { main: { x: 0, y: 0, w: 1, h: 1 } };
+const stripFrame = document.getElementById('strip-frame')!;
+const stripLabel = stripFrame.querySelector('span')!;
 let portrait = window.innerHeight > window.innerWidth;
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h);
-  composer.setSize(w, h);
-  camera.aspect = w / h;
-  // Keep the wheel clear of the speed panel, and of the menu bar where it spans the top (phones).
-  const menu = (gui.domElement.querySelector(':scope > .title') ?? gui.domElement).getBoundingClientRect();
-  const top = menu.left < w * 0.3 ? menu.bottom : 0;
-  const bottom = document.getElementById('ride')!.getBoundingClientRect().top - 8;
-  setFreeArea(camera, w, h, top, bottom);
+  // Keep the wheel clear of the speed panel and the settings: a side panel on wide screens, a
+  // bottom sheet (which hides the speed panel) on phones.
+  const panel = ui?.panelSize();
+  let bottom = rideEl.getBoundingClientRect().top - 8, right = w;
+  if (panel && ui!.isSheet()) bottom = h - panel.h - 8;
+  else if (panel) right = w - panel.w;
+  // The roadside strip takes a slice of the free height, at the top or just above the speed panel.
+  let main: Rect = { x: 0, y: 0, w: right, h }, strip: Rect | undefined, freeBottom = bottom;
+  if (p.strip !== 'off') {
+    const sh = Math.round(Math.min(240, Math.max(70, bottom * 0.28)));
+    if (p.strip === 'above') {
+      strip = { x: 0, y: 0, w: right, h: sh };
+      main = { x: 0, y: sh, w: right, h: h - sh };
+    } else {
+      strip = { x: 0, y: bottom - sh, w: right, h: sh };
+      main = { x: 0, y: 0, w: right, h: bottom - sh };
+    }
+    freeBottom = bottom - sh;
+  }
+  layout.main = main;
+  layout.strip = strip;
+  composer.setSize(main.w, main.h);
+  camera.aspect = main.w / main.h;
+  setFreeArea(camera, main.w, main.h, 0, freeBottom);
+  if (strip) stripComposer.setSize(strip.w, strip.h);
+  stripFrame.hidden = !strip;
+  if (strip) Object.assign(stripFrame.style, { left: `${strip.x}px`, top: `${strip.y}px`, width: `${strip.w}px`, height: `${strip.h}px` });
   // Re-frame when a phone turns between portrait and landscape.
   if ((h > w) !== portrait) { portrait = h > w; placeCamera(camera, controls, p, derive(p)); }
 }
@@ -275,7 +402,7 @@ function frame(now: number) {
   if (!p.paused) simTime += dt * p.timeScale;
 
   const d = derive(p);
-  if (p.cityMode && city.update(simTime, p)) refreshGui();
+  if (p.cityMode) city.update(simTime, p);
   const rampG = p.cityMode ? city.rampG : p.braking ? p.brakeG : p.speedRampG;
   // One pedal-surge setting: each stroke pulses the rider's push, which comes from the estimated
   // force needed (accelerating plus air drag and rolling resistance).
@@ -301,32 +428,6 @@ function frame(now: number) {
   }
   if (p.showBuffer !== lastBufferFlag) { lastBufferFlag = p.showBuffer; drawBuffer(); }
 
-  // Exposure window ends now.
-  const T = exposureSeconds(p);
-  const tB = simTime, tA = simTime - T;
-  const rideBy = p.view === 'ride-by';
-  const maxAngle = rideBy ? Math.PI / 8 : p.pedalSurgePct > 0 ? Math.PI / 2 : Math.PI * 2;
-  const slices = buildSlices(p, d, motion, tA, tB, maxAngle, p.displayMode === 'banner' && !anim.live ? pov.bannerTile(p) : 0, anim);
-
-  const L = p.trackLengthM;
-  const hubAt = (t: number) => {
-    if (!rideBy) return 0;
-    const s = motion.dist(t) + L / 2;
-    return s - Math.floor(s / L) * L - L / 2;
-  };
-
-  // Mechanical wheel: blur copies spread over the (visually dominant part of the) exposure.
-  wheel.build(p, d);
-  wheel.group.visible = p.showWheel;
-  const blurT = p.exposureModel === 'eye' ? (p.eyeTauMs / 1000) * 1.5 : T;
-  const sweep = motion.phi(tB) - motion.phi(tB - blurT);
-  const travel = motion.dist(tB) - motion.dist(tB - blurT);
-  const copies = Math.max(1, Math.min(24, Math.ceil(Math.max(sweep / 0.07, rideBy ? travel / 0.01 : 0))));
-  const times = Array.from({ length: copies }, (_, i) => tB - blurT * (copies > 1 ? (i + 0.5) / copies : 0));
-  wheel.pose(times, (t) => motion.phi(t), hubAt);
-
-  pov.update(p, d, slices, tB, camera, anim);
-
   ground.position.y = -d.tireRadius;
   laneMarks.position.y = -d.tireRadius;
   const a = p.ambient;
@@ -334,12 +435,68 @@ function frame(now: number) {
   scene.background = bg;
   hemi.intensity = a * 2.5;
   sun.intensity = a * 2.5;
-  bloom.strength = p.bloom;
+  bloom.strength = stripBloom.strength = p.bloom;
   renderer.toneMappingExposure = Math.pow(2, p.ev);
+  wheel.build(p, d);
+  wheel.group.visible = p.showWheel;
+  const tileM = p.displayMode === 'banner' && !anim.live ? pov.bannerTile(p) : 0;
 
+  // Clear the whole canvas (behind the panels), then draw each view into its own rectangle. Both
+  // show the same moment, motion and animation; only the camera and exposure differ.
+  renderer.setScissorTest(false);
+  renderer.setRenderTarget(null);
+  renderer.setClearColor(bg);
+  renderer.clear();
   controls.update();
-  composer.render();
+  drawView(p, d, anim, tileM, camera, composer, layout.main);
+  if (layout.strip) {
+    const s = layout.strip;
+    const own = p.stripShutter !== 'same';
+    const sp: Params = {
+      ...p, view: 'ride-by', trackLengthM: placeStripCamera(stripCamera, p, d, s.w / s.h),
+      ...(own ? { exposureModel: 'camera', shutter: p.stripShutter, autoExposure: true } : {}),
+    };
+    drawView(sp, d, anim, tileM, stripCamera, stripComposer, s);
+    const label = `Roadside · ${own ? `${p.stripShutter} exposure` : p.exposureModel === 'eye' ? 'human eye' : p.shutter}`;
+    if (stripLabel.textContent !== label) stripLabel.textContent = label;
+  }
+  renderer.setScissorTest(false);
+
   updateStats(d, now);
   updateRidePanel(motion.speed(simTime));
 }
 requestAnimationFrame(frame);
+
+/** Render one view of the current moment into its rectangle of the canvas. */
+function drawView(v: Params, d: Derived, anim: AnimSpec, tileM: number, cam: THREE.PerspectiveCamera, comp: typeof composer, r: Rect) {
+  // Exposure window ends now.
+  const T = exposureSeconds(v);
+  const tB = simTime, tA = simTime - T;
+  const rideBy = v.view === 'ride-by';
+  const maxAngle = rideBy ? Math.PI / 8 : v.pedalSurgePct > 0 ? Math.PI / 2 : Math.PI * 2;
+  const slices = buildSlices(v, d, motion, tA, tB, maxAngle, tileM, anim);
+
+  const L = v.trackLengthM;
+  const hubAt = (t: number) => {
+    if (!rideBy) return 0;
+    const s = motion.dist(t) + L / 2;
+    return s - Math.floor(s / L) * L - L / 2;
+  };
+
+  // Mechanical wheel: blur copies spread over the (visually dominant part of the) exposure.
+  const blurT = v.exposureModel === 'eye' ? (v.eyeTauMs / 1000) * 1.5 : T;
+  const sweep = motion.phi(tB) - motion.phi(tB - blurT);
+  const travel = motion.dist(tB) - motion.dist(tB - blurT);
+  const copies = Math.max(1, Math.min(24, Math.ceil(Math.max(sweep / 0.07, rideBy ? travel / 0.01 : 0))));
+  const times = Array.from({ length: copies }, (_, i) => tB - blurT * (copies > 1 ? (i + 0.5) / copies : 0));
+  wheel.pose(times, (t) => motion.phi(t), hubAt);
+
+  pov.update(v, d, slices, tB, cam, anim);
+
+  // WebGL counts the viewport from the bottom of the canvas.
+  const y = window.innerHeight - r.y - r.h;
+  renderer.setViewport(r.x, y, r.w, r.h);
+  renderer.setScissor(r.x, y, r.w, r.h);
+  renderer.setScissorTest(true);
+  comp.render();
+}

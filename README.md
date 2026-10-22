@@ -37,6 +37,27 @@ These are all renders from the simulator, starting from the defaults (700c wheel
   </tr>
 </table>
 
+## Using the app
+
+Two views show the same moment and the same animation. The main view follows the bike, and a narrow **roadside strip** above it watches the bike ride past as a fixed camera would, with a 1 s exposure by default. You can move the strip below the main view, give it its own exposure, or hide it under *Simulator → Camera*. The panel at the bottom is for riding: the current **preset** with a **Next ▶** button (or press **N**), then the speed, **🛑 Brake**, **▶ Ride** and **Stop-and-go**.
+
+**⚙️ Settings** opens a panel: on the right on a computer, or from the bottom on a phone. Every section starts with just a few choices, and its **Details** folders hold the rest.
+
+| Tab | What it holds |
+|---|---|
+| **Presets** | The list of presets and the settings of the selected one: what to show (a pattern or your own image, GIF or video), text, wheel-locked or banner mode, brightness, water and animation options |
+| **Hardware** | The build: wheel size, LED type, strip count and density, controller chip, firmware and battery, with every timing value under Details |
+| **Simulator** | How the simulation looks and rides: camera side, human eye or camera shutter, the roadside strip's position and exposure, units, pedal surge, rendering. Not part of the setup |
+| **Stats** | Live build stats: rpm, column timing, resolution, refresh rate, RAM, current draw and battery life, with warnings for common pitfalls |
+
+### Presets
+
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with eight: Water, Splashy water, Smiley, Rainbow spiral, Clock face, Beating heart, HELLO banner and Flip-book ball. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Dropping or pasting an image puts it in the selected preset.
+
+### Setups
+
+A setup is the hardware build plus all the presets. It saves automatically in the browser, uploaded images included. **Save** downloads it as a `.json` file with images embedded, **Open…** (or dropping the file on the page) loads one, and **New** puts everything back to the defaults: the hardware, the built-in presets and the simulator settings. The setup file is also what a future version will flash to the wheel's controller.
+
 ## Running
 
 ```bash
@@ -72,21 +93,21 @@ In banner mode the frames advance as the bike travels, so the road becomes a fli
 
 ### Water mode
 
-The simulator opens in water mode: simulated water fills the bottom of the disc. To return to it from another pattern, pick **💧 show water** in the Water folder, or *Water (fluid sim)* as the test pattern. Use the speed panel at the bottom of the screen to ride:
+The simulator opens in water mode: simulated water fills the bottom of the disc. To return to it, pick the **Water** preset, or choose *Water* under a preset's **Show** menu. Use the speed panel at the bottom of the screen to ride:
 - Drag the slider to change speed.
 - **🛑 Brake** stops the bike; **▶ Ride** sets off again.
 - **Stop-and-go** (on by default) rides through the city automatically: it pulls away to a top speed between half and one and a half times the stop-and-go cruise speed, cruises for 4–12 s, brakes for a light, and waits 2–6 s. Each light turns red at a random distance ahead (3–40 m), and the rider brakes just hard enough to stop there, so some stops are sharp and others a slow roll-down. Each pull-away varies too.
 
-Each pedal stroke pulses the rider's push (*pedal surge*, default ±60%). The push comes from an estimate of the power needed: accelerating the bike and rider (85 kg) plus air drag and rolling resistance. So the surge is strong when pulling away, gentle when cruising, and absent when braking or coasting. Build stats shows the estimated rider power. The water surges against each speed change and sloshes back and forth afterwards. It's one body of water seen from both sides: from the non-drive side, braking pushes it to the viewer's left. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
+Each pedal stroke pulses the rider's push (*pedal surge*, default ±60%). The push comes from an estimate of the power needed: accelerating the bike and rider (85 kg) plus air drag and rolling resistance. So the surge is strong when pulling away, gentle when cruising, and absent when braking or coasting. The Stats tab shows the estimated rider power. The water surges against each speed change and sloshes back and forth afterwards. It's one body of water seen from both sides: from the non-drive side, braking pushes it to the viewer's left. The firmware model runs a small FLIP fluid simulation (default: a 24-cell grid with ~570 particles at 30 Hz). It paints each LED through a lookup table from LED position to grid cell, so no frames are stored.
 
 **Rim drag.** The spinning rim drags the water touching it, using the wheel's speed as the magnet measures it. While riding, water is pulled back along the bottom and up the rear wall, where it tumbles over in breaking waves; when stopped, the rim is still and just damps the slosh. *Rim friction* (default 0.05) sets how strongly: around 0.2 or more carries the water all the way round into a ring, as real water in a spinning wheel would.
 
-**Fluid presets:**
+**Fluid types** (a preset's *Water → Fluid*):
 - **Water** (default): lively, little damping.
 - **Splashy:** livelier still, with softer particle packing, so it throws more spray.
 - **Thick (oil):** viscous, slow and heavy.
 
-Each preset sets the FLIP ratio, viscosity and particle separation, all also adjustable individually.
+Each type sets the liveliness (FLIP ratio), viscosity and particle spacing, all also adjustable under *Water → Details*.
 
 **Rendering.** The LEDs read a map twice as fine as the simulation grid, built from the particles each step:
 - the body of water is deep blue
@@ -99,39 +120,44 @@ A magnet-only build can't sense bumps, so there are no bump splashes.
 
 The firmware senses braking from the magnet alone: the change in revolution time between the last two passes. The estimate arrives about a revolution late. Hard braking also rotates the whole picture until the next pass, because the firmware assumes the wheel kept its last speed. *Ideal* sync shows the best case, with no lag or angle error. A 6-axis IMU at the axle would close most of that gap.
 
-The **📊 Build stats** section of the settings menu shows:
+The **Stats** tab shows:
 - the estimated sensed vs true acceleration
 - the simulation's MFLOP/s as a share of one core on the chosen chip (about 33% of an RP2350 core at the defaults)
 - firmware RAM for the lookup table and simulation state
 
 ### Banner mode
 
-Set **Image → display mode** to *banner (world-locked)* and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. Seen from the roadside with a long exposure, the bike paints the banner as it rides by.
+Set a preset's **Mode** to *Banner on the road* (or pick the *HELLO banner* preset) and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. In the roadside strip's long exposure, the bike paints the banner as it rides by.
+
+Banners keep their text and pictures in the **upper half**. Below the hub the strips leave **voids**: arches standing on the road that no LED ever passes over. With 3 strips per side on a 700c wheel, about 90% of the bottom quarter and half of the band just below the middle stay dark, in a pattern that repeats every 71 cm (the circumference divided by the strips). The firmware works out banner position from the wheel's rotation, so the voids always fall in the same place in the banner, at any speed.
+
+So the lower half isn't a picture. It is a pattern drawn along the LEDs' own paths, so every lit LED lands on ground the strips actually cover, and the patterns outline the voids exactly. Near the ground the outer LED traces the void's edge; higher up it is the point on the strip that is momentarily moving along the strip. Choose it with **Lower half** (shown in banner mode):
+- **Arches** (default): a coloured outline around each void.
+- **Rainbow arches:** a white outline with nested rainbow lines inside, one LED radius each.
+- **Scallops:** the lit ground between voids in alternating colours, with a bright edge.
+- **Beads:** round dots along each void's edge.
+- **Picture (full height):** the image fills the whole height, as before.
+
+Slow LEDs near the road dwell and look brighter, so the patterns dim each LED by its speed over the road. Text and Wide text put their words in the upper half; other patterns and uploaded images are fitted into it.
 
 Position comes from hall-sensor dead reckoning: whole turns at each magnet pass, plus the time since the pass divided by the last revolution period. Polling delay and pedal surges show up as a torn or doubled banner. *Predict motion* computes each update for the middle of the time it's displayed instead of when it's sent. The *ideal* sync mode shows the best case. LEDs near the ground move slowly relative to the road and leave bright cusps, while the top edge streaks past at about twice road speed. The bitmap is stored at about one pixel per LED pitch, as tall as the LEDs reach.
 
-### Parameters
+### Settings reference
 
-| Group | Highlights |
+| Where | Highlights |
 |---|---|
-| Wheel | Size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), tire width, rim depth, spokes |
-| Strips & LEDs | Strip count, LED/m, package size, diffuser, start radius, double-sided, back-strip data (independent by default, so images read correctly from both sides; *same* mirrors the non-drive side like the Adafruit wiring), radial stagger |
-| Ride | Large speed panel (slider, live readout, brake / ride, stop-and-go), mph or km/h, pedal surge (from estimated rider power), cadence, speed-change and braking rates, stop-and-go cruise speed |
-| Electronics | Chip preset (ATmega328P → Teensy 4.x, RP2350 default), LED type (APA102, SK9822, HD107S, WS2812B, SK6812), clock, parallel lanes, overhead, PWM, global brightness |
-| Firmware | C/Arduino hall-sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked; columns/rev, lines/s floor, hall poll, debounce |
-| Image | Wheel-locked or banner (world-locked) display, load/drop/paste an image, animated GIF/WebP/APNG, or video, or pick a test pattern (some animated), polar (picture) or Adafruit columns-as-angles mapping, gamma, bit depth, inner-LED dimming |
-| Water | Fluid preset (water, splashy, thick), rim friction, FLIP ratio, viscosity, particle separation, fill, grid size, sim rate, pressure iterations, slosh gain, acceleration smoothing |
-| Animation | Timed or revolution-synced frame advance, playback rate (×, kept across clips), source fps, revolutions per frame, import frame limit, video sample rate |
-| Camera | Chase or ride-by view, drive or non-drive side, shutter speed or human-eye persistence, auto exposure, EV, time scale |
+| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, banner gap, the banner's lower-half pattern (arches, rainbow arches, scallops, beads or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
+| Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma and bit depth under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce under the details folders |
+| Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1 s by default), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
 
-The **📊 Build stats** section at the top of the **⚙️ Settings & stats** menu reports rpm, column timing, achievable resolution, refresh rate, RAM use, current draw, and battery life, with warnings for common pitfalls.
-
-LED PWM rates vary between datasheets and clone parts, so every preset value can be edited.
+LED PWM rates vary between datasheets and clone parts, so every value filled in from the LED and chip tables can still be edited.
 
 ## Layout
 
-- `src/params.ts`: parameters and preset tables
+- `src/params.ts`: parameters, the hardware lookup tables, and which settings belong to presets vs the hardware
+- `src/presets.ts`, `src/setupFile.ts`, `src/mediaStore.ts`: named presets, the setup file, and stored uploads
+- `src/ui.ts`: the settings panel and preset list
 - `src/sim/`: LED bus timing, wheel kinematics, hall-sensor firmware model, stats
 - `src/image/`: test patterns, image loading, conversion to the firmware column buffer
 - `src/render/`: POV integration shader, wheel model with motion blur, HDR/bloom, camera
-- `test/`: unit tests for timing, the PWM integral, and the firmware model
+- `test/`: unit tests for timing, the PWM integral, the firmware model, presets and setup files

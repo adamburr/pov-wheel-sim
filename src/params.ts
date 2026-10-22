@@ -93,6 +93,14 @@ export const PATTERNS = ['Smiley', 'Polar test grid', 'Clock face', 'Color wheel
   'Bouncing ball (animated)', 'Beating heart (animated)', 'Counter (animated)', 'Water (fluid sim)'] as const;
 export type PatternName = (typeof PATTERNS)[number];
 
+/**
+ * What fills the lower half of a banner. Near the ground the strips leave arch-shaped voids
+ * they never pass over; the patterns are drawn along the LEDs' own paths, around those voids.
+ * 'picture' uses the whole height for the image instead.
+ */
+export const BANNER_LOWER = ['picture', 'arches', 'rainbow', 'scallops', 'beads'] as const;
+export type BannerLower = (typeof BANNER_LOWER)[number];
+
 export const MPH = 0.44704; // m/s
 
 export function defaultParams() {
@@ -101,6 +109,8 @@ export function defaultParams() {
   const led = LEDS['APA102 / DotStar'];
   const fw = FIRMWARE['C / Arduino (hall interrupt)'];
   return {
+    setupName: 'My wheel',    // names the setup file
+
     // Wheel
     wheelPreset: '700c (622)',
     bsdMm: wheel.bsdMm,
@@ -157,8 +167,10 @@ export function defaultParams() {
     freeRunColsPerSec: 540,
 
     // Image
+    useMedia: false,          // show the preset's uploaded image/clip instead of the pattern
     displayMode: 'wheel' as 'wheel' | 'banner', // banner: image pinned to the world, tiled along the road
     tileGapM: 0,
+    bannerLower: 'arches' as BannerLower, // banner: the lower half is a picture or a pattern drawn around the voids
     // Animation
     frameAdvance: 'timed' as 'timed' | 'revolution', // timed: at animFps; revolution: at the magnet
     animFps: 12,              // the clip's own frame rate (set when a clip or pattern loads)
@@ -188,8 +200,11 @@ export function defaultParams() {
     radialCompensation: false,
     showBuffer: false,
 
-    // Camera / exposure
+    // Camera / exposure. The main view follows the bike; the strip watches from the roadside.
+    // `view` and `trackLengthM` are set per render (see main.ts), not by the user.
     view: 'chase' as 'chase' | 'ride-by',
+    strip: 'above' as 'above' | 'below' | 'off',
+    stripShutter: '1 s',      // the roadside strip is a long-exposure photo, so a banner shows whole
     side: 'drive' as 'drive' | 'non-drive',
     exposureModel: 'eye' as 'camera' | 'eye',
     shutter: '1/4 s',
@@ -208,6 +223,71 @@ export function defaultParams() {
   };
 }
 export type Params = ReturnType<typeof defaultParams>;
+
+// Every saved value belongs to one of two groups. Preset keys are what the wheel shows, so each
+// named preset has its own; device keys describe the physical build. Together they make up the
+// setup file (and, later, what gets flashed to the controller). Everything else only drives the
+// simulation: riding, camera, exposure and rendering.
+export const PRESET_KEYS = [
+  'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'mapping', 'fit', 'imageRotationDeg',
+  'globalBrightness', 'radialCompensation',
+  'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
+  'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs',
+  'frameAdvance', 'playbackRate', 'revsPerFrame', 'maxFrames', 'videoFps',
+] as const satisfies readonly (keyof Params)[];
+export type PresetKey = (typeof PRESET_KEYS)[number];
+
+export const DEVICE_KEYS = [
+  'setupName',
+  'wheelPreset', 'bsdMm', 'tireMm', 'rimDepthMm', 'spokes',
+  'stripCount', 'ledDensity', 'ledPackage', 'dieMm', 'diffusionMm', 'stripStartMm', 'autoLength',
+  'stripLengthMm', 'doubleSided', 'backData', 'radialStagger',
+  'chip', 'ledType', 'clockMHz', 'lanes', 'overheadUs', 'pwmHz', 'gbPwmHz', 'batteryMah',
+  'firmware', 'python', 'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs',
+  'overflow', 'predictMotion', 'freeRunColsPerSec', 'gamma', 'colorBits',
+] as const satisfies readonly (keyof Params)[];
+export type DeviceKey = (typeof DEVICE_KEYS)[number];
+
+/** Short names for the pattern menu; the values stay the internal pattern names. */
+export const PATTERN_LABELS: Record<PatternName, string> = {
+  'Water (fluid sim)': 'Water', 'Smiley': 'Smiley', 'Polar test grid': 'Test grid', 'Clock face': 'Clock face',
+  'Color wheel': 'Color wheel', 'Rainbow spiral': 'Rainbow spiral', 'Checkerboard': 'Checkerboard',
+  'Text': 'Text', 'Wide text': 'Wide text', 'Bouncing ball (animated)': 'Bouncing ball',
+  'Beating heart (animated)': 'Beating heart', 'Counter (animated)': 'Counter',
+};
+
+// Allowed values for the string settings that pick from a list.
+const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
+  pattern: PATTERNS, bannerLower: BANNER_LOWER, fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'], mapping: ['polar', 'columns'],
+  fit: ['disc', 'annulus'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
+  ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
+  ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],
+  overflow: ['wrap', 'blank'],
+};
+
+export function pick<K extends keyof Params>(p: Params, keys: readonly K[]): Pick<Params, K> {
+  const out = {} as Pick<Params, K>;
+  for (const k of keys) out[k] = p[k];
+  return out;
+}
+
+/**
+ * Keep only the listed keys whose values have the right type (and, for menus, a known choice).
+ * Used on anything read back from storage or a setup file.
+ */
+export function sanitize<K extends keyof Params>(raw: unknown, keys: readonly K[]): Partial<Pick<Params, K>> {
+  const out: Partial<Pick<Params, K>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  const d = defaultParams();
+  for (const k of keys) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (typeof v !== typeof d[k]) continue;
+    if (typeof v === 'number' && !Number.isFinite(v)) continue;
+    if (typeof v === 'string' && CHOICES[k] && !CHOICES[k]!.includes(v)) continue;
+    out[k] = v as Params[K];
+  }
+  return out;
+}
 
 /** Frames per second the firmware aims for in timed playback. */
 export function playbackFps(p: Params): number {

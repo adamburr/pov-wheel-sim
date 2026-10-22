@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import fragmentShader from './pov.frag.glsl?raw';
-import { LEDS, type Params, SHUTTERS, speedMps } from '../params';
+import { BANNER_LOWER, LEDS, type Params, SHUTTERS, speedMps } from '../params';
 import type { Derived } from '../sim/timing';
 import { animSpecFor, type AnimSpec, MAX_SLICES, type Slice } from '../sim/firmware';
 import { bannerTileM, type FrameStack } from '../image/polarize';
@@ -60,7 +60,8 @@ export class PovDisplay {
   private shared: Record<string, THREE.IUniform>;
   private front: THREE.Mesh;
   private back: THREE.Mesh;
-  private planeKey = '';
+  // Light-surface geometry per view (hub-locked cone, ride-by plane): both views render every frame.
+  private planes = new Map<string, [THREE.BufferGeometry, THREE.BufferGeometry]>();
 
   constructor() {
     this.sliceTex.minFilter = this.sliceTex.magFilter = THREE.NearestFilter;
@@ -77,6 +78,7 @@ export class PovDisplay {
       uFrames: { value: 1 }, uFrameTimed: { value: 1 }, uFps: { value: 12 },
       uBanner: { value: 0 }, uBannerTex: { value: this.bannerTex }, uBannerW: { value: 1 },
       uBannerTile: { value: 1 }, uBannerHalfH: { value: 0.3 }, uBannerMirror: { value: 0 }, uPredict: { value: 1 },
+      uLower: { value: 0 },
     };
     const make = (side: number) => new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -118,22 +120,31 @@ export class PovDisplay {
    */
   private ensurePlane(p: Params, d: Derived) {
     const R = d.rEnd + 0.02;
-    const key = `${p.view}|${R}|${p.trackLengthM}|${d.rStart}|${d.maxLedRadius}`;
-    if (key === this.planeKey) return;
-    this.planeKey = key;
     const rideBy = p.view === 'ride-by';
-    const w = rideBy ? p.trackLengthM + 2 * R : 2 * R;
-    const midZ = ledFaceZ(d, 0.5 * (d.rStart + d.rEnd));
-    for (const [m, side] of [[this.front, 1], [this.back, -1]] as const) {
-      m.geometry.dispose();
-      const g = rideBy ? new THREE.PlaneGeometry(w, 2 * R) : new THREE.PlaneGeometry(w, 2 * R, 96, 96);
-      const pos = g.getAttribute('position');
-      for (let i = 0; i < pos.count; i++) {
-        const z = rideBy ? midZ : ledFaceZ(d, Math.hypot(pos.getX(i), pos.getY(i)));
-        pos.setZ(i, side * (z + 0.0005));
+    const key = `${p.view}|${R}|${rideBy ? p.trackLengthM : 0}|${d.rStart}|${d.maxLedRadius}`;
+    let pair = this.planes.get(key);
+    if (!pair) {
+      // Settings or the window changed: drop stale shapes (the other view rebuilds its own).
+      if (this.planes.size >= 4) {
+        for (const [g1, g2] of this.planes.values()) { g1.dispose(); g2.dispose(); }
+        this.planes.clear();
       }
-      m.geometry = g;
+      const w = rideBy ? p.trackLengthM + 2 * R : 2 * R;
+      const midZ = ledFaceZ(d, 0.5 * (d.rStart + d.rEnd));
+      const make = (side: number) => {
+        const g = rideBy ? new THREE.PlaneGeometry(w, 2 * R) : new THREE.PlaneGeometry(w, 2 * R, 96, 96);
+        const pos = g.getAttribute('position');
+        for (let i = 0; i < pos.count; i++) {
+          const z = rideBy ? midZ : ledFaceZ(d, Math.hypot(pos.getX(i), pos.getY(i)));
+          pos.setZ(i, side * (z + 0.0005));
+        }
+        return g;
+      };
+      pair = [make(1), make(-1)];
+      this.planes.set(key, pair);
     }
+    this.front.geometry = pair[0];
+    this.back.geometry = pair[1];
   }
 
   /**
@@ -231,6 +242,7 @@ export class PovDisplay {
     }
     u.uBannerMirror.value = independent ? 1 : 0;
     u.uPredict.value = p.predictMotion ? 1 : 0;
+    u.uLower.value = BANNER_LOWER.indexOf(p.bannerLower);
     u.uRRoll.value = d.tireRadius;
     this.back.visible = p.doubleSided;
 

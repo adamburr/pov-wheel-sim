@@ -48,6 +48,7 @@ uniform float uBannerTile;   // image width + gap (m)
 uniform float uBannerHalfH;  // half the banner height (m), centred on the hub
 uniform int uBannerMirror;   // independent back strips paint a mirrored banner
 uniform int uPredict;        // compute each update for its mid-display time
+uniform int uLower;          // banner lower half: 0 picture, 1 arches, 2 rainbow arches, 3 scallops, 4 beads
 uniform int uFrames;         // animation frames
 uniform int uFrameTimed;     // 1: frames advance at uFps; 0: per slice (revolution-synced)
 uniform float uFps;
@@ -77,6 +78,52 @@ int frameAt(float tSend, vec4 A, vec4 D) {
   return int(mod(floor(f), float(uFrames)));
 }
 
+vec3 hue(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
+
+// Banner lower half, drawn along the LEDs' own paths so it only lands where LEDs really pass.
+// Below the hub the strips leave voids: arches standing between the points where each strip
+// points straight down. Near the ground their edge is the outer LED's path; higher up it is the
+// point on the strip that is momentarily moving along the strip, at radius Rt·cos(angle).
+// Everything here follows from the wheel angle the firmware already tracks.
+vec3 lowerDuty(float th, float hub, float rk) {
+  float dd = mod(th - 0.5 * PI + PI, TAU) - PI;  // angle past pointing straight down
+  float Rt = uRRoll;
+  float halfP = PI * Rt / float(uStrips);       // half the road between bottom passes
+  float X = Rt * dd - rk * sin(dd);             // position relative to this strip's lowest point
+  if (abs(X) >= halfP) return vec3(0.0);        // the next strip owns this stretch of road
+  float strip = floor((hub - Rt * dd) / (2.0 * halfP) + 0.5); // which bottom pass this is
+  float voidIdx = strip - (X < 0.0 ? 1.0 : 0.0);  // the void this side of the pass borders
+  vec3 voidHue = hue(fract(voidIdx / 6.0));
+  float rOuter = uRStart + (float(uLeds) - 0.5) * uPitch;
+  float rimEdge = Rt * cos(dd);
+  bool outerPart = rimEdge >= rOuter;           // near the ground the outer LED draws the edge
+  float edge = min(rOuter, rimEdge);
+  // Higher up the strip lies along the edge, so a wider band of LEDs keeps the line from thinning.
+  float onEdge = edge > uRStart && abs(rk - edge) < (outerPart ? 1.5 : 4.0) * uPitch ? 1.0 : 0.0;
+  // Keep the brightness even: an LED (or edge point) that moves slowly over the road dwells and
+  // looks brighter, so scale by how fast it travels. The edge point moves at 2·sin(dd)·v.
+  float q = rk / Rt;
+  float ledSpeed = sqrt(max(0.0, 1.0 + q * q - 2.0 * q * cos(dd)));
+  float dimLed = clamp(ledSpeed / 1.5, 0.1, 1.0);
+  float dimEdge = clamp((outerPart ? ledSpeed : 2.0 * abs(sin(dd))) / 1.5, 0.1, 1.0);
+  if (uLower == 1) return voidHue * onEdge * dimEdge;
+  if (uLower == 2) {
+    // Nested arches: every third LED in from the outer one, in rainbow order, inside a white edge.
+    float i = (rOuter - rk) / (3.0 * uPitch);
+    float line = abs(i - floor(i + 0.5)) * 3.0 < 0.5 && i < 5.5 ? 1.0 : 0.0;
+    return max(vec3(onEdge * dimEdge), hue(floor(i + 0.5) / 6.0) * line * dimLed);
+  }
+  if (uLower == 3) {
+    // Scallops: the lit ground between voids in alternating colours, with a bright edge.
+    vec3 fill = mod(strip, 2.0) < 0.5 ? vec3(0.1, 0.35, 1.0) : vec3(1.0, 0.25, 0.6);
+    return max(fill * 0.35 * dimLed, vec3(onEdge * dimEdge));
+  }
+  // Beads: round dots along the edge, three on each side of a void; as long along the edge as
+  // they are thick across it (about 3 cm on a 700c wheel).
+  float bead = abs(fract(X / (halfP / 3.0)) - 0.5) < 0.14 && edge > uRStart && abs(rk - edge) < (outerPart ? 2.5 : 5.0) * uPitch ? 1.0 : 0.0;
+  return voidHue * bead * min(1.0, 1.6 * dimEdge);
+}
+
 // Banner mode: what the firmware sends to an LED it believes is at angle offAng past strip 0,
 // radius rk, at time tu. Its belief is the true pose plus the dead-reckoning error delta(t).
 vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk, int frame) {
@@ -85,6 +132,7 @@ vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk, int frame) {
   float th = A.z + A.w * dt + dl + offAng;      // believed clockwise angle of this strip
   float hub = D.z + uRRoll * (A.w * dt + dl);   // believed hub position along the road
   vec2 pos = vec2(hub + rk * cos(th), -rk * sin(th));
+  if (uLower > 0 && pos.y < 0.0) return lowerDuty(th, hub, rk);
   float x = mod(pos.x + 0.5 * uBannerW, uBannerTile);
   if (x >= uBannerW) return vec3(0.0);
   if (uBannerMirror == 1 && uSide < 0.0) x = uBannerW - x;
