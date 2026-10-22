@@ -20,6 +20,14 @@ These are all renders from the simulator, starting from the Water preset and the
     <td width="50%"><img src="docs/images/smiley-half-second.jpg" alt="A smiley face at a 1/2 s exposure"><br><sub><b>Smiley test pattern,</b> 15 mph, 1/2 s: a full image, with a brighter hub where the inner LEDs sweep smaller circles.</sub></td>
   </tr>
   <tr>
+    <td width="50%"><img src="docs/images/smiley-ride.jpg" alt="The bouncing smiley dragged up the rear wall and tilted"><br><sub><b>Bouncing smiley</b> (Smiley preset), human eye, 12 mph: the turning wall drags it up the rear wall and tilts it, while its weight, near the mouth, holds it there.</sub></td>
+    <td width="50%"><img src="docs/images/smiley-brake.jpg" alt="The bouncing smiley thrown forward under braking"><br><sub><b>Bouncing smiley braking</b> from 15 mph at 0.5 g, human eye: it's thrown forward against the front wall.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/clock-face.jpg" alt="A Roman-numeral clock with spinning hands"><br><sub><b>Clock face,</b> 15 mph, 1/8 s: an old Roman-numeral dial whose hands spin in opposite directions, one turn each every 2 s, so they smear.</sub></td>
+    <td width="50%"><img src="docs/images/spiral-spin.jpg" alt="A four-armed rainbow spiral"><br><sub><b>Rainbow spiral,</b> 15 mph, 1/8 s: a still picture the firmware turns once every 16 s by shifting the columns it sends.</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/images/shutter-1-30.jpg" alt="Three wedges at a 1/30 s shutter"><br><sub><b>1/30 s photo</b> at 10 mph: each of the 3 strips sweeps only 25°.</sub></td>
     <td width="50%"><img src="docs/images/wide-text-wheel.jpg" alt="HELLO between rainbow lines on the wheel"><br><sub><b>Wide text, wheel-locked,</b> 15 mph, 1/2 s: the text sits in the upper half, clear of the hub.</sub></td>
   </tr>
