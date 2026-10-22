@@ -285,14 +285,16 @@ const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRe
 /**
  * Banner frames for the bouncing ball: it bounces on the deck of the truss-bridge lower half,
  * flattening as it lands. The deck itself comes from that pattern; its top edge is DECK_TOP of the
- * way down the banner (0.19 of the half height above the hub).
+ * way down the banner (0.19 of the half height above the hub). With the picture riding with the
+ * bike, the ball stays over the hub while the bridge passes underneath.
  */
 const DECK_TOP = 0.405;
-function ballBanner(frames: number): HTMLCanvasElement[] {
-  const H = SIZE, W = Math.round(H * 0.75), ball = H * 0.055;
-  // The top of the bounce stays below the very top of the LEDs' reach, where the outer LEDs
-  // leave gaps (above ~0.8 of the reach).
-  const floor = H * DECK_TOP, apex = H * 0.11 + ball, rest = floor - ball;
+function ballBanner(frames: number, ridesWithBike: boolean): HTMLCanvasElement[] {
+  const H = SIZE, W = Math.round(H * 0.75), ball = H * 0.0825;
+  // Bounce as high as the LEDs reach. Riding with the bike, every point of the disc is swept each
+  // turn, so the ball can touch the top. Pinned to the road, the outer LEDs leave gaps above
+  // ~0.8 of their reach, so the bounce stays below that.
+  const floor = H * DECK_TOP, apex = H * (ridesWithBike ? 0.01 : 0.11) + ball, rest = floor - ball;
   return Array.from({ length: frames }, (_, i) => {
     const { c, g } = canvas(W, H);
     g.fillStyle = '#000';
@@ -305,12 +307,20 @@ function ballBanner(frames: number): HTMLCanvasElement[] {
     g.beginPath();
     g.ellipse(W / 2, y, ball / squash, ball * squash, 0, 0, Math.PI * 2);
     g.fill();
+    // A light orange highlight towards the upper left, squashed with the ball.
+    g.fillStyle = '#ffa030';
+    g.beginPath();
+    g.ellipse(W / 2 - (0.35 * ball) / squash, y - 0.35 * ball * squash, (0.35 * ball) / squash, 0.35 * ball * squash, 0, 0, Math.PI * 2);
+    g.fill();
     return c;
   });
 }
 
-/** Built-in patterns as animations (stills have one frame). */
-export function makeAnimation(name: PatternName, text: string): Animation {
+/**
+ * Built-in patterns as animations (stills have one frame). ridesWithBike: the banner picture is
+ * drawn around the hub rather than pinned to the road, which lets the bouncing ball go higher.
+ */
+export function makeAnimation(name: PatternName, text: string, ridesWithBike = false): Animation {
   const anim = ANIMATED[name];
   if (name === 'Wide text') {
     const banner = wideText(text);
@@ -328,7 +338,7 @@ export function makeAnimation(name: PatternName, text: string): Animation {
     frames.push(c);
   }
   // The wheel-locked ball stays inside its rim; on a banner it bounces on a bridge deck instead.
-  const bannerFrames = name === 'Bouncing ball (animated)' ? ballBanner(anim.frames) : undefined;
+  const bannerFrames = name === 'Bouncing ball (animated)' ? ballBanner(anim.frames, ridesWithBike) : undefined;
   return { frames, fps: anim.fps, bannerFrames };
 }
 

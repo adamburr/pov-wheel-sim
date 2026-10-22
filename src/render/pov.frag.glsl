@@ -47,6 +47,7 @@ uniform float uBannerW;      // banner image width (m)
 uniform float uBannerTile;   // image width + gap (m)
 uniform float uBannerHalfH;  // half the banner height (m), centred on the hub
 uniform int uBannerMirror;   // independent back strips paint a mirrored banner
+uniform int uBannerRide;     // 1: the banner picture rides with the bike (centred on the hub, upright)
 uniform int uPredict;        // compute each update for its mid-display time
 uniform int uLower;          // banner lower half: 0 picture, 1 arches, 2 rainbow arches, 3 scallops, 4 beads, 5 truss bridge
 uniform int uFrames;         // animation frames
@@ -88,7 +89,7 @@ float segDist(vec2 p, vec2 a, vec2 b) {
 // The truss bridge's deck: a band just above the hub (as fractions of the banner's half height),
 // where the strips sweep without gaps. It is the top of the lower-half pattern, so a banner
 // picture (the bouncing ball) can stand on it.
-const float DECK_LO = 0.15, DECK_HI = 0.19;
+const float DECK_LO = 0.11, DECK_HI = 0.19;
 
 // Truss bridge: the deck, a truss hanging below it and a pier down to the road under each point
 // where a strip points straight down (the only places the strips reach the ground). The truss's
@@ -106,7 +107,7 @@ vec3 bridgeDuty(float Xn, float Y, float halfP, float rOuter, float dim) {
             min(segDist(p, vec2(d, yb), vec2(d, y0)),      // vertical
             min(segDist(p, vec2(0.0, yb), vec2(0.0, y0)),  // centre post
                 segDist(p, vec2(d, y0), vec2(0.0, yb)))))); // inner diagonal
-  float t = 0.7 * uPitch;
+  float t = 1.4 * uPitch;                       // half the member thickness (about 2 cm thick)
   if (m < t) return vec3(0.25, 0.5, 1.0) * dim;
   if (p.x < 2.0 * t && Y < yb) return vec3(0.25, 0.5, 1.0) * 0.7 * dim; // pier
   return vec3(0.0);
@@ -167,8 +168,10 @@ vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk, int frame) {
   vec2 pos = vec2(hub + rk * cos(th), -rk * sin(th));
   float lowerTop = uLower == 5 ? DECK_HI * uBannerHalfH : 0.0; // the bridge's deck sits just above the hub
   if (uLower > 0 && pos.y < lowerTop) return lowerDuty(th, hub, rk);
-  float x = mod(pos.x + 0.5 * uBannerW, uBannerTile);
-  if (x >= uBannerW) return vec3(0.0);
+  // The picture is pinned to the road and tiled along it, or rides along centred over the hub
+  // (upright, not turning with the wheel). The lower-half pattern always stays on the road.
+  float x = uBannerRide == 1 ? pos.x - hub + 0.5 * uBannerW : mod(pos.x + 0.5 * uBannerW, uBannerTile);
+  if (x < 0.0 || x >= uBannerW) return vec3(0.0);
   if (uBannerMirror == 1 && uSide < 0.0) x = uBannerW - x;
   float v = (uBannerHalfH - pos.y) / (2.0 * uBannerHalfH);
   if (v < 0.0 || v >= 1.0) return vec3(0.0);

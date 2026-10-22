@@ -4,11 +4,11 @@ A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel
 
 **Live demo:** https://adamburr.github.io/pov-wheel-sim/
 
-![Water sloshing in a 700c wheel with 3 LED strips at 12 mph, 1/4 s exposure](docs/images/hero-water.jpg)
+![The default Ball on a bridge preset at 10 mph: a ball bouncing above the hub, riding with the bike, over a truss bridge pinned to the road, in the roadside strip (top) and the follow view](docs/images/hero-bridge.jpg)
 
 ## Examples
 
-These are all renders from the simulator, starting from the defaults (700c wheel, 3 strips of 144 LED/m APA102, RP2350, water pattern, 60% pedal surge) with stop-and-go off, unless the caption says otherwise.
+These are all renders from the simulator, starting from the Water preset and the default build (700c wheel, 3 strips of 144 LED/m APA102, RP2350, 60% pedal surge) with stop-and-go off and the roadside strip hidden, unless the caption says otherwise. The banner shots are crops of the roadside strip.
 
 <table>
   <tr>
@@ -29,11 +29,14 @@ These are all renders from the simulator, starting from the defaults (700c wheel
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/ride-by.jpg" alt="Cycloid streaks from a roadside camera"><br><sub><b>Ride-by,</b> 10 mph, 1/4 s, smiley: a fixed roadside camera sees the LEDs trace cycloids.</sub></td>
-    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO painted in the air in banner mode"><br><sub><b>Banner mode,</b> 10 mph, 2 s: the image is pinned to the world and painted as the bike rides past.</sub></td>
+    <td width="50%"><img src="docs/images/banner-hello.jpg" alt="HELLO painted in the air above rainbow arches in banner mode"><br><sub><b>HELLO banner preset,</b> roadside, 10 mph, 2 s: the text is pinned to the road in the upper half, and rainbow arches outline the voids the strips never sweep below the hub.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/banner-surge.jpg" alt="Torn banner while pulling away"><br><sub><b>Banner while pulling away</b> from 4 to 16 mph, with 4 ms hall polling and no motion prediction: dead-reckoning errors from the pedal surges tear the text.</sub></td>
-    <td width="50%"><img src="docs/images/banner-flipbook.jpg" alt="Bouncing ball animation as a flip-book along the road"><br><sub><b>Animated banner:</b> frames advance as the bike travels, so the road becomes a flip-book.</sub></td>
+    <td width="50%"><img src="docs/images/banner-scallops.jpg" alt="Alternating coloured scallops around dark arch-shaped voids"><br><sub><b>Scallops lower half,</b> roadside, 10 mph, 2 s: the lit ground between the voids is filled in alternating colours, so the arch-shaped voids show plainly.</sub></td>
+    <td width="50%"><img src="docs/images/banner-surge.jpg" alt="Torn banner while pulling away"><br><sub><b>Banner while pulling away</b> from 4 to 16 mph, with 4 ms hall polling and no motion prediction: dead-reckoning errors from the pedal surges tear the text and fling the arches.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/images/banner-bridge.jpg" alt="A ball bouncing along above a truss bridge"><br><sub><b>Ball on a bridge</b> (the default preset), roadside, 10 mph, 1/2 s: the truss bridge is pinned to the road while the ball rides with the bike, showing each time a strip sweeps over it.</sub></td>
   </tr>
 </table>
 
@@ -52,7 +55,7 @@ Two views show the same moment and the same animation. The main view follows the
 
 ### Presets
 
-A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with eight: Water, Splashy water, Smiley, Rainbow spiral, Clock face, Beating heart, HELLO banner and Flip-book ball. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Dropping or pasting an image puts it in the selected preset.
+A real wheel has one button that steps through its presets in order while you ride; **Next ▶** does the same here. The app starts with eight: Water, Splashy water, Smiley, Rainbow spiral, Clock face, Beating heart, HELLO banner and Ball on a bridge, and opens on Ball on a bridge. Edit any of them, add a copy with **＋ New preset**, reorder them with ↑ / ↓, or delete them. **Restore built-in presets** (under *Manage presets*) brings back the originals. Dropping or pasting an image puts it in the selected preset.
 
 ### Setups
 
@@ -89,11 +92,11 @@ Frames can advance on a timer (at the clip's fps) or every N wheel revolutions:
 - **Timed** keeps the clip's speed. A frame can change mid-revolution, so different sectors show different frames (visible seams).
 - **Revolution-synced** switches cleanly at the magnet, but the playback rate rises and falls with the bike's speed.
 
-In banner mode the frames advance as the bike travels, so the road becomes a flip-book. On a banner the bouncing ball has its own layout: it bounces on the deck of the *Truss bridge* lower half (the Flip-book ball preset), so the road becomes a ball bouncing along a bridge.
+In banner mode the frames advance as the bike travels, so the road becomes a flip-book. On a banner the bouncing ball has its own layout: it bounces on the deck of the *Truss bridge* lower half. In the *Ball on a bridge* preset the ball rides with the bike while the bridge stays pinned to the road, so it bounces along above the hub as the bridge passes underneath.
 
 ### Water mode
 
-The simulator opens in water mode: simulated water fills the bottom of the disc. To return to it, pick the **Water** preset, or choose *Water* under a preset's **Show** menu. Use the speed panel at the bottom of the screen to ride:
+The **Water** preset fills the bottom of the disc with simulated water (or choose *Water* under any preset's **Show** menu). Use the speed panel at the bottom of the screen to ride:
 - Drag the slider to change speed.
 - **🛑 Brake** stops the bike; **▶ Ride** sets off again.
 - **Stop-and-go** (on by default) rides through the city automatically: it pulls away to a top speed between half and one and a half times the stop-and-go cruise speed, cruises for 4–12 s, brakes for a light, and waits 2–6 s. Each light turns red at a random distance ahead (3–40 m), and the rider brakes just hard enough to stop there, so some stops are sharp and others a slow roll-down. Each pull-away varies too.
@@ -111,7 +114,7 @@ Each type sets the liveliness (FLIP ratio), viscosity and particle spacing, all 
 
 **Rendering.** The LEDs read a map twice as fine as the simulation grid, built from the particles each step:
 - the body of water is deep blue
-- fast-moving surface water whitens into whitecaps
+- fast-moving surface water foams, shifting from blue through green and yellow to white as it speeds up
 - loose droplets glint white as spray
 
 A magnet-only build can't sense bumps, so there are no bump splashes.
@@ -128,6 +131,8 @@ The **Stats** tab shows:
 ### Banner mode
 
 Set a preset's **Mode** to *Banner on the road* (or pick the *HELLO banner* preset) and the image stops turning with the wheel. It is pinned to the world instead and tiles along the road. At every update the firmware works out where each LED is and lights it with that spot of the banner, so the spinning strips act like a scanner that reveals a picture hanging in the air. In the roadside strip's long exposure, the bike paints the banner as it rides by.
+
+Set the preset's **Picture** to *Rides with the bike* and the picture is drawn around the hub instead, upright and not turning with the wheel, so it travels with the bike while the lower-half pattern stays on the road. In a long roadside exposure it then smears along the road, as anything riding with the bike would.
 
 Banners keep their text and pictures in the **upper half**. Below the hub the strips leave **voids**: arches standing on the road that no LED ever passes over. With 3 strips per side on a 700c wheel, about 90% of the bottom quarter and half of the band just below the middle stay dark, in a pattern that repeats every 71 cm (the circumference divided by the strips). The firmware works out banner position from the wheel's rotation, so the voids always fall in the same place in the banner, at any speed.
 
@@ -147,7 +152,7 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 
 | Where | Highlights |
 |---|---|
-| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, banner gap, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
+| Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity, particle spacing, grid size, sim rate, pressure iterations and acceleration smoothing. *Animation:* playback speed, timed or every-N-turns frame advance, import frame limit, video sample rate. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fit, rotation, inner-LED dimming |
 | Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma and bit depth under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce under the details folders |
 | Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1 s by default), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
 

@@ -28,8 +28,14 @@ export const BUILT_IN_PRESETS: { name: string; settings: PresetSettings }[] = [
   { name: 'Clock face', settings: { pattern: 'Clock face' } },
   { name: 'Beating heart', settings: { pattern: 'Beating heart (animated)' } },
   { name: 'HELLO banner', settings: { pattern: 'Wide text', text: 'HELLO', displayMode: 'banner', bannerLower: 'rainbow' } },
-  { name: 'Flip-book ball', settings: { pattern: 'Bouncing ball (animated)', displayMode: 'banner', bannerLower: 'bridge' } },
+  {
+    name: 'Ball on a bridge',
+    settings: { pattern: 'Bouncing ball (animated)', displayMode: 'banner', bannerLower: 'bridge', bannerUpper: 'bike' },
+  },
 ];
+
+/** The preset the app opens on: on first load, after New, and after restoring the built-ins. */
+export const DEFAULT_PRESET = 'Ball on a bridge';
 
 export function newId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -103,7 +109,8 @@ export class PresetStore {
   }
 
   restoreBuiltIns() {
-    this.replaceAll(builtInPresets());
+    const presets = builtInPresets();
+    this.replaceAll(presets, Math.max(0, presets.findIndex((x) => x.name === DEFAULT_PRESET)));
   }
 
   select(i: number) {

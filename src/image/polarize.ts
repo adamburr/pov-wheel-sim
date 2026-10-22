@@ -214,12 +214,20 @@ export interface WaterMaps {
 
 /**
  * Paint one firmware frame of water into `out` (RGBA PWM duty). The body of water is deep
- * blue; fast water near the surface whitens into whitecaps; water with no body around it is
- * spray, drawn as bright white droplets; air is black.
+ * blue; fast water near the surface foams, shifting through green and yellow to white as it gets
+ * faster; water with no body around it is spray, drawn as bright white droplets; air is black.
  */
 export function renderWater(maps: WaterMaps, lut: Int32Array, p: Params, d: Derived, out: Uint8Array): number {
   const C = p.columnsPerRev, n = d.ledsPerStrip;
-  const deep = [0.08, 0.35, 1.0], foam = [0.85, 0.95, 1.0];
+  // Foam colour ramp from still water (f = 0) to the fastest foam and spray (f = 1): [f, r, g, b].
+  // Yellow holds over a wide band, or the green-to-white blend (after gamma) would hide it.
+  const ramp = [[0, 0.08, 0.35, 1.0], [0.25, 0.1, 0.9, 0.3], [0.45, 1.0, 0.9, 0.1], [0.75, 1.0, 0.9, 0.1], [1, 1.0, 1.0, 1.0]];
+  const colour = (f: number, ch: number) => {
+    let i = 0;
+    while (i < ramp.length - 2 && f > ramp[i + 1][0]) i++;
+    const [f0, f1] = [ramp[i][0], ramp[i + 1][0]];
+    return ramp[i][ch + 1] + (ramp[i + 1][ch + 1] - ramp[i][ch + 1]) * Math.min(1, Math.max(0, (f - f0) / (f1 - f0)));
+  };
   const g = (x: number) => Math.pow(x, p.gamma);
   const clamp = (x: number) => Math.min(1, Math.max(0, x));
   const { renderDensity: dens, renderBulk: bulk, renderSpeed: speed } = maps;
@@ -237,7 +245,7 @@ export function renderWater(maps: WaterMaps, lut: Int32Array, p: Params, d: Deri
     const k = Math.floor(idx / C) % n;
     const comp = p.radialCompensation ? ledRadius(p, d, 0, k) / d.rEnd : 1;
     for (let ch = 0; ch < 3; ch++) {
-      const v = g(deep[ch] + (foam[ch] - deep[ch]) * f) * a * comp;
+      const v = g(colour(f, ch)) * a * comp;
       out[o + ch] = Math.round(v * 255);
       sum += v;
     }

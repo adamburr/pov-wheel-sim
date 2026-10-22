@@ -171,6 +171,7 @@ export function defaultParams() {
     displayMode: 'wheel' as 'wheel' | 'banner', // banner: image pinned to the world, tiled along the road
     tileGapM: 0,
     bannerLower: 'arches' as BannerLower, // banner: the lower half is a picture or a pattern drawn around the voids
+    bannerUpper: 'road' as 'road' | 'bike', // banner: the picture is pinned to the road or rides with the bike
     // Animation
     frameAdvance: 'timed' as 'timed' | 'revolution', // timed: at animFps; revolution: at the magnet
     animFps: 12,              // the clip's own frame rate (set when a clip or pattern loads)
@@ -229,7 +230,7 @@ export type Params = ReturnType<typeof defaultParams>;
 // setup file (and, later, what gets flashed to the controller). Everything else only drives the
 // simulation: riding, camera, exposure and rendering.
 export const PRESET_KEYS = [
-  'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'mapping', 'fit', 'imageRotationDeg',
+  'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'mapping', 'fit', 'imageRotationDeg',
   'globalBrightness', 'radialCompensation',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs',
@@ -258,7 +259,7 @@ export const PATTERN_LABELS: Record<PatternName, string> = {
 
 // Allowed values for the string settings that pick from a list.
 const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
-  pattern: PATTERNS, bannerLower: BANNER_LOWER, fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'], mapping: ['polar', 'columns'],
+  pattern: PATTERNS, bannerLower: BANNER_LOWER, bannerUpper: ['road', 'bike'], fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'], mapping: ['polar', 'columns'],
   fit: ['disc', 'annulus'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
   ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
   ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],

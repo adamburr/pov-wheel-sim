@@ -61,7 +61,7 @@ const { composer: stripComposer, bloom: stripBloom } = createPost(renderer, scen
 const motion = new WheelMotion();
 
 // ---- Image source and firmware column buffer ----
-let source: Animation = makeAnimation(p.pattern, p.text);
+let source: Animation = makeAnimation(p.pattern, p.text, p.bannerUpper === 'bike');
 let sourceVersion = 0;
 let buffer: FrameStack | undefined;
 let banner: (FrameStack & { pixelM: number }) | undefined;
@@ -139,7 +139,7 @@ let loadGen = 0;
 async function loadSource() {
   const gen = ++loadGen;
   const media = store.active.media;
-  if (!p.useMedia || !media) { setSource(makeAnimation(p.pattern, p.text)); return; }
+  if (!p.useMedia || !media) { setSource(makeAnimation(p.pattern, p.text, p.bannerUpper === 'bike')); return; }
   try {
     const blob = await getMedia(media.id);
     if (!blob) throw new Error('it is no longer stored in this browser');
@@ -149,7 +149,7 @@ async function loadSource() {
     if (gen !== loadGen) return;
     console.warn(`Couldn't load ${media.name}: ${(err as Error).message}`);
     p.useMedia = false;
-    setSource(makeAnimation(p.pattern, p.text));
+    setSource(makeAnimation(p.pattern, p.text, p.bannerUpper === 'bike'));
   }
 }
 
@@ -176,7 +176,7 @@ const hooks = {
   onPresetEdit: (key: string) => {
     if (key === 'name') return; // renamed in the store already
     store.capture(p);
-    if (key === 'show' || key === 'text') loadSource();
+    if (key === 'show' || key === 'text' || key === 'bannerUpper') loadSource();
     if ((key === 'maxFrames' || key === 'videoFps') && p.useMedia) {
       clearTimeout(reloadTimer);
       reloadTimer = window.setTimeout(loadSource, 400);

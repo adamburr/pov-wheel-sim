@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, DEVICE_KEYS, PRESET_KEYS } from '../src/params';
-import { BUILT_IN_PRESETS, type KeyValueStorage, PresetStore } from '../src/presets';
+import { BUILT_IN_PRESETS, DEFAULT_PRESET, type KeyValueStorage, PresetStore } from '../src/presets';
 import { loadDevice, parseSetup, saveDevice, serializeSetup, setupFileName } from '../src/setupFile';
 
 function memoryStorage(): KeyValueStorage & { data: Map<string, string> } {
@@ -18,17 +18,19 @@ describe('setting groups', () => {
 });
 
 describe('preset store', () => {
-  it('seeds 5–8 built-in presets on first load, with Water first', () => {
+  it('seeds 5–8 built-in presets on first load, Water first, opening on the default', () => {
     const s = new PresetStore(memoryStorage());
     expect(s.presets.length).toBe(BUILT_IN_PRESETS.length);
     expect(s.presets.length).toBeGreaterThanOrEqual(5);
     expect(s.presets.length).toBeLessThanOrEqual(8);
-    expect(s.active.name).toBe('Water');
+    expect(s.presets[0].name).toBe('Water');
+    expect(s.active.name).toBe(DEFAULT_PRESET);
     expect(new Set(s.presets.map((x) => x.name)).size).toBe(s.presets.length);
   });
 
   it('steps through presets with one button, wrapping round', () => {
     const s = new PresetStore();
+    s.select(0);
     const names = s.presets.map(() => s.next().name);
     expect(names.at(-1)).toBe('Water');
     expect(names[0]).toBe(s.presets[1].name);

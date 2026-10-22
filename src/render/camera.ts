@@ -50,7 +50,10 @@ export function createStripCamera() {
 
 /**
  * Frame the strip so the wheel, ground to top, fills its height. Returns the track length: the
- * visible road plus a wheel on each side, so the bike rolls fully in and out before it loops.
+ * visible road plus a wheel on each side, so the bike rolls fully in and out before it loops,
+ * rounded up to whole wheel turns. Then the wheel reaches each spot at the same angle every lap, so
+ * a long exposure spanning several laps looks like one pass (patterns tied to the wheel angle,
+ * like the banner's lower half, would otherwise land in a different place each lap).
  */
 export function placeStripCamera(camera: THREE.PerspectiveCamera, p: Params, d: Derived, aspect: number): number {
   const z = p.side === 'drive' ? 1 : -1;
@@ -60,5 +63,6 @@ export function placeStripCamera(camera: THREE.PerspectiveCamera, p: Params, d: 
   camera.position.set(0, 0, z * dist);
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
-  return 2 * halfH * aspect + 2 * d.tireRadius;
+  const turn = 2 * Math.PI * d.tireRadius;
+  return Math.ceil((2 * halfH * aspect + 2 * d.tireRadius) / turn) * turn;
 }
