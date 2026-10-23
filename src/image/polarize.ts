@@ -82,7 +82,7 @@ export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
                 if (p.fit === 'annulus') r = ((r - d.rStart) / (d.rEnd - d.rStart)) * fitR;
                 let x = r * Math.cos(th);
                 const y = r * Math.sin(th);
-                if (back) x = -x; // independent back strips get a mirrored image so it reads correctly
+                if (back && p.backSide === 'reads') x = -x; // independent back strips get a mirrored image so it reads correctly
                 sample(x / (2 * fitR) + 0.5, 0.5 - y / (2 * fitR), acc);
               }
             }
@@ -90,7 +90,7 @@ export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
           } else {
             // Adafruit layout: scale the bitmap to LED height, repeat it around the wheel.
             const w = Math.max(1, Math.round((img.width * n) / img.height));
-            const col = back ? C - 1 - c : c;
+            const col = back && p.backSide === 'reads' ? C - 1 - c : c;
             const u = ((col % w) + 0.5) / w;
             const v = (n - 1 - k + 0.5) / n; // top row of the bitmap sits at the rim
             sample(u, v, acc);

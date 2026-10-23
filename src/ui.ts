@@ -179,6 +179,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const edgesCtl = picture.add(p, 'pictureEdges', { 'Blurred mirror': 'mirror', 'Dark': 'dark' }).name('Edges');
   picture.add(p, 'fit', { 'Whole disc': 'disc', 'LED ring only': 'annulus' }).name('Fit');
   picture.add(p, 'imageRotationDeg', -180, 180, 1).name('Rotation (°)');
+  const backSideCtl = picture.add(p, 'backSide', { 'Reads right': 'reads', 'Mirror of drive side': 'mirror' }).name('Non-drive side');
 
   // lil-gui calls the GUI-level handler before the control's own one (which may seed other
   // values), so report the change once both have run.
@@ -332,6 +333,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     anim.show(!live && animated);
     revsCtl.show(p.frameAdvance === 'revolution');
     picture.show(!live);
+    backSideCtl.show(p.displayMode === 'wheel' && p.doubleSided && p.backData === 'independent');
     lengthCtl.show(!p.autoLength);
     backCtl.show(p.doubleSided);
     clockCtl.show(LEDS[p.ledType].protocol === 'clocked');

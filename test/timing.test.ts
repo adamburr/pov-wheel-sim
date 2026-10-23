@@ -334,6 +334,14 @@ describe('non-drive side', () => {
     expect(differ).toBeGreaterThan(C * 0.8);
   });
 
+  it('can give the back strips the drive side\'s own pixels instead', () => {
+    const w = 64, h = 64, px = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = (y * w + x) * 4; px[o] = x < w / 2 ? 255 : 0; px[o + 3] = 255; }
+    const buf = polarize({ width: w, height: h, data: px }, { ...p, backSide: 'mirror' }, d);
+    const half = p.stripCount * d.ledsPerStrip * buf.columns * 4;
+    expect([...buf.data.subarray(half, 2 * half)]).toEqual([...buf.data.subarray(0, half)]);
+  });
+
   it('shows the same physical water on both sides', () => {
     const C = p.columnsPerRev, lut = waterLut(p, d, 24), half = p.stripCount * d.ledsPerStrip;
     for (let row = 0; row < half; row++) for (let c = 0; c < C; c++) {

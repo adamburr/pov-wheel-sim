@@ -173,6 +173,7 @@ export function defaultParams() {
     bannerLower: 'arches' as BannerLower, // banner: the lower half is a picture or a pattern drawn around the voids
     bannerUpper: 'road' as 'road' | 'bike', // banner: the picture is pinned to the road or rides with the bike
     spinSeconds: 0,           // wheel-locked: the firmware turns the picture once every this many seconds (0 = still; positive turns it against the wheel, negative with it)
+    backSide: 'reads' as 'reads' | 'mirror', // own-data back strips: redraw the picture to read right, or show the drive side's pixels (a mirror image)
     // Animation
     frameAdvance: 'timed' as 'timed' | 'revolution', // timed: at animFps; revolution: at the magnet
     animFps: 12,              // the clip's own frame rate (set when a clip or pattern loads)
@@ -248,7 +249,7 @@ export type Params = ReturnType<typeof defaultParams>;
 // setup file (and, later, what gets flashed to the controller). Everything else only drives the
 // simulation: riding, camera, exposure and rendering.
 export const PRESET_KEYS = [
-  'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'pictureFill',
+  'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'backSide', 'mapping', 'fit', 'pictureFill',
   'pictureZoom', 'pictureX', 'pictureY', 'pictureEdges', 'imageRotationDeg', 'globalBrightness',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
   'smileyBounce', 'smileyGrip', 'smileyGain',
@@ -281,7 +282,7 @@ export const PATTERN_LABELS: Record<PatternName, string> = {
 // Allowed values for the string settings that pick from a list.
 const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
   pattern: PATTERNS, bannerLower: BANNER_LOWER, bannerUpper: ['road', 'bike'], fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'], mapping: ['polar', 'columns'],
-  fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], pictureEdges: ['dark', 'mirror'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
+  fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], pictureEdges: ['dark', 'mirror'], backSide: ['reads', 'mirror'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
   ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
   ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],
   overflow: ['wrap', 'blank'],
@@ -325,7 +326,7 @@ export function speedMps(p: Params): number {
  * to a picture starts them afresh, so a picture always begins the same way, whatever the preset
  * showed before: cropped to fill the wheel and turning with it.
  */
-export const PICTURE_KEYS = ['displayMode', 'tileGapM', 'bannerUpper', 'spinSeconds', 'mapping', 'fit', 'pictureFill',
+export const PICTURE_KEYS = ['displayMode', 'tileGapM', 'bannerUpper', 'spinSeconds', 'backSide', 'mapping', 'fit', 'pictureFill',
   'pictureZoom', 'pictureX', 'pictureY', 'pictureEdges', 'imageRotationDeg',
   'frameAdvance', 'playbackRate', 'revsPerFrame'] as const satisfies readonly PresetKey[];
 

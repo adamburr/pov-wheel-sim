@@ -104,7 +104,7 @@ let rebuildTimer = 0;
 
 function imageKeyFor(d: Derived) {
   return [sourceVersion, bannerLowerOf(p) === 'picture', p.mapping, p.fit, p.pictureFill, p.pictureZoom, p.pictureX, p.pictureY, p.pictureEdges, p.useMedia, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
-    p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData, p.radialStagger].join('|');
+    p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData, p.backSide, p.radialStagger].join('|');
 }
 
 const MAX_TEXTURE_BYTES = 128 * 1024 * 1024;
