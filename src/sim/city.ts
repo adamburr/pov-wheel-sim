@@ -4,12 +4,12 @@ export type CityPhase = 'go' | 'cruise' | 'brake' | 'stopped';
 
 const G = 9.81;
 const NEAREST_LIGHT_M = 3;   // light turns red just ahead: a hard stop
-const FARTHEST_LIGHT_M = 40; // spotted far off: a long, gentle roll-down
+const FARTHEST_LIGHT_M = 20; // spotted far off: a gentler roll-down
 const MAX_BRAKE_G = 0.7;
-const MIN_BRAKE_G = 0.03;
+const MIN_BRAKE_G = 0.1;
 const COAST_G = 0.04;        // slowing with the pedals still, before braking
 const FINAL_MPS = 1.5;       // below this (about 3 mph) the rider brakes firmly to a stop, not creeping
-const FINAL_G = 0.15;        // the least braking for that last stretch
+const FINAL_G = 0.25;        // the least braking for that last stretch
 
 /** One stretch of a trip: ramp at g towards `share` of the trip's top speed, and stay at least `hold` s. */
 interface Leg { share: number; g: number; hold: number }
@@ -78,10 +78,10 @@ export class CityRide {
       }
       case 'go': {
         this.phase = 'cruise';
-        // A block of 4–12 s: the speed drifts around the trip's top speed, now and then easing
+        // A block of 12–30 s: the speed drifts around the trip's top speed, now and then easing
         // off (a turn, a pothole, traffic) and picking up again.
         this.legs = [];
-        for (let left = this.between(4, 12); left > 0;) {
+        for (let left = this.between(12, 30); left > 0;) {
           const hold = this.between(1.5, 4);
           const share = this.between(0, 1) < 0.2 ? this.between(0.6, 0.8) : this.between(0.88, 1.1);
           this.legs.push({ share, g: this.between(0.03, 0.08), hold });
@@ -123,7 +123,7 @@ export class CityRide {
       }
       case 'brake':
         this.phase = 'stopped';
-        this.legs = [{ share: 0, g: this.rampG, hold: this.between(1, 3) }]; // a short wait at the light
+        this.legs = [{ share: 0, g: this.rampG, hold: this.between(0.5, 1.5) }]; // a short wait at the light
         break;
     }
   }

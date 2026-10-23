@@ -51,6 +51,25 @@ describe('city stop-and-go', () => {
     expect(pulls).toBeGreaterThan(5);
   });
 
+  it('rides a long block between lights and waits briefly at each', () => {
+    const p = { ...defaultParams(), speed: 12, citySpeed: 12, speedRampG: 0.2 };
+    const c = new CityRide(4);
+    c.start(0, p);
+    const cruises: number[] = [], waits: number[] = [];
+    let since = 0, last = c.phase;
+    for (let t = 0; t < 1500; t += 0.01) {
+      c.update(t, p);
+      if (c.phase !== last) {
+        if (last === 'cruise') cruises.push(t - since);
+        if (last === 'stopped' && t > 2) waits.push(t - since);
+        since = t; last = c.phase;
+      }
+    }
+    expect(cruises.length).toBeGreaterThan(10);
+    for (const s of cruises) expect(s).toBeGreaterThanOrEqual(12 - 1e-6);
+    for (const s of waits) { expect(s).toBeGreaterThanOrEqual(0.5 - 0.02); expect(s).toBeLessThanOrEqual(1.5 + 0.02); }
+  });
+
   it('lets the speed wander along the block instead of holding it', () => {
     const legs = ride(7, 600);
     const cruise = legs.filter((l) => l.phase === 'cruise');
@@ -81,7 +100,7 @@ describe('city stop-and-go', () => {
       const v = m.speed(t);
       if (c.phase === 'brake' && v < 1.5 && v > 0 && slowSince < 0) slowSince = t;
       if (slowSince >= 0 && v === 0) { creeps.push(t - slowSince); slowSince = -1; }
-      expect(c.lightM === 0 || (c.lightM >= 3 && c.lightM <= 40)).toBe(true);
+      expect(c.lightM === 0 || (c.lightM >= 3 && c.lightM <= 20)).toBe(true);
       last = c.phase;
     }
     expect(misses.length).toBeGreaterThan(10);
@@ -89,8 +108,8 @@ describe('city stop-and-go', () => {
     expect(Math.min(...decels)).toBeLessThan(0.08);  // some slow roll-downs
     expect(Math.max(...decels)).toBeGreaterThan(0.2); // some sharp stops
     expect(Math.max(...decels)).toBeLessThanOrEqual(0.7);
-    // No creeping to a stop: the last 1.5 m/s goes at 0.15 g or more, about a second at most.
+    // No creeping to a stop: the last 1.5 m/s goes at 0.25 g or more, about 0.6 s at most.
     expect(creeps.length).toBeGreaterThan(10);
-    for (const s of creeps) expect(s).toBeLessThan(1.1);
+    for (const s of creeps) expect(s).toBeLessThan(0.7);
   });
 });
