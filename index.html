@@ -22,22 +22,18 @@
       #toast[hidden] { display: none; }
       #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; font-size: 20px; background: rgba(0, 120, 255, 0.15); border: 3px dashed var(--accent); pointer-events: none; }
 
-      /* Ride panel: the preset button (the wheel's one hardware button), then speed and riding. */
-      /* Two packed rows, as wide as their contents: the preset and riding buttons, then the speed.
-         Sized to fit a 375 px phone (iPhone mini) without wrapping. */
-      #ride { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); box-sizing: border-box; display: grid; gap: 6px; background: var(--panel); border-radius: 12px; padding: 8px 10px; backdrop-filter: blur(6px); user-select: none; transition: left 0.2s; }
-      #ride .row { display: flex; align-items: center; gap: 6px; }
-      #ride-brake { margin-left: auto; }
-      #preset-name { flex: 0 1 auto; max-width: 11em; min-width: 0; text-align: left; font-size: 14px; font-weight: 600; background: none !important; border: 0 !important; padding: 2px 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      #preset-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-      #ride #preset-next { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
+      /* Ride panel: the preset's name, then the Next button (the wheel's one hardware button), the speed and its slider. */
+      #ride { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); box-sizing: border-box; display: grid; gap: 6px; background: var(--panel); border-radius: 12px; padding: 8px 12px; backdrop-filter: blur(6px); user-select: none; transition: left 0.2s; }
+      #ride .row { display: flex; align-items: center; gap: 12px; }
+      #preset-name { max-width: 100%; min-width: 0; text-align: left; font: inherit; font-size: 14px; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #ride #preset-next { font-size: 13px; padding: 5px 12px; border-radius: 8px; border: 1px solid #2f5d93; background: #1d3a5f; font-weight: 600; cursor: pointer; white-space: nowrap; }
       #ride #preset-next:hover { background: #24497a; }
-      #ride-speed { min-width: 2.3em; text-align: right; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
-      #ride-unit { font-size: 12px; color: var(--muted); }
-      #ride-slider { flex: 1 1 220px; min-width: 80px; height: 24px; margin: 0 4px; accent-color: var(--accent); cursor: pointer; }
-      #ride-status { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-      #ride button { font-size: 13px; padding: 5px 12px; border-radius: 8px; border: 1px solid #3a4152; background: #1b2030; cursor: pointer; white-space: nowrap; }
-      #ride button:hover { background: #262d42; }
+      #ride .auto { display: flex; align-items: center; gap: 3px; margin-left: -6px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+      #ride .auto input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+      #ride .speed { flex: none; white-space: nowrap; }
+      #ride-speed { display: inline-block; min-width: 2.3em; text-align: right; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+      #ride-unit { margin-left: 4px; font-size: 12px; color: var(--muted); }
+      #ride-slider { flex: 1 1 220px; min-width: 80px; height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
       #ride label { margin-left: 2px; font-size: 13px; display: flex; gap: 5px; align-items: center; cursor: pointer; white-space: nowrap; }
       #ride input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
       @media (max-width: 420px) {
@@ -108,18 +104,12 @@
     <div id="buffer"><div>Firmware column buffer (x = column, y = strip/LED)</div><canvas></canvas></div>
     <div id="strip-frame" hidden><span>Roadside</span></div>
     <div id="ride">
+      <button id="preset-name" type="button" title="Edit presets">Preset</button>
       <div class="row">
-        <button id="preset-name" type="button" title="Edit presets">Preset</button>
-        <span id="preset-count"></span>
         <button id="preset-next" type="button" title="Next preset (N): the wheel's button">Next ▶</button>
-        <button id="ride-brake" type="button">Brake</button>
-        <button id="ride-go" type="button">Ride</button>
-        <label><input id="ride-city" type="checkbox" /> Stop-and-go</label>
-      </div>
-      <div class="row">
-        <span id="ride-speed">0.0</span><span id="ride-unit">mph</span>
+        <label class="auto" title="Go to the next preset at each stop, when the lights go out"><input id="auto-next" type="checkbox" />Auto</label>
+        <span class="speed"><span id="ride-speed">0.0</span><span id="ride-unit">mph</span></span>
         <input id="ride-slider" type="range" min="0" max="40" step="0.5" aria-label="Bicycle speed" />
-        <span id="ride-status"></span>
       </div>
     </div>
     <button id="panel-toggle" type="button" aria-controls="panel" aria-expanded="false">⚙️ Settings</button>

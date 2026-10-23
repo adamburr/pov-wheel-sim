@@ -275,36 +275,15 @@ const hooks = {
   isAnimated: () => source.frames.length > 1,
 };
 
-// ---- Riding: stop-and-go automation and the large speed control ----
+// ---- Riding: stop-and-go automation and the speed readout ----
 // A fresh seed each page load, so the trips (including the first) differ every visit.
 const city = new CityRide(1 + Math.floor(Math.random() * 2147483645));
-function setCity(on: boolean) {
-  p.cityMode = on;
-  if (on) {
-    if (p.speed > 0) p.citySpeed = p.speed;
-    city.start(simTime, p);
-  } else {
-    p.speed = p.citySpeed; p.braking = false;
-  }
-}
-function brake() {
-  if (p.cityMode) setCity(false);
-  if (p.speed > 0) p.resumeSpeed = p.speed;
-  p.speed = 0; p.braking = true;
-}
-function rideOn() {
-  if (p.cityMode) setCity(false);
-  p.speed = p.resumeSpeed || 10; p.braking = false;
-}
 const rideEl = document.getElementById('ride')!;
 const rideSpeed = document.getElementById('ride-speed')!;
 const rideUnit = document.getElementById('ride-unit')!;
-const rideStatus = document.getElementById('ride-status')!;
 const rideSlider = document.getElementById('ride-slider') as HTMLInputElement;
-const rideCity = document.getElementById('ride-city') as HTMLInputElement;
-document.getElementById('ride-brake')!.addEventListener('click', brake);
-document.getElementById('ride-go')!.addEventListener('click', rideOn);
-rideCity.addEventListener('change', () => setCity(rideCity.checked));
+const autoNext = document.getElementById('auto-next') as HTMLInputElement;
+autoNext.addEventListener('change', () => { p.nextOnDark = autoNext.checked; hooks.onDeviceEdit('nextOnDark'); refreshGui(); });
 rideSlider.addEventListener('input', () => {
   const v = Number(rideSlider.value);
   if (p.cityMode) {
@@ -320,10 +299,8 @@ function updateRidePanel(actualMps: number) {
   rideUnit.textContent = p.speedUnit;
   rideSlider.max = mph ? '40' : '65';
   // The slider sets the target: the cruise speed in stop-and-go, otherwise the riding speed.
-  const target = p.cityMode ? p.citySpeed : p.speed;
-  if (document.activeElement !== rideSlider) rideSlider.value = String(target);
-  rideCity.checked = p.cityMode;
-  rideStatus.textContent = `target ${target.toFixed(1)}`;
+  if (document.activeElement !== rideSlider) rideSlider.value = String(p.cityMode ? p.citySpeed : p.speed);
+  autoNext.checked = p.nextOnDark; // also set from the Hardware panel
 }
 ui = buildUi(p, hooks);
 loadSource();

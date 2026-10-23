@@ -350,7 +350,6 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   // ---------- Preset list and the preset bar on the ride panel ----------
   const list = $('preset-list');
   const presetName = $('preset-name');
-  const presetCount = $('preset-count');
   function select(i: number) {
     store.select(i);
     hooks.onPresetSelected();
@@ -381,7 +380,6 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
       return li;
     }));
     presetName.textContent = store.active.name;
-    presetCount.textContent = `${store.activeIndex + 1}/${store.presets.length}`;
     ($('preset-delete') as HTMLButtonElement).disabled = store.presets.length <= 1;
   }
   $('preset-add').onclick = () => { store.add(); hooks.onPresetSelected(); };
