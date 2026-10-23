@@ -317,7 +317,7 @@
     "tileGapM": 0,
     "bannerLower": "arches",
     "bannerUpper": "road",
-    "spinSeconds": -2,
+    "spinSeconds": -4,
     "backSide": "mirror",
     "mapping": "polar",
     "fit": "disc",
