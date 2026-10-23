@@ -240,7 +240,7 @@ export class PovDisplay {
       u.uBannerTile.value = bannerTileM(this.banner, p.tileGapM);
       u.uBannerHalfH.value = (this.banner.height * this.banner.pixelM) / 2;
     }
-    u.uBannerMirror.value = independent ? 1 : 0;
+    u.uBannerMirror.value = independent && p.backSide === 'reads' ? 1 : 0;
     u.uPredict.value = p.predictMotion ? 1 : 0;
     u.uLower.value = BANNER_LOWER.indexOf(bannerLowerOf(p));
     u.uBannerRide.value = p.bannerUpper === 'bike' ? 1 : 0;

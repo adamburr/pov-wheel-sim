@@ -333,7 +333,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     anim.show(!live && animated);
     revsCtl.show(p.frameAdvance === 'revolution');
     picture.show(!live);
-    backSideCtl.show(p.displayMode === 'wheel' && p.doubleSided && p.backData === 'independent');
+    backSideCtl.show(p.doubleSided && p.backData === 'independent');
     lengthCtl.show(!p.autoLength);
     backCtl.show(p.doubleSided);
     clockCtl.show(LEDS[p.ledType].protocol === 'clocked');

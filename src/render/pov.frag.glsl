@@ -46,7 +46,7 @@ uniform sampler2DArray uBannerTex;
 uniform float uBannerW;      // banner image width (m)
 uniform float uBannerTile;   // image width + gap (m)
 uniform float uBannerHalfH;  // half the banner height (m), centred on the hub
-uniform int uBannerMirror;   // independent back strips paint a mirrored banner
+uniform int uBannerMirror;   // independent back strips paint a mirrored banner (so it reads right)
 uniform int uBannerRide;     // 1: the banner picture rides with the bike (centred on the hub, upright)
 uniform float uSpinRate;     // wheel-locked picture spin, turns per second (0 = still)
 uniform float uSpinPhase;    // spin at the end of the exposure, in turns (0..1)
