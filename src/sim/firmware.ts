@@ -212,6 +212,15 @@ export function magnetOmega(p: Params, motion: WheelMotion, t: number): number {
   return TAU / T;
 }
 
+/**
+ * Whether the firmware has the LEDs lit at time t: armed and not timed out (hall), the wheel
+ * turning (ideal), or always (free-running, which has no sensor to tell it the wheel stopped).
+ */
+export function lightsOn(p: Params, d: Derived, motion: WheelMotion, t: number): boolean {
+  const seg = segmentsFor(p, d, motion, t, t).find((s) => t >= s.start && t < s.end);
+  return !!seg && seg.enabled;
+}
+
 export function segmentsFor(p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number): Segment[] {
   // Banner mode needs a position estimate, which a free-running clock doesn't have.
   if (p.syncMode === 'hall' || (p.syncMode === 'free' && p.displayMode === 'banner')) {

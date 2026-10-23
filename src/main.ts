@@ -6,7 +6,7 @@ import { loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, se
 import { DEFAULT_MEDIA_URLS, DEFAULT_SETUP, defaultBuiltIns, defaultDevice, DEFAULTS_ID } from './defaults';
 import { getMedia, pruneMedia, putMedia } from './mediaStore';
 import { derive, type Derived } from './sim/timing';
-import { type AnimSpec, animSpecFor, buildSlices, WheelMotion } from './sim/firmware';
+import { type AnimSpec, animSpecFor, buildSlices, lightsOn, WheelMotion } from './sim/firmware';
 import { WaterSource } from './image/waterSource';
 import { RibbonSource } from './image/ribbonSource';
 import { SmileySource } from './image/smileySource';
@@ -429,6 +429,7 @@ const bg = new THREE.Color();
 let simTime = 20; // start with history so the hall firmware is already armed
 let last = performance.now();
 let lastBufferFlag = p.showBuffer;
+let wasLit = false;
 
 function frame(now: number) {
   requestAnimationFrame(frame);
@@ -444,6 +445,10 @@ function frame(now: number) {
   const strokeHz = (p.cadenceRpm / 60) * 2, vTarget = speedMps(p);
   const surge = pedalSurge(p.pedalSurgePct / 100, motion.speed(simTime), vTarget, rampG * 9.81, 2 * Math.PI * strokeHz);
   motion.configure(vTarget, d.tireRadius, surge.cruise, strokeHz, simTime, rampG * 9.81, surge.ramp);
+  // The firmware's own preset change: the next look each time the lights go out, as when stopping.
+  const lit = lightsOn(p, d, motion, simTime);
+  if (p.nextOnDark && wasLit && !lit) { store.next(); hooks.onPresetSelected(); }
+  wasLit = lit;
 
   // Content: live frames from a physics look (water, bouncing smiley, tumble dryer), or the converted image/animation.
   let anim = animSpecFor(p, buffer?.frames ?? 1);

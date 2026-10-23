@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, MPH } from '../src/params';
 import { clockedFrameBits, derive, squareIntegral } from '../src/sim/timing';
-import { buildSlices, hallSegments, magnetAccel, magnetOmega, WheelMotion } from '../src/sim/firmware';
+import { buildSlices, hallSegments, lightsOn, magnetAccel, magnetOmega, WheelMotion } from '../src/sim/firmware';
 import { bannerBitmap, bannerTileM, polarize, renderWater, stackFrames, waterLut } from '../src/image/polarize';
 
 describe('LED bus timing', () => {
@@ -84,6 +84,18 @@ describe('firmware model', () => {
     expect(slices[slices.length - 1].t1).toBe(10.25);
     for (let i = 1; i < slices.length; i++) expect(slices[i].t0).toBeCloseTo(slices[i - 1].t1, 12);
     for (const s of slices) expect(s.omega).toBeCloseTo((2 * Math.PI) / T, 6);
+  });
+
+  it('turns the lights off once a stopped wheel times out, and only once', () => {
+    const m = new WheelMotion();
+    m.configure(10 * MPH, d.tireRadius, 0, 1, 0);
+    m.configure(0, d.tireRadius, 0, 1, 20); // stops dead at t = 20 s
+    expect(lightsOn(p, d, m, 19)).toBe(true);
+    let offs = 0, was = true;
+    for (let t = 19; t < 30; t += 0.05) { const lit = lightsOn(p, d, m, t); if (was && !lit) offs++; was = lit; }
+    expect(offs).toBe(1);
+    expect(lightsOn(p, d, m, 30)).toBe(false);
+    expect(lightsOn({ ...p, syncMode: 'free' }, d, m, 30)).toBe(true); // no sensor: never knows it stopped
   });
 });
 

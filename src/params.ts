@@ -164,6 +164,7 @@ export function defaultParams() {
     debounceMs: fw.debounceMs,
     overflow: 'wrap' as 'wrap' | 'blank',
     predictMotion: true,      // banner mode: compute each update for mid-display time, not send time
+    nextOnDark: true,         // switch to the next preset each time the lights go out (stopping)
     freeRunColsPerSec: 540,
 
     // Image
@@ -265,7 +266,7 @@ export const DEVICE_KEYS = [
   'stripLengthMm', 'doubleSided', 'backData', 'radialStagger',
   'chip', 'ledType', 'clockMHz', 'lanes', 'overheadUs', 'pwmHz', 'gbPwmHz', 'batteryMah',
   'firmware', 'python', 'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs',
-  'overflow', 'predictMotion', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
+  'overflow', 'predictMotion', 'nextOnDark', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];

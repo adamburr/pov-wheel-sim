@@ -230,6 +230,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     });
     applyElectronics(p);
   });
+  ctl.add(p, 'nextOnDark').name('Next preset when lights go out');
   ctl.add(p, 'batteryMah', 500, 20000, 100).name('Battery (mAh)');
   const elecMore = ctl.addFolder('Electronics details').close();
   const clockCtl = elecMore.add(p, 'clockMHz', 0.1, 40, 0.1).name('LED clock (MHz)');
