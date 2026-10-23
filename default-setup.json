@@ -311,7 +311,7 @@
     "tileGapM": 0,
     "bannerLower": "arches",
     "bannerUpper": "road",
-    "spinSeconds": 16,
+    "spinSeconds": -2,
     "mapping": "polar",
     "fit": "disc",
     "pictureFill": "crop",
@@ -424,7 +424,7 @@
    }
   }
  ],
- "activePreset": 8,
+ "activePreset": 6,
  "media": {
   "a4ff5ldsmvjw0cia": {
    "name": "cat-painting.jpg",

@@ -80,7 +80,7 @@ function drawSpiral(g: CanvasRenderingContext2D) {
     g.beginPath();
     for (let i = 0; i <= 200; i++) {
       const t = i / 200, a = t * Math.PI * 3 + (arm * Math.PI) / 2, r = t * R * 0.95;
-      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      const x = cx - Math.cos(a) * r, y = cy + Math.sin(a) * r; // mirrored left to right
       if (i) g.lineTo(x, y); else g.moveTo(x, y);
     }
     g.stroke();

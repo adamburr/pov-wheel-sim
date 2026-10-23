@@ -172,7 +172,7 @@ export function defaultParams() {
     tileGapM: 0,
     bannerLower: 'arches' as BannerLower, // banner: the lower half is a picture or a pattern drawn around the voids
     bannerUpper: 'road' as 'road' | 'bike', // banner: the picture is pinned to the road or rides with the bike
-    spinSeconds: 0,           // wheel-locked: the firmware turns the picture once every this many seconds (0 = still, negative = backwards)
+    spinSeconds: 0,           // wheel-locked: the firmware turns the picture once every this many seconds (0 = still; positive turns it against the wheel, negative with it)
     // Animation
     frameAdvance: 'timed' as 'timed' | 'revolution', // timed: at animFps; revolution: at the magnet
     animFps: 12,              // the clip's own frame rate (set when a clip or pattern loads)
