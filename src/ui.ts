@@ -230,6 +230,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     });
     applyElectronics(p);
   });
+  const perStripCtl = ctl.add(p, 'hallPerStrip').name('Sensor per strip');
   ctl.add(p, 'nextOnDark').name('Next preset when lights go out');
   ctl.add(p, 'batteryMah', 500, 20000, 100).name('Battery (mAh)');
   const elecMore = ctl.addFolder('Electronics details').close();
@@ -245,7 +246,6 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   fwMore.add(p, 'minLinesPerSec', 0, 1000, 10).name('Min lines/s (0 = off)');
   const pollCtl = fwMore.add(p, 'hallPollMs', 0, 20, 0.5).name('Hall poll (ms)');
   const debounceCtl = fwMore.add(p, 'debounceMs', 0, 300, 5).name('Hall debounce (ms)');
-  const perStripCtl = fwMore.add(p, 'hallPerStrip').name('Sensor per strip');
   const sensorCtl = fwMore.add(p, 'hallSensor', { 'Hall switch (threshold)': 'switch', 'Magnetometer (peak)': 'magnetometer' }).name('Magnet sensor');
   const odrCtl = fwMore.add(p, 'magOdrHz', 50, 5000, 10).name('Magnetometer rate (Hz)');
   fwMore.add(p, 'overflow', { 'Wrap around': 'wrap', 'Blank': 'blank' }).name('After last column');
