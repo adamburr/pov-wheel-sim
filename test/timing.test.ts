@@ -86,6 +86,44 @@ describe('firmware model', () => {
     for (const s of slices) expect(s.omega).toBeCloseTo((2 * Math.PI) / T, 6);
   });
 
+  // Largest gap (degrees) between where the hall firmware thinks the wheel is and where it is,
+  // over [t0, t1] while lit and moving faster than 3 mph, cruising at 12 mph then braking at g from t = 20 s.
+  const deadReckoningError = (q: typeof p, g: number, t0: number, t1: number) => {
+    const m = new WheelMotion();
+    m.configure(12 * MPH, d.tireRadius, 0, 1, 0);
+    m.configure(0, d.tireRadius, 0, 1, 20, g * 9.81, 0);
+    const segs = hallSegments(q, d, m, t0, t1);
+    let worst = 0;
+    for (let t = t0; t < t1; t += 0.0005) {
+      const s = segs.find((x) => t >= x.start && t < x.end);
+      if (!s?.enabled || s.T === undefined || s.k === undefined || m.speed(t) < 3 * MPH) continue;
+      worst = Math.max(worst, Math.abs(2 * Math.PI * (s.k + (t - (s.ref ?? s.start)) / s.T) - m.phi(t)));
+    }
+    return (worst * 180) / Math.PI;
+  };
+
+  it('dead-reckons braking far better with a hall sensor per strip', () => {
+    const one = deadReckoningError(p, 0.25, 19, 30), per = deadReckoningError({ ...p, hallPerStrip: true }, 0.25, 19, 30);
+    expect(per).toBeLessThan(one / 4);
+  });
+
+  it('keeps the column count continuous as each strip\'s sensor syncs it', () => {
+    const q = { ...p, hallPerStrip: true };
+    const segs = hallSegments(q, d, motion, 10, 11).filter((s) => s.enabled);
+    expect(new Set(segs.map((s) => Math.round((s.k! % 1) * 3))).size).toBe(3); // every strip's sensor syncs
+    for (const s of segs) for (let t = s.start; t < Math.min(s.end, 11); t += 0.002) {
+      const angle = 2 * Math.PI * (Math.floor(s.k! + 1e-9) + (t - s.m) / (s.P * q.columnsPerRev));
+      expect(Math.abs(angle - motion.phi(t))).toBeLessThan((2 * Math.PI) / q.columnsPerRev); // within a column
+    }
+  });
+
+  it('finds a magnetometer pass at the field peak, not at the next sample', () => {
+    const polled = deadReckoningError({ ...p, hallPollMs: 4 }, 0, 12, 18);
+    const peak = deadReckoningError({ ...p, hallSensor: 'magnetometer', magOdrHz: 1000 }, 0, 12, 18);
+    expect(polled).toBeGreaterThan(2);
+    expect(peak).toBeLessThan(0.1);
+  });
+
   it('turns the lights off once a stopped wheel times out, and only once', () => {
     const m = new WheelMotion();
     m.configure(10 * MPH, d.tireRadius, 0, 1, 0);

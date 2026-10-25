@@ -118,13 +118,17 @@ export class WheelMotion {
     return hi;
   }
 
-  /** Times in [t0, t1] at which the angle crosses a multiple of 2π (strip 0 passes the magnet). */
-  passes(t0: number, t1: number): number[] {
+  /**
+   * Times in [t0, t1] at which the angle crosses a multiple of 2π (strip 0 passes the magnet), or
+   * of 2π/n (one of n evenly spaced strips does).
+   */
+  passes(t0: number, t1: number, n = 1): number[] {
+    const step = TAU / n;
     const p0 = this.phi(t0), p1 = this.phi(t1);
     if (p1 - p0 < 1e-9) return [];
     const out: number[] = [];
-    for (let n = Math.ceil(p0 / TAU); n <= Math.floor(p1 / TAU) && out.length < 4096; n++) {
-      out.push(WheelMotion.solve((t) => this.phi(t), n * TAU, t0, t1));
+    for (let i = Math.ceil(p0 / step); i <= Math.floor(p1 / step) && out.length < 4096; i++) {
+      out.push(WheelMotion.solve((t) => this.phi(t), i * step, t0, t1));
     }
     return out;
   }
@@ -138,43 +142,89 @@ export interface Segment {
   P: number;        // column period; < 0 means columns are locked to true wheel angle
   enabled: boolean;
   // Dead reckoning (hall mode): the firmware believes the wheel is at angle
-  // 2π(k + (t - start)/T), i.e. k whole turns at the sync, advancing at the last measured rate.
+  // 2π(k + (t - ref)/T), i.e. k turns at the pass it synced to, advancing at the last measured
+  // rate. k is whole with one sensor; with one per strip it counts in steps of 1/strips. ref is
+  // when it believes that pass happened: when it saw it (a switch), or earlier for a magnetometer,
+  // which finds the field's peak only after it has gone by.
   T?: number;
   k?: number;
+  ref?: number;
+}
+
+/** A magnet pass as the firmware registers it: when it knew (at), and when it puts the pass (ref). */
+export interface Detection { at: number; ref: number }
+
+// Where the fork magnet meets the sensors: 40 mm from the axle, by the strips' inner ends, 5 mm gap.
+const SENSOR_R_M = 0.04;
+const MAG_GAP_M = 0.005;
+
+/**
+ * A magnetometer pass: the firmware samples the field at the output data rate, and once it
+ * falls again fits a parabola through the three samples around the maximum to put the pass
+ * between samples. The field is the magnet's near-dipole falloff, (gap² + x²)^-1.5.
+ */
+function magnetometerPass(p: Params, motion: WheelMotion, tc: number): Detection {
+  const dt = 1 / Math.max(1, p.magOdrHz);
+  const v = (motion.speed(tc) / motion.radius) * SENSOR_R_M;
+  const field = (t: number) => (MAG_GAP_M ** 2 + (v * (t - tc)) ** 2) ** -1.5;
+  const j = Math.round(tc / dt);
+  const b0 = field((j - 1) * dt), b1 = field(j * dt), b2 = field((j + 1) * dt);
+  const den = b0 - 2 * b1 + b2;
+  const off = den < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (b0 - b2)) / den)) : 0;
+  return { at: (j + 1) * dt, ref: (j + off) * dt };
+}
+
+/** Magnet passes per turn: one hall sensor, or one beside each strip (evenly spaced). */
+export function hallSensors(p: Params): number {
+  return p.hallPerStrip ? Math.max(1, p.stripCount) : 1;
 }
 
 /**
  * Hall-sensor firmware, modelled on the Adafruit CircuitPython code: poll the sensor, reject
  * passes closer than the debounce, use the last revolution time to set the column period,
  * arm after two passes within 1.5 s, go dark after max(2 s, 2.5 revs) with no pass.
+ * With a sensor per strip it knows which one fired, so each pass syncs it to that strip's
+ * place in the turn: the turn time comes from the last 1/N turn, and the column count jumps
+ * to where that strip's pass falls.
  */
 export function hallSegments(p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number): Segment[] {
   const valid = hallDetections(p, motion, tA - 5, tB);
   const segs: Segment[] = [];
-  const C = p.columnsPerRev;
+  const C = p.columnsPerRev, N = hallSensors(p);
   for (let i = 1; i < valid.length; i++) {
-    const T = valid[i] - valid[i - 1];
-    const start = valid[i];
+    const T = (valid[i].ref - valid[i - 1].ref) * N;
+    const start = valid[i].at, ref = valid[i].ref;
     const timeout = Math.max(2, 2.5 * T);
-    const end = Math.min(i + 1 < valid.length ? valid[i + 1] : Infinity, start + timeout);
+    const end = Math.min(i + 1 < valid.length ? valid[i + 1].at : Infinity, start + timeout);
     if (end < tA) continue;
     let P = T / C;
     if (p.minLinesPerSec > 0) P = Math.min(P, 1 / p.minLinesPerSec);
     P = Math.max(P, d.columnTimeS);
-    segs.push({ start, end, m: start, P, enabled: T <= 1.5, T, k: Math.round(motion.phi(start) / TAU) });
+    const pass = Math.round((motion.phi(ref) * N) / TAU); // passes since the start, in 1/N turns
+    const m = ref - Math.round((((pass % N) + N) % N) * C / N) * P; // when column 0 would have started
+    segs.push({ start, end, m, P, enabled: T <= 1.5, T, k: pass / N, ref });
   }
   return segs;
 }
 
-/** Magnet passes as the firmware registers them: delayed to the next poll, debounced. */
-export function hallDetections(p: Params, motion: WheelMotion, t0: number, t1: number): number[] {
+/**
+ * Magnet passes as the firmware registers them, debounced per sensor. A hall switch is seen at
+ * the next poll (or at once, on an interrupt) and taken as the pass; a magnetometer's pass is
+ * placed at the field's peak, known a sample later.
+ */
+export function hallDetections(p: Params, motion: WheelMotion, t0: number, t1: number): Detection[] {
   const poll = p.hallPollMs / 1000;
   const debounce = p.debounceMs / 1000;
-  const valid: number[] = [];
-  for (const m of motion.passes(t0, t1)) {
-    const det = poll > 0 ? Math.ceil(m / poll) * poll : m;
-    if (det > t1) break;
-    if (!valid.length || det - valid[valid.length - 1] >= debounce) valid.push(det);
+  const N = hallSensors(p);
+  const valid: Detection[] = [];
+  const last: number[] = [];
+  for (const m of motion.passes(t0, t1, N)) {
+    let det: Detection;
+    if (p.hallSensor === 'magnetometer') det = magnetometerPass(p, motion, m);
+    else { const at = poll > 0 ? Math.ceil(m / poll) * poll : m; det = { at, ref: at }; }
+    if (det.at > t1) break;
+    const sensor = ((Math.round((motion.phi(m) * N) / TAU) % N) + N) % N;
+    if (last[sensor] === undefined || det.at - last[sensor] >= debounce) { valid.push(det); last[sensor] = det.at; }
   }
   return valid;
 }
@@ -190,11 +240,11 @@ export function magnetAccel(p: Params, motion: WheelMotion, t: number): number {
   if (p.syncMode === 'free') return 0;
   const det = hallDetections(p, motion, t - 5, t);
   if (det.length < 3) return 0;
-  const [a, b, c] = det.slice(-3);
-  const T1 = b - a, T2 = c - b;
-  if (T1 > 1.5 || T2 > 1.5 || t - c > Math.max(2, 2.5 * T2)) return 0; // not armed / timed out
+  const [a, b, c] = det.slice(-3).map((x) => x.ref);
+  const N = hallSensors(p), T1 = (b - a) * N, T2 = (c - b) * N; // turn times
+  if (T1 > 1.5 || T2 > 1.5 || t - det[det.length - 1].at > Math.max(2, 2.5 * T2)) return 0; // not armed / timed out
   const R = motion.radius;
-  return (R * (TAU / T2 - TAU / T1)) / (0.5 * (T1 + T2));
+  return (R * (TAU / T2 - TAU / T1)) / (0.5 * (c - a));
 }
 
 /**
@@ -207,8 +257,8 @@ export function magnetOmega(p: Params, motion: WheelMotion, t: number): number {
   if (p.syncMode === 'free') return 0;
   const det = hallDetections(p, motion, t - 5, t);
   if (det.length < 2) return 0;
-  const T = det[det.length - 1] - det[det.length - 2];
-  if (T > 1.5 || t - det[det.length - 1] > Math.max(2, 2.5 * T)) return 0;
+  const T = (det[det.length - 1].ref - det[det.length - 2].ref) * hallSensors(p);
+  if (T > 1.5 || t - det[det.length - 1].at > Math.max(2, 2.5 * T)) return 0;
   return TAU / T;
 }
 
@@ -325,7 +375,7 @@ export function buildSlices(
     const omega = (motion.phi(t1) - p0) / (t1 - t0);
     let delta0 = 0, deltaRate = 0;
     if (seg?.T && seg.k !== undefined) {
-      delta0 = TAU * seg.k + (TAU * (t0 - seg.start)) / seg.T - p0;
+      delta0 = TAU * seg.k + (TAU * (t0 - (seg.ref ?? seg.start))) / seg.T - p0;
       deltaRate = TAU / seg.T - omega;
     }
     // Ride-by pins the banner to the visible track; chase pins it to distance travelled.
@@ -370,7 +420,7 @@ function frameStep(p: Params, anim: AnimSpec, motion: WheelMotion, seg: Segment 
   const C = p.columnsPerRev;
   let turns = 0;
   if (seg && seg.P < 0) turns = motion.phi(t) / TAU;
-  else if (seg?.k !== undefined) turns = seg.k + Math.min(Math.floor((t - seg.m) / seg.P), C - 1) / C;
+  else if (seg?.k !== undefined) turns = Math.floor(seg.k + 1e-9) + Math.min(Math.floor((t - seg.m) / seg.P), C - 1) / C;
   else if (seg) turns = Math.round(seg.m / (seg.P * C)) + Math.floor((t - seg.m) / seg.P) / C;
   return Math.floor(turns / Math.max(0.01, anim.revsPerFrame) + 1e-9);
 }

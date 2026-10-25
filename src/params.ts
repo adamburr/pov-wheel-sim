@@ -162,6 +162,9 @@ export function defaultParams() {
     minLinesPerSec: fw.minLinesPerSec,
     hallPollMs: fw.hallPollMs,
     debounceMs: fw.debounceMs,
+    hallPerStrip: false,      // a hall sensor beside each strip: a magnet pass every 1/strips turn
+    hallSensor: 'switch' as 'switch' | 'magnetometer', // switch: trips at a threshold; magnetometer: the field's peak is found
+    magOdrHz: 1000,           // magnetometer output data rate
     overflow: 'wrap' as 'wrap' | 'blank',
     predictMotion: true,      // banner mode: compute each update for mid-display time, not send time
     nextOnDark: true,         // switch to the next preset each time the lights go out (stopping)
@@ -265,7 +268,7 @@ export const DEVICE_KEYS = [
   'stripCount', 'ledDensity', 'ledPackage', 'dieMm', 'diffusionMm', 'stripStartMm', 'autoLength',
   'stripLengthMm', 'doubleSided', 'backData', 'radialStagger',
   'chip', 'ledType', 'clockMHz', 'lanes', 'overheadUs', 'pwmHz', 'gbPwmHz', 'batteryMah',
-  'firmware', 'python', 'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs',
+  'firmware', 'python', 'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs', 'hallPerStrip', 'hallSensor', 'magOdrHz',
   'overflow', 'predictMotion', 'nextOnDark', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
 ] as const satisfies readonly (keyof Params)[];
@@ -286,7 +289,7 @@ const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
   fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], pictureEdges: ['dark', 'mirror'], backSide: ['reads', 'mirror'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
   ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
   ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],
-  overflow: ['wrap', 'blank'],
+  overflow: ['wrap', 'blank'], hallSensor: ['switch', 'magnetometer'],
 };
 
 export function pick<K extends keyof Params>(p: Params, keys: readonly K[]): Pick<Params, K> {
