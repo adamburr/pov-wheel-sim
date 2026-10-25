@@ -162,7 +162,7 @@ export function defaultParams() {
     minLinesPerSec: fw.minLinesPerSec,
     hallPollMs: fw.hallPollMs,
     debounceMs: fw.debounceMs,
-    hallPerStrip: true,       // a hall sensor beside each strip: a magnet pass every 1/strips turn
+    hallPerStrip: false,      // a hall sensor beside each strip: a magnet pass every 1/strips turn
     hallSensor: 'switch' as 'switch' | 'magnetometer', // switch: trips at a threshold; magnetometer: the field's peak is found
     magOdrHz: 1000,           // magnetometer output data rate
     overflow: 'wrap' as 'wrap' | 'blank',
