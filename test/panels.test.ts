@@ -151,6 +151,45 @@ describe('worker transport', () => {
   });
 });
 
+describe('Baltic birch (SendCutSend .125")', () => {
+  const birch = (n: number) => {
+    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: n });
+    return designPanels(wheel, panel);
+  };
+
+  it('is the default, and two strips along the face grain pass every check but the (typical) fork', () => {
+    expect(defaultParams().panelMaterial).toBe('birch_125');
+    const d = birch(2), s = d.sides.LEFT.summary;
+    expect(s.blades.map((b) => b.grainDeg)).toEqual([0, 0]);
+    expect(s.sigmaOk).toBe(true);
+    expect(s.sigmaMaxMPa).toBeLessThanOrEqual(31);
+    expect(s.sigmaTargetMPa).toBe(33);
+    expect(s.sigmaHubSectionMPa).toBeLessThanOrEqual(31);
+    expect(s.clearanceOk).toBe(true);
+    expect(s.clampAfterCreepN).toBeCloseTo(s.clampForceOnHubN / 2, 0);
+    expect(s.partSizeIn[1]).toBeLessThanOrEqual(30);
+    expect(d.orderNote).toMatch(/face grain along the part's length/);
+    expect(d.warnings).toHaveLength(1);
+    expect(d.warnings[0]).toMatch(/fork/);
+  });
+
+  it('warns that blades across the grain bend unequally (3 strips) or overload the ones along it (4 strips)', () => {
+    const three = birch(3).sides.LEFT.summary;
+    expect(three.blades.map((b) => b.grainDeg)).toEqual([0, 60, 60]);
+    expect(three.blades[1].tipForceN).toBeLessThan(three.blades[0].tipForceN / 5);
+    expect(birch(3).warnings.some((w) => /bend unequally/.test(w))).toBe(true);
+    expect(birch(4).sides.LEFT.summary.sigmaOk).toBe(false);
+  });
+
+  it('isotropic materials stay the same every way', () => {
+    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: 3, panelMaterial: 'g10_063' });
+    const s = designPanels(wheel, panel).sides.LEFT.summary;
+    expect(new Set(s.blades.map((b) => b.tipForceN)).size).toBe(1);
+    expect(s.blades[0].grainDeg).toBeNull();
+    expect(s.clampAfterCreepN).toBeNull();
+  });
+});
+
 describe('shared settings', () => {
   it('designs from the simulator\'s settings, and points its strips at the panels', () => {
     const p = { ...defaultParams(), stripCount: 2 };

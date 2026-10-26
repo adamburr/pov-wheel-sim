@@ -1,11 +1,13 @@
 # LED panels: design notes
 
 Hardware for running the display on a real bicycle wheel: two identical flat-cut panels that clamp onto the
-front hub, one on each side, and carry the LED strips, battery and electronics. The app designs them in the
-**Panels** tab and writes the cut file.
+front hub, one on each side, and carry the LED strips. The battery and electronics attach to the hub. The
+app designs the panels in the **Panels** tab and writes the cut file.
 
 Target wheel: **700c front, 32 spokes, 3-cross, rim brake (no rotor)**.
-Final material: **G-10/FR-4, 1/16" (1.6 mm), waterjet cut** (SendCutSend).
+Material: **Baltic birch plywood, .125" (3.18 mm), laser cut by SendCutSend**, with **2 strips** per side so
+both blades run along the face grain (see [Baltic birch](#baltic-birch)). G-10/FR-4 1/16" (waterjet) also works,
+with any of the layouts.
 
 > **Status: not yet verified on the bike.** Only the bore (1.5") and the tip radius (11.75") are measured.
 > Every other wheel and fork dimension is a *typical value*. Read [Before you order](#before-you-order).
@@ -51,7 +53,7 @@ The panels' own settings are part of the setup file:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| Material | G-10 1/16" | See [Materials](#materials) |
+| Material | Baltic birch 1/8" | See [Materials](#materials) |
 | Tip radius | 298.45 mm | Radius of the tip end on the wheel (measured 11.75"); 0 = just inside the rim wall |
 | Bore Ø | 38.1 mm | Centre hole (measured 1.5") |
 | Nipple slot | every tip | Slot in the tip end for a spoke nipple |
@@ -60,7 +62,9 @@ The panels' own settings are part of the setup file:
 | Holes every N pixels | 2 | Tie holes along the blade |
 | Hole to edge, to bore | 4.0, 3.0 mm | Minimum material from a hole to the outer edge, and to the bore |
 | Corner radius | 2.0 mm | On every outline corner |
-| Plate half width, length, taper columns | 41.3, 48 mm, 4 | Electronics plate (snapped to the hole grid) |
+| Blade width at centre | 75 mm | The blade tapers straight from this to the tip width (27 mm) |
+| Plate half width, length, taper columns | 55.3, 20 mm, 1 | Hub plate: a wide, short plate round the bore that carries the bending through the hub (snapped to the hole grid) |
+| Holes beside the bore | off | Holes on the line through the bore; they weaken the hub section |
 | Spoke crosses, flange hole circle, centre to flange, over-locknut | 3, 44, 35, 100 mm | Hub (typical) |
 | Fork crown radius, half-width at crown | 340, 22 mm | Fork (typical, straight legs) |
 
@@ -75,14 +79,64 @@ every blade like a leaf spring. The reaction from that bending clamps both panel
 them centred. Nothing else holds them.
 
 **Assembly**
-1. Zip-tie the battery and electronics to the left panel's plate (inner face).
+1. Fit the battery and electronics to the hub.
 2. Fit the LED strips on the outer faces. Ties go across the strip, between pixels.
 3. Slide the left panel over the hub, then the right panel. Line each tip up between two spokes, or over a
    spoke for the 3-blade layout (see below).
 4. Tie each pair of tips together through the outermost hole pair.
 5. Connect the strips to the electronics.
 
+## Baltic birch
+
+SendCutSend's .125" Baltic birch is 3-ply (3.18 mm, B/BB, laser cut, ±0.005"). Plywood is far stiffer and stronger
+along its face grain. For 4 mm 3-ply birch, [Metsä Wood's declaration of performance](https://www.metsagroup.com/globalassets/metsa-wood/dop-documents/dop_metsa_wood_birch_plywood_muf_2019-12-2_en.pdf)
+gives:
+
+| | Along the face grain | Across |
+|---|---|---|
+| Bending stiffness (mean) | 16 471 MPa | 1 029 MPa |
+| Bending strength (characteristic) | 65.9 MPa | 10.6 MPa |
+| Stress target: permanent load, 0.6 × strength / 1.2 (Eurocode 5) | 33.0 MPa | 5.3 MPa |
+
+Blades at other angles follow Hankinson's formula. The bent shape doesn't depend on stiffness, so each blade's
+tip force and stress scale with its stiffness along its own direction.
+
+- **Use 2 strips.** Only the 2-blade part has every blade along the grain. With 3 strips the two blades at 60° to
+  the grain push 1.1 N against the first one's 13.5 N, so the panel clamps the hub unevenly and tilts on it. With
+  4 strips the two blades along the grain carry nearly all the clamp, and they and the hub section are
+  overstressed (49 MPa).
+- **Order note:** SendCutSend doesn't say how it lays parts on the sheet. Ask for the face grain along the part's
+  length (along the blades), and check the face veneer when the parts arrive. The cut file has the length along Y.
+- **The blade shape is close to the limit.** A blade this thick, bent this far over this span, carries at least
+  about δ·E·t / L² ≈ 38 mm × 16 471 MPa × 3.18 mm / (265 mm)² ≈ 29 MPa, whatever its shape. The design reaches
+  30.1 MPa in the blade and 30.0 MPa in the hub section. That's why the hub plate is wide (110.6 mm) and short,
+  the blades are 75 mm wide at the centre, and no holes sit beside the bore: each moves stress off whichever
+  section was worst.
+- **Creep:** under the tie preload, plywood creeps and the clamp relaxes to about half (k_def 1.0, service class
+  2), from 27 N to 13.5 N. That still holds the panels down to 11 g sideways. Seal the panels: Baltic birch isn't
+  weatherproof, and wet plywood creeps more.
+- **Cutting:** every web is 2.03 mm (0.08") or more, SendCutSend's minimum for unsupported features. The holes
+  are 4.6 mm, and the part (4.36 × 23.77 in) is well inside their 30 × 44 in limit. Expect dark edges where the
+  laser burns the glue lines.
+- **Fork:** the panel is 1.6 mm thicker than G-10, so its outer face and the LED strip stand 1.6 mm further out.
+  On the typical fork the strip plus a tie band hits the fork leg by 0.7 mm at r ≈ 84 mm. The bare panel clears
+  it by 4.6 mm. No blade shape fixes this; measure the fork (see [Before you order](#before-you-order)).
+
+| Baltic birch, 2 strips | |
+|---|---|
+| Part | 4.36 × 23.77 in (110.7 × 603.6 mm), 120 holes, 62.8 g |
+| Blade | 301.8 mm from the centre flat, 298.4 mm bent; 75 → 27 mm wide |
+| Hub plate | 110.6 mm wide, 44.4 mm long, tapering to the blade by r = 29.9 mm |
+| Tip force | 13.5 N per tip (zip ties: 80 N or more) |
+| Clamp on the hub | 27 N, about 13.5 N once crept |
+| Stress | 30.1 MPa blade, 30.0 MPa hub section (target 33.0) |
+| Spokes | 2.34 mm gap, no collisions |
+| LEDs | 39 per blade, r 22.7–293.9 mm |
+
 ## Geometry
+
+The numbers in this section and the next are for the original G-10 layout: 2-, 3- and 4-blade, with a hole grid
+for electronics on the plate (plate 82.6 × 100.8 mm, blades 56.1 mm wide at the centre).
 
 Every edge is a straight line with a rounded corner (R2.0 mm on the outline, R1.0 mm on the holes, about R1.8 mm
 in the slot). The only curve is the centre bore. Every blade has identical geometry, so both panels flex the
@@ -92,7 +146,7 @@ same way and the tips meet on the centre line.
 - **Length and taper:** each blade runs 301.8 mm from the centre when flat. Bending shortens it by 3.3 mm, so
   the tip end lands at 298.4 mm, the measured 11.75". The arm tapers from 56.1 mm wide at the centre to 27 mm
   at the tip.
-- **Electronics plate:** 82.6 mm wide, running 50.4 mm out from the centre. It then tapers over 71.1 mm to the
+- **Plate:** 82.6 mm wide, running 50.4 mm out from the centre. It then tapers over 71.1 mm to the
   plain blade. The taper is fitted to the holes: its edge clears the 4th hole column of the second row by
   exactly 4 mm.
 - **Nipple slot:** every tip has a slot 5.0 mm wide and 3.7 mm deep, open at the tip end. When a tip lands on a
@@ -182,12 +236,12 @@ in-plane stress the beam model doesn't capture. Stresses are well under the limi
 | Key | Material | Thickness | E | Stress target | Use |
 |---|---|---|---|---|---|
 | `g10_063` | G-10/FR-4 | 1.6 mm | 18 GPa | 60 MPa | Final, waterjet |
-| `birch_125` | Baltic birch plywood | 3.175 mm | 9 GPa | 25 MPa (short-term) | Prototype, laser; blades along the face grain |
+| `birch_125` | Baltic birch plywood (SendCutSend .125", 3-ply) | 3.18 mm | 16.5 GPa along the face grain, 1.0 GPa across | 33.0 MPa along, 5.3 MPa across (permanent load) | Laser; blades along the face grain, 2 strips |
 | `hardboard_125` | Hardboard | 3.175 mm | 4.5 GPa | 15 MPa (short-term) | Prototype, laser |
 | `delrin_125` | Delrin 150 | 3.175 mm | 2.9 GPa | 20 MPa | Laser |
 
-These are typical material values, not tested ones. The prototype targets are short-term, about a third of typical
-bending strength. Use prototypes for fit checks only.
+These are typical material values, not tested ones. The hardboard and Delrin targets are short-term, about a third
+of typical bending strength: use them for fit checks only.
 
 ## Before you order
 
@@ -224,3 +278,6 @@ bending strength. Use prototypes for fit checks only.
 - Ported from the Python generator (shapely, ezdxf, matplotlib) to TypeScript and built into the simulator's
   Panels tab, sharing its build settings. The results match the Python version's to its rounding; cut files
   are DXF R12.
+- Baltic birch from SendCutSend: plywood is modelled along and across its face grain (Metsä Wood's 3-ply values,
+  Eurocode 5 permanent-load targets, creep). Two strips with both blades along the grain; a wide, short hub plate,
+  wider blade roots and no holes beside the bore bring the stress to 30 MPa. The electronics moved to the hub.

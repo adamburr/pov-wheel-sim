@@ -16,7 +16,7 @@ interface Scene { prims: Prim[]; snaps: Pt[]; bounds: [Pt, Pt]; xScale: number; 
 
 const C = {
   bg: '#0b0e15', grid: '#161b26', gridText: '#4b5466', part: '#1c2330', edge: '#c5cfdd', hole: '#8d98aa',
-  dim: '#6fb3ff', led: '#ff9f1c', angle: '#c08cff', sensor: '#b07cd8', red: '#ff5a67', measure: '#ffd166',
+  dim: '#6fb3ff', grain: '#c9a26b', led: '#ff9f1c', angle: '#c08cff', sensor: '#b07cd8', red: '#ff5a67', measure: '#ffd166',
   text: '#d8dde6', muted: '#8b93a3', spokeIn: '#8a949c', spokeOut: '#c08a2c', spokeOther: '#262c38',
 };
 const SECTION_X = 3; // lateral exaggeration of the side section
@@ -57,6 +57,10 @@ function flatScene(d: PanelDesign, s: SideResult): Scene {
     }
   }
   prims.push({ k: 'text', at: [E * 0.6, 0], text: `LED strip lane ${mmIn(pp.stripW)}`, color: C.led });
+  if (pp.ETrans) { // plywood: the face grain runs along blade 1
+    const y = g.star ? g.plateLW![1] + 40 : Math.max(g.hw(0), g.plateLW?.[1] ?? 0) + 36;
+    prims.push({ k: 'dim', a: [-E * 0.9, y], b: [-E * 0.45, y], off: 0, text: 'face grain', color: C.grain });
+  }
   dim([E, -wt / 2], [E, wt / 2], -12, `tip ${mmIn(wt)}`);
   dim([xs.at(-1)! + hole / 2, yr + hole / 2 + 1], [E, yr + hole / 2 + 1], 9, `gap ${mmIn(sm.gapLastHoleToEndMm)}`);
   if (xs.length >= 4) dim([xs.at(-4)!, yr], [xs.at(-3)!, yr], 12 + hole / 2, `pitch ${mmIn(step, 2)}`);

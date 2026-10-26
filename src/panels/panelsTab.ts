@@ -47,10 +47,12 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
   holes.add(p, 'panelEdgeMm', 1, 10, 0.1).name('Hole to edge (mm)');
   holes.add(p, 'panelBoreEdgeMm', 0.5, 10, 0.1).name('Hole to bore (mm)');
   holes.add(p, 'panelCornerMm', 0.5, 10, 0.1).name('Corner radius (mm)');
-  const plate = gui.addFolder('Electronics plate').close();
-  plate.add(p, 'panelPlateHalfWidthMm', 15, 80, 0.1).name('Half width (mm)');
+  const plate = gui.addFolder('Blade and hub plate').close();
+  plate.add(p, 'panelBladeWidthMm', 40, 140, 1).name('Blade width at centre (mm)');
+  plate.add(p, 'panelPlateHalfWidthMm', 15, 80, 0.1).name('Plate half width (mm)');
   plate.add(p, 'panelPlateLengthMm', 10, 120, 1).name('Length from centre (mm)');
   plate.add(p, 'panelTaperCols', 0, 10, 1).name('Taper over N hole columns');
+  plate.add(p, 'panelCenterHoles').name('Holes beside the bore');
   const hub = gui.addFolder('Hub and fork (typical values)').close();
   hub.add(p, 'spokeCrosses', 0, 4, 1).name('Spoke crosses');
   hub.add(p, 'hubFlangePcdMm', 30, 80, 0.5).name('Flange hole circle Ø (mm)');
@@ -67,7 +69,8 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
     actions.innerHTML = d ? `
       <button type="button" class="primary" data-act="cut" title="SendCutSend-ready: inches, one layer, closed outlines">⬇ Cut file${d.identical ? '' : 's'} (DXF, inches)</button>
       <button type="button" data-act="ref" title="Both panels in mm, with LED strips, sensors and labels. Not for cutting.">Reference DXF (mm)</button>
-      <button type="button" data-act="report" title="Every computed number">Report (JSON)</button>` : '';
+      <button type="button" data-act="report" title="Every computed number">Report (JSON)</button>
+      ${d.orderNote ? `<p class="hint order-note">📝 Order note: ${esc(d.orderNote)}</p>` : ''}` : '';
     if (!PANEL_STRIPS.includes(p.stripCount)) {
       summary.innerHTML = `<p class="hint">The panels come with 2, 3 or 4 blades per side, one per strip. The hardware has ${p.stripCount} strips: pick 2–4 below.</p>`;
       return;
@@ -77,6 +80,12 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
       return;
     }
     const L = d.sides.LEFT.summary, R = d.sides.RIGHT.summary, pp = d.spec;
+    // which way the governing blade runs on plywood
+    const grainAt = (s: typeof L) => {
+      if (!pp.ETrans) return '';
+      const deg = s.blades.find((b) => b.sigmaMPa === s.sigmaMaxMPa)?.grainDeg ?? 0;
+      return deg ? `, ${deg}° to the grain` : ', along the grain';
+    };
     const fc = (L.forkClearance.minMm <= R.forkClearance.minMm ? L : R).forkClearance;
     const th = L.tieHeadsInside;
     const rows: [string, string][] = [
@@ -87,13 +96,14 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
       ['Mass', `${L.massG} g per panel`],
       ['Blades', `${d.arms.map((a) => `${a.toFixed(2)}°`).join(', ')}`],
       ['LEDs', `${L.ledsPerStrip} per blade, r ${L.ledStartR}–${L.ledEndR} mm`],
-      ['Bending', `tip force ${L.tipForceN} N · clamp ${L.clampForceOnHubN} N`],
-      ['Stress', `${Math.max(L.sigmaMaxMPa, R.sigmaMaxMPa)} MPa (target ≤ ${pp.sigmaAllow})`],
+      ['Bending', `tip force ${[...new Set(L.blades.map((b) => b.tipForceN))].join(' / ')} N · clamp ${L.clampForceOnHubN} N`
+        + (L.clampAfterCreepN !== null ? ` (${L.clampAfterCreepN} N once crept)` : '')],
+      ['Stress', `${L.sigmaMaxMPa} MPa (target ≤ ${L.sigmaTargetMPa}${grainAt(L)})`],
       ['Spokes', `${Math.min(L.spokeClearance.minGapMm, R.spokeClearance.minGapMm)} mm gap · tips ${R.spokeClearance.tipsSideClearMm} mm sideways`
         + ` · ${L.spokeClearance.collisionPoints + R.spokeClearance.collisionPoints} collisions`],
       ['Fork', `${fc.minMm} mm (${fc.governedBy}) · bare panel ${Math.min(L.forkClearance.panelFaceMm, R.forkClearance.panelFaceMm)} mm`],
       ['Tie heads', th.nMoveOutside ? `${th.nMoveOutside} go on the outer face (at r ${[...new Set(th.moveOutside.map((m) => m.r))].join(', ')} mm)` : 'all fit on the inner face'],
-      ['Shake', `${d.lateralGBeforeAPanelLifts} g sideways before a panel lifts`],
+      ['Shake', `${d.lateralGBeforeAPanelLifts} g sideways before a panel lifts${d.lateralGAfterCreep !== null ? ` (${d.lateralGAfterCreep} g once crept)` : ''}`],
     ];
     const notes = [d.spacingNote, d.rimNote,
       d.tipSlot ? `Nipple slot ${d.tipSlot.widthMm} wide × ${d.tipSlot.depthMm} mm deep in ${pp.tipSlot === 'all' ? 'every tip' : 'the tips'} (from the assumed rim and nipple: confirm).` : '',

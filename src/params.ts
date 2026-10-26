@@ -134,7 +134,7 @@ export function defaultParams() {
 
     // Panels: the flat-cut LED supports that clamp onto the hub (see src/panels). Strips, LED
     // density, spokes and the rim come from the settings above.
-    panelMaterial: 'g10_063',
+    panelMaterial: 'birch_125', // SendCutSend .125" Baltic birch, face grain along the blades
     panelBoreMm: 38.1,        // centre hole (measured 1.5")
     panelTipRadiusMm: 298.45, // radius of the blade tips on the wheel (measured 11.75"); 0 = just inside the rim
     panelTipSlot: 'all' as 'all' | 'auto' | 'none', // nipple slot in the tips: always, only when a tip sits on a spoke, or never
@@ -146,9 +146,12 @@ export function defaultParams() {
     panelEdgeMm: 4,           // minimum material from a hole to the outer edge
     panelBoreEdgeMm: 3,       // ...and to the bore
     panelCornerMm: 2,         // radius on every outline corner
-    panelPlateHalfWidthMm: 41.3, // electronics plate half-width (snapped to the hole grid)
-    panelPlateLengthMm: 48,   // full-width plate length from the centre (snapped to the hole grid)
-    panelTaperCols: 4,        // the plate's taper carries this many columns of the second hole row
+    panelBladeWidthMm: 75,    // blade width at the centre, tapering straight to the tip
+    // A wide, short plate round the bore carries the bending through the hub (the electronics go on the hub).
+    panelPlateHalfWidthMm: 55.3, // plate half-width (snapped to the hole grid)
+    panelPlateLengthMm: 20,   // full-width plate length from the centre (snapped to the hole grid)
+    panelTaperCols: 1,        // the plate's taper carries this many columns of the second hole row
+    panelCenterHoles: false,  // holes on the line through the bore (they weaken the hub section)
     spokeCrosses: 3,          // lacing
     hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
     hubFlangeOffsetMm: 35,    // hub centre to each flange (typical)
@@ -298,7 +301,7 @@ export const DEVICE_KEYS = [
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
   'panelMaterial', 'panelBoreMm', 'panelTipRadiusMm', 'panelTipSlot', 'panelStripWidthMm', 'panelStripThickMm',
   'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelBoreEdgeMm', 'panelCornerMm',
-  'panelPlateHalfWidthMm', 'panelPlateLengthMm', 'panelTaperCols', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
+  'panelBladeWidthMm', 'panelPlateHalfWidthMm', 'panelPlateLengthMm', 'panelTaperCols', 'panelCenterHoles', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
   'hubOldMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];

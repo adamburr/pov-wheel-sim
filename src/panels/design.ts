@@ -19,7 +19,7 @@ import {
   adiff, box, type BulgePt, ccw, clamp, cleanRing, convexHull, deg, densify, filletRing, outlineOf, pmod, pointInRing, pointSegDist, pol,
   type Pt, rad, rectPts, Ring, rot, rotRing, segSegDist,
 } from './geom';
-import { type Material, MATERIALS } from './materials';
+import { atGrain, type Material, MATERIALS } from './materials';
 import { type Spoke, Wheel, type WheelSpec } from './wheel';
 
 export { MATERIALS };
@@ -65,6 +65,8 @@ export interface PanelSpec {
   forkCrownR: number; forkCrownHalf: number; minForkClear: number; // straight fork blades, dropouts (OLD/2) to crown
 }
 
+// The original G-10 layout, which the tests hold the generator to. The app starts from its own
+// defaults (params.ts), set for SendCutSend's Baltic birch.
 export const PANEL_DEFAULTS: PanelSpec = {
   strips: 2, evenSpacing: true, sandwichOk: true, nippleD: 4, tipSlot: 'all', tipSlotW: null, tipSlotClear: 1,
   material: 'g10_063',
@@ -798,8 +800,10 @@ export interface SideResult {
     ledStartR: number; ledEndR: number; boreD: number; wCenter: number; wTip: number;
     flatArmEndRho: number; bentArmEndR: number; bendShorteningMm: number; partSizeIn: [number, number]; partSizeMm: [number, number];
     holesPerBlade: number[] | null; holesDroppedWhereBladesMeet: number | null;
-    areaCm2: number; massG: number; tipForceN: number; clampForceOnHubN: number;
-    sigmaMaxMPa: number; sigmaOk: boolean; stressAlongArm: [number, number][]; sigmaHubSectionMPa: number; netWidthAtHubMm: number;
+    areaCm2: number; massG: number; tipForceN: number; clampForceOnHubN: number; clampAfterCreepN: number | null;
+    /** Each blade: its angle on the wheel and to the face grain, tip force, peak stress and stress target there. */
+    blades: { deg: number; grainDeg: number | null; tipForceN: number; sigmaMPa: number; targetMPa: number }[];
+    sigmaMaxMPa: number; sigmaTargetMPa: number; sigmaOk: boolean; stressAlongArm: [number, number][]; sigmaHubSectionMPa: number; netWidthAtHubMm: number;
     contact: { r: number; zInnerFace: number };
     spokeClearance: Clearances; clearanceOk: boolean;
     room: ReturnType<typeof roomTable>; dropoutClearAtHub: number;
@@ -830,6 +834,10 @@ export interface PanelDesign {
   identical: boolean;
   imbalanceGmmPerPanel: number;
   lateralGBeforeAPanelLifts: number;
+  /** The same once creep has relaxed the clamp (materials that creep). */
+  lateralGAfterCreep: number | null;
+  /** What to tell the cutter, beyond the file (plywood: the face grain direction). */
+  orderNote: string;
   sim: { stripCount: number; ledDensity: number; stripStartMm: number; stripLengthMm: number; ledEndR: number; evenlySpaced: boolean };
   warnings: string[];
 }
@@ -926,6 +934,15 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     const fc = forkClearance(c);
     const [cutRot, size] = bestCutRot(g);
     const area = shapeArea(g);
+    // Plywood: the face grain runs along blade 1; every blade's stiffness and strength follow its angle
+    // to the grain. The bent shape doesn't depend on stiffness, so a blade's tip force and stress scale with it.
+    const blades = g.arms.map((a) => {
+      const off = pmod(a - g.arms[0], 180), grainDeg = Math.min(off, 180 - off);
+      const k = atGrain(pp, grainDeg), scale = k.E / pp.E;
+      return { deg: r2(a), grainDeg: pp.ETrans ? r1(grainDeg) : null, F: m.F * scale, tipForceN: r2(m.F * scale), sigmaMPa: r1(m.sigmaMax * scale), targetMPa: r1(k.sigmaAllow) };
+    });
+    const worst = blades.reduce((b, x) => (x.sigmaMPa / x.targetMPa > b.sigmaMPa / b.targetMPa ? x : b));
+    const clampN = blades.reduce((sum, b) => sum + b.F, 0);
     return {
       label, side, g, m, cutRot,
       summary: {
@@ -938,8 +955,11 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
         partSizeIn: [r2(size[0] / 25.4), r2(size[1] / 25.4)], partSizeMm: [r1(size[0]), r1(size[1])],
         holesPerBlade: g.holesPerBlade ?? null, holesDroppedWhereBladesMeet: g.holesDropped ?? null,
         areaCm2: r1(area / 100), massG: r1((area * t * pp.density) / 1000),
-        tipForceN: r2(m.F), clampForceOnHubN: r1(m.clampN),
-        sigmaMaxMPa: r1(m.sigmaMax), sigmaOk: m.sigmaMax <= pp.sigmaAllow, stressAlongArm: m.sigmaAt,
+        tipForceN: Math.max(...blades.map((b) => b.tipForceN)), clampForceOnHubN: r1(clampN),
+        clampAfterCreepN: pp.creep ? r1(clampN / (1 + pp.creep)) : null,
+        blades: blades.map(({ F: _F, ...b }) => b),
+        sigmaMaxMPa: worst.sigmaMPa, sigmaTargetMPa: worst.targetMPa, sigmaOk: blades.every((b) => b.sigmaMPa <= b.targetMPa),
+        stressAlongArm: m.sigmaAt,
         sigmaHubSectionMPa: r1(m.sigmaHub), netWidthAtHubMm: r1(g.netWCenter),
         contact: { r: m.rContact, zInnerFace: r2(m.zContact) },
         spokeClearance: cl, clearanceOk: cl.minGapMm >= pp.minSpokeClear && cl.collisionPoints === 0,
@@ -960,7 +980,15 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   const perSide = (s: SideResult) => {
     const out: string[] = [], sm = s.summary, sc = sm.spokeClearance;
     if (!sm.clearanceOk) out.push(`spoke clearance ${sc.minGapMm} mm is under ${pp.minSpokeClear} mm (arms ${sc.armsMinGapMm}, tips sideways ${sc.tipsSideClearMm}${sc.collisionPoints ? `, ${sc.collisionPoints} collision points` : ''}). Don't cut this layout.`);
-    if (!sm.sigmaOk) out.push(`bending stress ${sm.sigmaMaxMPa} MPa is over the ${pp.sigmaAllow} MPa target for ${pp.label}.`);
+    if (!sm.sigmaOk) {
+      out.push(`bending stress ${sm.sigmaMaxMPa} MPa is over the ${sm.sigmaTargetMPa} MPa target for ${pp.label}`
+        + `${pp.ETrans ? ` (blade at ${sm.blades.find((b) => b.sigmaMPa === sm.sigmaMaxMPa)?.grainDeg ?? 0}° to the face grain)` : ''}.`);
+    }
+    const fs = sm.blades.map((b) => b.tipForceN);
+    if (Math.max(...fs) > 1.5 * Math.min(...fs)) {
+      out.push(`the blades bend unequally (tip forces ${fs.join(' / ')} N): ${pp.label} is ${Math.round(pp.E / (pp.ETrans ?? pp.E))}× stiffer `
+        + 'along its face grain than across, so the panel clamps the hub unevenly and tilts on it. Use 2 strips: both blades then run along the grain.');
+    }
     const fc = sm.forkClearance;
     if (!sm.forkOk) {
       out.push(`${fc.governedBy} ${fc.minMm < 0 ? `hits the (typical) fork by ${-fc.minMm} mm` : `clears the (typical) fork by only ${fc.minMm} mm`}`
@@ -970,7 +998,17 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   };
   // one warning for both panels when they say the same
   const wl = perSide(L), wr = perSide(R);
-  const warnings = [...wl.map((w) => (wr.includes(w) ? `Both panels: ${w}` : `LEFT: ${w}`)), ...wr.filter((w) => !wl.includes(w)).map((w) => `RIGHT: ${w}`)];
+  const made: string[] = []; // what the cutter can make
+  if (pp.minFeature) {
+    const step = pp.holesEvery * pp.ledPitch, hole = pp.tieW + pp.tieClear;
+    const webs: [string, number][] = [['hole to edge', pp.gridEdge], ['hole to bore', pp.boreEdge], ['between holes along the blade', step - hole],
+      ['between hole rows', pitchY(pp) - hole], ['hole', hole], ...(pp.slot ? [['nipple slot', pp.slot[0]] as [string, number]] : [])];
+    for (const [what, v] of webs) if (v < pp.minFeature) made.push(`${what} is ${r2(v)} mm: under the ${pp.minFeature} mm the cutter makes reliably in ${pp.label}.`);
+  }
+  if (pp.maxPartIn && (L.summary.partSizeIn[0] > pp.maxPartIn[0] || L.summary.partSizeIn[1] > pp.maxPartIn[1])) {
+    made.push(`the part (${L.summary.partSizeIn.join(' × ')} in) is larger than ${pp.maxPartIn.join(' × ')} in, the largest the cutter takes in ${pp.label}.`);
+  }
+  const warnings = [...made,...wl.map((w) => (wr.includes(w) ? `Both panels: ${w}` : `LEFT: ${w}`)), ...wr.filter((w) => !wl.includes(w)).map((w) => `RIGHT: ${w}`)];
   const evenly = new Set(arms.map((a, i) => r3(pmod(arms![(i + 1) % arms!.length] - a, 360)))).size === 1;
   return {
     name, spec: pp, wheel: wh, material: `${pp.label} (${pp.role})`, rimNote, spacingNote, arms,
@@ -983,6 +1021,10 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     tipSlot, tipsMeetAtZMm: r2(zM), sides: { LEFT: L, RIGHT: R }, identical: sig(L.g) === sig(R.g),
     imbalanceGmmPerPanel: Math.round(Math.hypot(vx, vy) * armMass * 0.4 * L.g.rhoEnd),
     lateralGBeforeAPanelLifts: r1(clamp_ / (pairMass * 9.81)),
+    lateralGAfterCreep: pp.creep ? r1(clamp_ / (1 + pp.creep) / (pairMass * 9.81)) : null,
+    orderNote: pp.ETrans
+      ? `${pp.label} is much stiffer and stronger along its face grain: ask for the face grain along the part's ${arms.length === 2 ? 'length (along the blades)' : 'blade 1'}, and check it when the parts arrive.`
+      : '',
     sim: {
       stripCount: pp.strips, ledDensity: Math.round(1000 / pp.ledPitch),
       stripStartMm: Math.round(R.summary.ledStartR), stripLengthMm: Math.round(R.summary.ledEndR - R.summary.ledStartR),
