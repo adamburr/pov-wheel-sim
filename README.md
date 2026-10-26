@@ -64,6 +64,7 @@ Two views show the same moment and the same animation. The main view follows the
 | **Hardware** | The build: wheel size, LED type, strip count and density, controller chip, firmware and battery, with every timing value under Details |
 | **Simulator** | How the simulation looks and rides: camera side, human eye or camera shutter, the roadside strip's position and exposure, units, pedal surge, rendering. Not part of the setup |
 | **Stats** | Live build stats: rpm, column timing, resolution, refresh rate, RAM, current draw and battery life, with warnings for common pitfalls |
+| **Panels** | The flat-cut panels that clamp onto the hub and hold the strips: a drawing of the part (pan, zoom, measure), its strength and clearance checks, and the cut file for a waterjet or laser. See [LED panels](#led-panels) |
 
 ### Presets
 
@@ -74,6 +75,10 @@ To show your own picture, set **Show** to *Image / video* and pick a file with t
 ### Setups
 
 A setup is the hardware build plus all the presets. It saves automatically in the browser, uploaded images included, and comes back when you open the page again (a new tab, a link or a bookmark). Reloading the page, plainly or forced, starts over from the defaults instead, like **Reset**. **Save** downloads it as a `.json` file with images embedded, **Open** (or dropping the file on the page) loads one, and **Reset** puts everything back to the defaults: the hardware, the built-in presets and the simulator settings. The setup file is also what a future version will flash to the wheel's controller.
+
+### LED panels
+
+To build the wheel, two identical flat-cut panels clamp onto the hub, one each side, and carry the strips and electronics: a star of tapered blades, one per strip, whose tips are zip-tied to each other near the rim so the blades bend like leaf springs and clamp the panels on. The **Panels** tab designs them from the same build as the simulator (strips, LEDs / m, spokes, rim, magnet sensors) plus their own settings (material, bore, tip radius, holes, plate, hub and fork). While it's open, the main area shows the part instead of the ride: flat as cut with its dimensions, bent on the wheel over the spokes, or a side section through the axle. Drag to pan, scroll or pinch to zoom, double-click to fit, and **📏 Measure** between snapped points. The tab lists the part size, mass, forces, stress and clearances, with a warning for any check that fails, and writes the **cut file** (DXF, inches, ready for SendCutSend), a reference drawing and a full report. **Use in simulator** points the simulator's strips at where the panels hold the LEDs. [docs/panels.md](docs/panels.md) has the design notes and what to measure before you order.
 
 ### Changing the defaults
 
@@ -199,4 +204,5 @@ LED PWM rates vary between datasheets and clone parts, so every value filled in 
 - `src/sim/`: LED bus timing, wheel kinematics, hall-sensor firmware model, stats
 - `src/image/`: test patterns, image loading, conversion to the firmware column buffer
 - `src/render/`: POV integration shader, wheel model with motion blur, HDR/bloom, camera
-- `test/`: unit tests for timing, the PWM integral, the firmware model, presets and setup files
+- `src/panels/`: the LED panel generator (laced-wheel model, flat geometry, bending, clearance checks), its worker, DXF output, the drafting view and the Panels tab
+- `test/`: unit tests for timing, the PWM integral, the firmware model, presets and setup files, and the panel design

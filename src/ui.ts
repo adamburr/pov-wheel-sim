@@ -5,8 +5,9 @@ import {
 } from './params';
 import type { PresetStore } from './presets';
 import { defaultDevice } from './defaults';
+import { buildPanelsTab, type PanelsTab } from './panels/panelsTab';
 
-export type Tab = 'presets' | 'hardware' | 'simulator' | 'stats';
+export type Tab = 'presets' | 'hardware' | 'simulator' | 'stats' | 'panels';
 
 export interface UiHooks {
   store: PresetStore;
@@ -17,6 +18,8 @@ export interface UiHooks {
   /** A hardware value changed in p; `key` is the property, when known. */
   onDeviceEdit: (key?: string) => void;
   onViewChange: () => void;
+  /** The main area switched between the ride and the panels' drawing. */
+  onShowPanels: (shown: boolean) => void;
   onUpload: (file: File) => void;
   onResetSetup: () => void;
   onOpenSetup: (file: File) => void;
@@ -33,7 +36,11 @@ export interface Ui {
   /** Size of the open panel (ignoring its slide-in animation), or undefined while closed. */
   panelSize: () => { w: number; h: number } | undefined;
   isSheet: () => boolean;
-  openTab: (tab: Tab) => void;
+  /** Show a tab; `open` also opens the settings panel. */
+  openTab: (tab: Tab, open?: boolean) => void;
+  /** The Panels tab is selected: the main area shows the panels' drawing instead of the ride. */
+  panelsShown: () => boolean;
+  panels: PanelsTab;
   pickMedia: () => void;
   /** Show a short message on the page (instead of alert(), which some browsers never show). */
   notify: (message: string) => void;
@@ -316,7 +323,14 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   }, 'reset').name('↺ Reset simulator settings');
   sg.onChange(() => queueMicrotask(refresh));
 
-  const guis = [pg, hg, sg];
+  // ---------- Panels tab: the flat-cut LED supports, drawn in the main area while this tab is open ----------
+  const panels = buildPanelsTab(p, document.querySelector<HTMLElement>('[data-pane="panels"]')!, (key) => {
+    if (key === 'stripCount') applyElectronics(p);
+    hooks.onDeviceEdit(key);
+    refresh();
+  });
+
+  const guis = [pg, hg, sg, panels.gui];
 
   /** Show only the controls that matter for the current choices. */
   function syncVisibility() {
@@ -411,11 +425,16 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     $('panel-toggle').setAttribute('aria-expanded', String(open));
     hooks.onLayout();
   }
-  function openTab(t: Tab) {
+  function openTab(t: Tab, open = true) {
+    const wasPanels = tab === 'panels';
     tab = t;
     for (const b of document.querySelectorAll<HTMLElement>('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === t));
     for (const pane of document.querySelectorAll<HTMLElement>('[data-pane]')) pane.hidden = pane.dataset.pane !== t;
-    if (!isOpen()) setOpen(true);
+    if ((t === 'panels') !== wasPanels) {
+      document.body.classList.toggle('view-panels', t === 'panels');
+      hooks.onShowPanels(t === 'panels');
+    }
+    if (open && !isOpen()) setOpen(true);
   }
   for (const b of document.querySelectorAll<HTMLElement>('[data-tab]')) b.onclick = () => openTab(b.dataset.tab as Tab);
   $('panel-toggle').onclick = () => setOpen(!isOpen());
@@ -446,6 +465,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     }
     syncVisibility();
     renderPresets();
+    panels.refresh();
   }
   refresh();
 
@@ -456,6 +476,8 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     panelSize: () => (isOpen() ? { w: panel.offsetWidth, h: panel.offsetHeight } : undefined),
     isSheet: () => sheetQuery.matches,
     openTab,
+    panelsShown: () => tab === 'panels',
+    panels,
     pickMedia: () => mediaInput.click(),
     notify,
     guis,

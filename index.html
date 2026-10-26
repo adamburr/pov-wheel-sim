@@ -56,7 +56,7 @@
       #panel header button:hover, .preset-actions button:hover { background: #262d42; }
       #panel-close { margin-left: auto; padding: 6px 10px !important; }
       #panel nav { display: flex; border-bottom: 1px solid var(--line); }
-      #panel nav button { flex: 1; padding: 10px 4px; font-size: 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; }
+      #panel nav button { flex: 1; padding: 10px 2px; font-size: 14px; white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; }
       #panel nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
       .pane { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; }
       #panel footer { flex: none; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; }
@@ -89,6 +89,50 @@
       @media (pointer: coarse) {
         #panel header button, .preset-actions button, #preset-list button, #ride button { min-height: 40px; }
         #preset-list button:not(.pick) { min-width: 40px; }
+      }
+
+      /* Panels: the drawing takes the main area while the Panels tab is open; the ride and its views step aside. */
+      #panels-view { position: fixed; inset: 0; display: none; background: #0b0e15; touch-action: none; user-select: none; }
+      #panels-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      body.view-panels #panels-view { display: block; }
+      body.view-panels.panel-open #panels-view { right: var(--panel-w); }
+      body.view-panels #app, body.view-panels #ride, body.view-panels #strip-frame, body.view-panels #buffer { visibility: hidden; }
+      .pv-bar { position: absolute; z-index: 1; top: 10px; left: 10px; right: 150px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .pv-bar button { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #3a4152; background: var(--panel); cursor: pointer; white-space: nowrap; }
+      .pv-bar button:hover { background: #1b2030; }
+      .pv-bar button[aria-pressed="true"] { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
+      .pv-group { display: inline-flex; }
+      .pv-group[hidden] { display: none; }
+      .pv-group button { border-radius: 0; margin-left: -1px; }
+      .pv-group button:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
+      .pv-group button:last-child { border-radius: 0 8px 8px 0; }
+      .pv-title, .pv-hint, .pv-readout, .pv-status { position: absolute; z-index: 1; left: 12px; pointer-events: none; }
+      .pv-title { top: 52px; right: 12px; font-size: 13px; font-weight: 600; }
+      .pv-hint { top: 72px; right: 12px; color: var(--muted); }
+      .pv-readout { bottom: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .pv-status { top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 10px 14px; border-radius: 10px; background: var(--panel); font-size: 14px; }
+      .pv-status[hidden] { display: none; }
+      .pv-status.over { top: auto; bottom: 12px; transform: translateX(-50%); font-size: 13px; color: var(--muted); }
+      .panels-summary { padding: 4px 12px 0; font-size: 13px; }
+      .panels-summary .hint { margin: 8px 0 0; }
+      .panels-summary table.kv { border-collapse: collapse; width: 100%; margin-top: 8px; }
+      .panels-summary .kv td { padding: 2px 0; vertical-align: top; }
+      .panels-summary .kv td:first-child { color: var(--muted); white-space: nowrap; padding-right: 10px; }
+      .panels-summary ul.warn { margin: 8px 0 0; padding-left: 16px; color: var(--warn); }
+      .panels-summary .warn { color: var(--warn); }
+      .panels-sim { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #161a24; }
+      .panels-sim button { display: block; margin-top: 6px; }
+      .panels-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+      .panels-actions:empty { display: none; }
+      .panels-summary button { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #3a4152; background: #1b2030; cursor: pointer; }
+      .panels-summary button:hover { background: #262d42; }
+      .panels-summary button.primary { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
+      .panels-summary button.primary:hover { background: #24497a; }
+      @media (max-width: 699px) {
+        body.view-panels.panel-open #panels-view { right: 0; bottom: 62dvh; }
+        .pv-bar { right: 110px; }
+        .pv-bar button { padding: 5px 8px; font-size: 12px; }
+        .pv-title, .pv-hint { display: none; }
       }
 
       /* lil-gui inside the tabs: full width, no title bar of its own, larger text. 'body' outranks lil-gui's own rules. */
@@ -126,6 +170,7 @@
         <button type="button" role="tab" data-tab="hardware">Hardware</button>
         <button type="button" role="tab" data-tab="simulator">Simulator</button>
         <button type="button" role="tab" data-tab="stats">Stats</button>
+        <button type="button" role="tab" data-tab="panels" title="The flat-cut panels that hold the strips on the hub">Panels</button>
       </nav>
       <div class="pane" data-pane="presets" role="tabpanel">
         <ol id="preset-list"></ol>
@@ -146,8 +191,17 @@
       <div class="pane" data-pane="stats" role="tabpanel">
         <div id="stats"></div>
       </div>
+      <div class="pane" data-pane="panels" role="tabpanel">
+        <p class="hint">Two flat-cut panels clamp onto the hub and hold the strips. Strips, LEDs / m, spokes, the rim and the magnet sensors come from the Hardware tab.</p>
+        <div class="panels-summary panels-actions"></div>
+        <div class="section">Panel build</div>
+        <div class="gui"></div>
+        <div class="section">Result</div>
+        <div class="panels-summary panels-result"></div>
+      </div>
       <footer><a href="https://github.com/adamburr/pov-wheel-sim" target="_blank" rel="noopener">Source on GitHub ↗</a></footer>
     </aside>
+    <div id="panels-view" aria-label="Panel drawing"></div>
     <div id="toast" role="status" hidden></div>
     <div id="drop">Drop an image, clip or setup file</div>
     <script type="module" src="/src/main.ts"></script>

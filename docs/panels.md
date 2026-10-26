@@ -1,7 +1,8 @@
-# POV wheel LED panels — design notes and generator
+# LED panels: design notes
 
-Hardware for running the **pov-wheel-sim** display on a real bicycle wheel: two identical flat-cut panels
-that clamp onto the front hub, one on each side, and carry the LED strips, battery and electronics.
+Hardware for running the display on a real bicycle wheel: two identical flat-cut panels that clamp onto the
+front hub, one on each side, and carry the LED strips, battery and electronics. The app designs them in the
+**Panels** tab and writes the cut file.
 
 Target wheel: **700c front, 32 spokes, 3-cross, rim brake (no rotor)**.
 Final material: **G-10/FR-4, 1/16" (1.6 mm), waterjet cut** (SendCutSend).
@@ -9,22 +10,59 @@ Final material: **G-10/FR-4, 1/16" (1.6 mm), waterjet cut** (SendCutSend).
 > **Status: not yet verified on the bike.** Only the bore (1.5") and the tip radius (11.75") are measured.
 > Every other wheel and fork dimension is a *typical value*. Read [Before you order](#before-you-order).
 
----
+## Using the Panels tab
 
-## Contents of this bundle
+Open **⚙️ Settings → Panels**. The main area switches to a drawing of the part (**← Ride** goes back):
 
-| Path | What it is |
+- **Flat part**: the part as cut, with the dimensions needed to check or rebuild it.
+- **On the wheel**: the bent panel seen from the right, over every spoke, with the LED strips and magnetometer
+  boards. *Left* / *Right* picks the panel.
+- **Side section**: a section through the axle with all the spokes, both panels bent by the tip ties, the
+  flanges, the fork and the rim (lateral scale ×3).
+
+Drag to pan, scroll or pinch to zoom, and double-click (or press **F**) to fit. **📏 Measure** (or **M**)
+measures between two clicked points, snapping to outline corners, hole corners and hole centres; **Esc** stops.
+
+The tab shows the result (part size, holes, mass, LEDs, forces, stress and clearances, with a warning for any
+check that fails) and the downloads:
+
+| Download | What it is |
 |---|---|
-| `README.md` | This file |
-| `pov_panels.py` | The generator: geometry, bending model, clearance checks, DXF and preview output |
-| `wheel3x.py` | 3D model of a laced wheel (spoke paths, crossings, interlace), used by the checks |
-| `out/700c_32h3x_{2,3,4}strips_g10_063/` | One folder per layout (2, 3 or 4 LED strips per side) |
-| `…_panel_QTY2_cut_in.dxf` | **The cut file.** Inches, one layer, closed outlines. Order **2** (left and right are the same part) |
-| `…_reference_mm.dxf` | Both panels in mm with LED lines and labels. For reference only, **do not cut** |
-| `…_preview.png` | Panels on the wheel (plan), side section with all 32 spokes, dimensioned flat part, summary numbers |
-| `…_report.json` | Every computed number: geometry, forces, stresses, clearances, settings for the simulator |
+| **Cut file (DXF, inches)** | `…_panel_QTY2_cut_in.dxf`. Inches, one layer, closed outlines. Order **2** (left and right are the same part). If the two panels ever differ, it writes a LEFT and a RIGHT file instead |
+| **Reference DXF (mm)** | Both panels in mm with LED lines, sensor boards and labels. For reference only, **do not cut** |
+| **Report (JSON)** | Every computed number: geometry, forces, stresses, clearances, and settings for the simulator |
 
----
+**Use in simulator** points the simulator's strips at where the panels hold the LEDs: their start radius and
+length, and a shallower rim when the outer LEDs need one.
+
+### Shared settings
+
+The panels use the same build as the simulator. From the **Hardware** tab:
+
+| Setting | Used for |
+|---|---|
+| *Strips* | Blades per side (the panels come with 2, 3 or 4). Also under Panels |
+| *LEDs / m* | Pixel pitch: the tie holes sit every *Holes every N pixels* LEDs, between pixels |
+| *Spokes* | The laced wheel model |
+| *Wheel size*, *Rim BSD*, *Rim depth* | The rim's inner wall (BSD/2 − depth) and the spoke ends (ERD = 2 × (wall radius + 4 mm)). When the measured tips don't fit inside that wall, the rim is assumed just outside them |
+| *Sync*, *Sensor per strip* | Magnetometer boards under the left panel's blades: one per strip, or one in all |
+
+The panels' own settings are part of the setup file:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Material | G-10 1/16" | See [Materials](#materials) |
+| Tip radius | 298.45 mm | Radius of the tip end on the wheel (measured 11.75"); 0 = just inside the rim wall |
+| Bore Ø | 38.1 mm | Centre hole (measured 1.5") |
+| Nipple slot | every tip | Slot in the tip end for a spoke nipple |
+| Strip width, thickness | 14, 4 mm | Strip in its sleeve (Adafruit 2241) |
+| Tie width, hole clearance | 3.6, 1.0 mm | Tie strap and hole clearance: the holes are square, 4.6 mm |
+| Holes every N pixels | 2 | Tie holes along the blade |
+| Hole to edge, to bore | 4.0, 3.0 mm | Minimum material from a hole to the outer edge, and to the bore |
+| Corner radius | 2.0 mm | On every outline corner |
+| Plate half width, length, taper columns | 41.3, 48 mm, 4 | Electronics plate (snapped to the hole grid) |
+| Spoke crosses, flange hole circle, centre to flange, over-locknut | 3, 44, 35, 100 mm | Hub (typical) |
+| Fork crown radius, half-width at crown | 340, 22 mm | Fork (typical, straight legs) |
 
 ## How it works
 
@@ -59,7 +97,7 @@ same way and the tips meet on the centre line.
   exactly 4 mm.
 - **Nipple slot:** every tip has a slot 5.0 mm wide and 3.7 mm deep, open at the tip end. When a tip lands on a
   spoke, the nipple sits in the slots of both panels. The slot bottom is 1 mm inside the nipple's inner end.
-  Change it with `tip_slot` (`all` / `auto` / `none`).
+  Change it with *Nipple slot* (every tip, only a tip on a spoke, or none).
 - **3- and 4-blade parts:** straight edges join the corners of neighbouring plates around the hub, so no
   narrow slots are left between blades.
 
@@ -81,7 +119,7 @@ same way and the tips meet on the centre line.
 - **Innermost tie on each blade (r ≈ 30 mm):** the head would hit the spokes, so put it on the outer face
   beside the strip. It stands lower than the strip.
 - **3-blade layout:** one extra position also needs the head outside (r ≈ 44 mm on the blade at 296°).
-  `report.json → tie_heads_inside.move_outside` lists every such position.
+  The report's `sides.LEFT.tieHeadsInside.moveOutside` lists every such position.
 
 ## Layouts (G-10)
 
@@ -101,13 +139,16 @@ tip slots.
 - **Cost:** at the ties the spoke is about 1.8 mm off the centre plane, so that tip pair sits slightly
   off-centre. The other two tips clear their spokes by 3.4 mm sideways.
 
-## The model (what `pov_panels.py` computes)
+## The model
 
-1. **Wheel** (`wheel3x.py`). A 32-hole, 3-cross lacing with holes alternating between flanges, heads-in and
+The generator is [`src/panels/design.ts`](../src/panels/design.ts); it runs in a worker, so the page stays
+responsive while it works (most of a second per design).
+
+1. **Wheel** (`src/panels/wheel.ts`). A 32-hole, 3-cross lacing with holes alternating between flanges, heads-in and
    heads-out faces, and interlacing at the outermost cross. Spokes run straight from the flange to the rim. The
    modelled rim sits just outside the measured tip.
 2. **Tip angles.** Tips go exactly 360°/N apart, rotated so they get the most room between spokes. If even
-   spacing can't clear the spokes (3 strips), one tip is centred on a spoke instead (`sandwich_ok`).
+   spacing can't clear the spokes (3 strips), one tip is centred on a spoke instead (`sandwichOk`).
 3. **Flat geometry.**
    - Build the reference blade: hole grid, plate snapped to the grid, grid pushed to the tip, taper fitted.
    - Repeat it around the hub and add the hub plate.
@@ -127,43 +168,14 @@ tip slots.
    - Outer side against the fork: the bare panel face, and the LED strip plus a tie band over it (4.0 + 1.27 mm).
    - Tie heads on the inner face against the spokes.
 6. **Output.**
-   - The cut DXF is rotated to its smallest bounding box. It contains only LWPOLYLINEs with arc bulges, plus
-     one CIRCLE for the bore, all on layer 0, in inches.
-   - Also written: the reference DXF, the preview and the report.
+   - The cut DXF is rotated to its smallest bounding box. It is DXF R12 (read by every CAD and CAM tool, and by
+     SendCutSend): closed POLYLINEs whose bulges make every fillet a true arc, plus one CIRCLE for the bore, all
+     on layer 0, in inches.
+   - Also written: the reference DXF and the report.
 
 **Not modelled:** with 3 or 4 blades the hub area has to dish slightly, like a shallow cone, which adds some
 in-plane stress the beam model doesn't capture. Stresses are well under the limit, but treat the 3- and
 4-blade margins as less certain than the 2-blade one.
-
-## Running it
-
-Requires Python 3 with `shapely`, `ezdxf` and `matplotlib`.
-
-```bash
-python3 pov_panels.py --all                       # G-10, 2, 3 and 4 strips -> out/
-python3 pov_panels.py --strips 3                  # one layout
-python3 pov_panels.py --material hardboard_125    # prototype material (also birch_125, delrin_125)
-python3 pov_panels.py --size 650b --strips 2      # other wheel sizes: 700c, 29in, 650b, 26in, 24in, 20in
-python3 pov_panels.py --set led_pitch=7.0 tip_slot=none pcd_left=45 pcd_right=45
-```
-
-`--set key=value` overrides any `WHEEL`, `PANEL` or material key. These are the ones you're most likely to change:
-
-| Key | Default | Meaning |
-|---|---|---|
-| `bore_d` | 38.1 | Centre hole (measured 1.5") |
-| `tip_end_r` | 298.45 | Radius of the tip end on the wheel (measured 11.75") |
-| `led_pitch` | 6.944 | Pixel pitch; tie holes every `holes_every` pixels |
-| `strip_w`, `strip_t` | 14, 4 | Strip in its sleeve (Adafruit 2241) |
-| `tie_w`, `tie_t`, `tie_clear` | 3.6, 1.27, 1.0 | Tie strap and hole clearance |
-| `grid_edge`, `bore_edge` | 4.0, 3.0 | Minimum material from a hole to the edge / to the bore |
-| `plate_half_w`, `plate_len`, `plate_taper_cols` | 41.3, 48, 4 | Electronics plate (snapped to the hole grid) |
-| `tip_slot`, `nipple_d`, `tip_slot_clear` | all, 4.0, 1.0 | Nipple slot |
-| `pcd_left/right`, `c2f_left/right`, `old` | 44, 35, 100 | Hub (typical) |
-| `fork_crown_r`, `fork_crown_half`, `min_fork_clear` | 340, 22, 3 | Fork (typical, straight legs) |
-| `material` | g10_063 | `g10_063`, `birch_125`, `hardboard_125`, `delrin_125` |
-
-The console prints a summary line per layout and a **WARNING** for any check that fails.
 
 ## Materials
 
@@ -209,3 +221,6 @@ bending strength. Use prototypes for fit checks only.
 - 2-, 3- and 4-blade layouts with a hub plate. Three blades at an even 120°, with one tip sandwiching a spoke.
 - Nipple slot in every tip. Fork check now includes the strip and tie band; tie-head check added. Cut files
   rotated to the smallest bounding box.
+- Ported from the Python generator (shapely, ezdxf, matplotlib) to TypeScript and built into the simulator's
+  Panels tab, sharing its build settings. The results match the Python version's to its rounding; cut files
+  are DXF R12.

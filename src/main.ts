@@ -19,6 +19,9 @@ import { PovDisplay } from './render/povMaterial';
 import { WheelModel } from './render/wheelGeometry';
 import { createPost } from './render/post';
 import { createCamera, createStripCamera, placeCamera, placeStripCamera, setFreeArea } from './render/camera';
+import { PanelDrawing } from './panels/drawing';
+import { type PackedDesign, unpackDesign } from './panels/transport';
+import { PANEL_STRIPS, panelInputs, panelKey } from './panels/fromParams';
 
 // The saved setup: the hardware build and the presets (the active one is loaded into p).
 // Reloading the page (plainly or forced) starts over from the defaults, like Reset; opening it
@@ -215,6 +218,7 @@ const hooks = {
   },
   onDeviceEdit: (key?: string) => {
     saveDevice(storage, p);
+    if (ui?.panelsShown()) updatePanels();
     // The import limits decide how an uploaded clip is decoded, so decode it again.
     if ((key === 'maxFrames' || key === 'videoFps') && p.useMedia) {
       clearTimeout(reloadTimer);
@@ -273,6 +277,10 @@ const hooks = {
     placeCamera(camera, controls, p, derive(p));
   },
   isAnimated: () => source.frames.length > 1,
+  onShowPanels: (shown: boolean) => {
+    history.replaceState(null, '', shown ? '#panels' : location.pathname + location.search);
+    if (shown) updatePanels(); else hooks.onLayout();
+  },
 };
 
 // ---- Riding: stop-and-go automation and the speed readout ----
@@ -304,6 +312,50 @@ function updateRidePanel(actualMps: number) {
 }
 ui = buildUi(p, hooks);
 loadSource();
+
+// ---- Panels: the flat-cut supports for the strips, designed while their tab is open ----
+// A design takes most of a second, so a worker does it, one at a time, always on the latest settings.
+const drawing = new PanelDrawing(document.getElementById('panels-view')!, () => ui!.openTab('presets', false));
+const designer = new Worker(new URL('./panels/worker.ts', import.meta.url), { type: 'module' });
+let designKey = '';
+let designing = 0; // id of the request in progress (0: none)
+let designQueued = false;
+let designId = 0;
+function sendDesign() {
+  designQueued = false;
+  designing = ++designId;
+  designer.postMessage({ id: designing, ...panelInputs(p) });
+}
+designer.onmessage = (e: MessageEvent<{ id: number; design?: PackedDesign; error?: string }>) => {
+  if (e.data.id !== designing) return;
+  designing = 0;
+  if (designQueued) { sendDesign(); return; } // the settings changed meanwhile
+  if (e.data.design) {
+    const d = unpackDesign(e.data.design);
+    ui!.panels.show({ design: d });
+    drawing.setDesign(d);
+  } else {
+    const msg = `Couldn't design the panels: ${e.data.error}`;
+    ui!.panels.show({ error: msg });
+    drawing.setDesign(undefined, msg);
+  }
+};
+function updatePanels() {
+  const key = panelKey(p);
+  if (key === designKey) return;
+  designKey = key;
+  if (!PANEL_STRIPS.includes(p.stripCount)) {
+    const msg = `The panels come with 2, 3 or 4 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
+    designQueued = false;
+    designing = 0; // a design still running is for other settings
+    ui!.panels.show({ error: msg });
+    drawing.setDesign(undefined, msg);
+    return;
+  }
+  ui!.panels.show({ busy: true });
+  drawing.setDesign(undefined, 'Designing…');
+  if (designing) designQueued = true; else sendDesign();
+}
 // Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
 Object.assign(window, { povSim: { p, ui, store, hooks, camera, controls } });
 
@@ -400,6 +452,7 @@ window.addEventListener('resize', resize);
 window.addEventListener('load', resize); // fonts can change the speed panel's height
 resize();
 placeCamera(camera, controls, p, derive(p));
+if (location.hash === '#panels') ui.openTab('panels'); // a link straight to the panels
 
 const night = new THREE.Color(0x05070d), dusk = new THREE.Color(0x34405c), day = new THREE.Color(0x9db8d8);
 const bg = new THREE.Color();
@@ -412,6 +465,8 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  // The panels' drawing covers the ride: keep the sim still and skip rendering it meanwhile.
+  if (ui!.panelsShown()) { updatePanels(); return; }
   if (!p.paused) simTime += dt * p.timeScale;
 
   const d = derive(p);

@@ -1,5 +1,6 @@
 // Single source of truth for every tunable value. The UI writes here, the sim and renderer read.
 // Preset tables only seed these values; every seeded value stays editable afterwards.
+import { MATERIALS } from './panels/materials';
 
 export interface WheelPreset { bsdMm: number; tireMm: number; spokes: number }
 export const WHEELS: Record<string, WheelPreset> = {
@@ -130,6 +131,30 @@ export function defaultParams() {
     doubleSided: true,
     backData: 'independent' as 'same' | 'independent', // independent: each side has its own strips and data
     radialStagger: false,
+
+    // Panels: the flat-cut LED supports that clamp onto the hub (see src/panels). Strips, LED
+    // density, spokes and the rim come from the settings above.
+    panelMaterial: 'g10_063',
+    panelBoreMm: 38.1,        // centre hole (measured 1.5")
+    panelTipRadiusMm: 298.45, // radius of the blade tips on the wheel (measured 11.75"); 0 = just inside the rim
+    panelTipSlot: 'all' as 'all' | 'auto' | 'none', // nipple slot in the tips: always, only when a tip sits on a spoke, or never
+    panelStripWidthMm: 14,    // LED strip in its sleeve (Adafruit 2241)
+    panelStripThickMm: 4,
+    panelTieWidthMm: 3.6,     // zip tie strap; holes are square, tie width + clearance
+    panelTieClearMm: 1,
+    panelHolesEvery: 2,       // tie holes every N pixels
+    panelEdgeMm: 4,           // minimum material from a hole to the outer edge
+    panelBoreEdgeMm: 3,       // ...and to the bore
+    panelCornerMm: 2,         // radius on every outline corner
+    panelPlateHalfWidthMm: 41.3, // electronics plate half-width (snapped to the hole grid)
+    panelPlateLengthMm: 48,   // full-width plate length from the centre (snapped to the hole grid)
+    panelTaperCols: 4,        // the plate's taper carries this many columns of the second hole row
+    spokeCrosses: 3,          // lacing
+    hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
+    hubFlangeOffsetMm: 35,    // hub centre to each flange (typical)
+    hubOldMm: 100,            // over-locknut width
+    forkCrownRadiusMm: 340,   // where the fork legs meet the crown, from the axle (typical)
+    forkCrownHalfMm: 22,      // half the inside width at the crown (typical)
 
     // Ride
     speedUnit: 'mph' as 'mph' | 'km/h',
@@ -271,6 +296,10 @@ export const DEVICE_KEYS = [
   'firmware', 'python', 'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs', 'hallPerStrip', 'hallSensor', 'magOdrHz',
   'overflow', 'predictMotion', 'nextOnDark', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
+  'panelMaterial', 'panelBoreMm', 'panelTipRadiusMm', 'panelTipSlot', 'panelStripWidthMm', 'panelStripThickMm',
+  'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelBoreEdgeMm', 'panelCornerMm',
+  'panelPlateHalfWidthMm', 'panelPlateLengthMm', 'panelTaperCols', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
+  'hubOldMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];
 
@@ -290,6 +319,7 @@ const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
   ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
   ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],
   overflow: ['wrap', 'blank'], hallSensor: ['switch', 'magnetometer'],
+  panelMaterial: Object.keys(MATERIALS), panelTipSlot: ['all', 'auto', 'none'],
 };
 
 export function pick<K extends keyof Params>(p: Params, keys: readonly K[]): Pick<Params, K> {
