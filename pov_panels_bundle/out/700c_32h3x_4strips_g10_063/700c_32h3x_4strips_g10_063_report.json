@@ -1,0 +1,755 @@
+{
+ "name": "700c_32h3x_4strips_g10_063",
+ "material": "G-10/FR-4 1/16\" (final, waterjet)",
+ "rim_note": "rim wall assumed at r = 301.8 mm (just outside the measured tip): measure M2/M23 to confirm",
+ "wheel_TYPICAL": {
+  "spokes": 32,
+  "crosses": 3,
+  "erd": 611.5103430067131,
+  "rim_wall_r": 301.75517150335656,
+  "nipple_exposed": 6.0,
+  "rim_offset": 0.0,
+  "offset_drill": 0.0,
+  "pcd_left": 44.0,
+  "pcd_right": 44.0,
+  "c2f_left": 35.0,
+  "c2f_right": 35.0,
+  "flange_t": 2.8,
+  "flange_outer_extra": 4.5,
+  "hole_d": 2.6,
+  "spoke_d": 2.0,
+  "head_h": 2.0,
+  "old": 100.0,
+  "interlace_len": 35.0,
+  "hub_end_d": 26.0
+ },
+ "wheel_check": {
+  "left_flange_holes_unique": true,
+  "left_crossings_per_spoke": [
+   3
+  ],
+  "left_spoke_len_model": [
+   299.9,
+   300.2
+  ],
+  "left_spoke_len_formula": 298.8,
+  "left_outermost_cross_r": [
+   80
+  ],
+  "right_flange_holes_unique": true,
+  "right_crossings_per_spoke": [
+   3
+  ],
+  "right_spoke_len_model": [
+   299.9,
+   300.2
+  ],
+  "right_spoke_len_formula": 298.8,
+  "right_outermost_cross_r": [
+   80
+  ]
+ },
+ "panel": {
+  "strips": 4,
+  "even_spacing": true,
+  "sandwich_ok": true,
+  "nipple_d": 4.0,
+  "tip_slot": "all",
+  "tip_slot_w": null,
+  "tip_slot_clear": 1.0,
+  "material": "g10_063",
+  "strip_w": 14.0,
+  "strip_t": 4.0,
+  "led_pitch": 6.944444444444445,
+  "bore_d": 38.1,
+  "tip_end_r": 298.45,
+  "w_center": 50.0,
+  "hub_w": 8.0,
+  "corner_r": 2.0,
+  "tip_clear": 3.0,
+  "tie_w": 3.6,
+  "tie_t": 1.27,
+  "tie_head": [
+   6.0,
+   5.9,
+   4.3
+  ],
+  "tie_clear": 1.0,
+  "holes_every": 2,
+  "grid_edge": 4.0,
+  "bore_edge": 3.0,
+  "grid_strip_gap": 1.5,
+  "rows_on_strip_edges": true,
+  "strip_start_gap": 3.0,
+  "plate": true,
+  "plate_side": "both",
+  "plate_half_w": 41.3,
+  "grid_pitch_y": null,
+  "center_col": true,
+  "push_out": true,
+  "plate_len": 48.0,
+  "plate_taper": 60.0,
+  "plate_taper_end": 149.6,
+  "plate_taper_cols": 4,
+  "sensor": true,
+  "sensor_side": -1,
+  "sensor_r": 110.0,
+  "sensor_board": [
+   25.4,
+   17.8
+  ],
+  "min_spoke_clear": 1.0,
+  "fork_crown_r": 340.0,
+  "fork_crown_half": 22.0,
+  "min_fork_clear": 3.0,
+  "label": "G-10/FR-4 1/16\"",
+  "role": "final, waterjet",
+  "thickness": 1.6,
+  "E": 18000.0,
+  "density": 1.85,
+  "sigma_allow": 60.0,
+  "cut_corner_r": 1.0,
+  "_slot": [
+   5.0,
+   3.69
+  ]
+ },
+ "arm_angles_deg": [
+  39.4,
+  129.4,
+  219.4,
+  309.4
+ ],
+ "arm_spacing_deg": [
+  90.0,
+  90.0,
+  90.0,
+  90.0
+ ],
+ "tips_between_holes": [
+  [
+   3,
+   4
+  ],
+  [
+   11,
+   12
+  ],
+  [
+   19,
+   20
+  ],
+  [
+   27,
+   28
+  ]
+ ],
+ "valve_deg": -5.625,
+ "spacing_note": "",
+ "sides": {
+  "LEFT": {
+   "leds_per_strip": 39,
+   "holes_per_row": 20,
+   "hole_pitch_mm": 13.89,
+   "hole_row_offset_mm": 7.0,
+   "cutouts_dropped": 0,
+   "grid_shift_out_mm": 2.41,
+   "gap_first_hole_to_bore_mm": 9.4,
+   "gap_last_hole_to_end_mm": 5.46,
+   "led_start_r": 23.0,
+   "led_end_r": 293.9,
+   "bore_d": 38.1,
+   "w_center": 56.1,
+   "w_tip": 27,
+   "flat_arm_end_rho": 301.8,
+   "bent_arm_end_r": 298.4,
+   "bend_shortening_mm": 3.39,
+   "part_size_in": [
+    17.48,
+    17.48
+   ],
+   "holes_per_blade": [
+    54,
+    54,
+    54,
+    54
+   ],
+   "holes_dropped_where_blades_meet": 0,
+   "area_cm2": 482.0,
+   "mass_g": 142.7,
+   "tip_force_N": 1.76,
+   "clamp_force_on_hub_N": 7.0,
+   "sigma_max_MPa": 25.5,
+   "sigma_ok": true,
+   "stress_along_arm": [
+    [
+     22,
+     13.6
+    ],
+    [
+     30,
+     13.2
+    ],
+    [
+     38,
+     12.8
+    ],
+    [
+     46,
+     12.4
+    ],
+    [
+     54,
+     12.3
+    ],
+    [
+     62,
+     12.5
+    ],
+    [
+     70,
+     12.8
+    ],
+    [
+     78,
+     13.1
+    ],
+    [
+     86,
+     13.5
+    ],
+    [
+     94,
+     13.9
+    ],
+    [
+     102,
+     14.4
+    ],
+    [
+     110,
+     15.0
+    ],
+    [
+     118,
+     15.7
+    ],
+    [
+     126,
+     15.7
+    ],
+    [
+     134,
+     15.3
+    ],
+    [
+     142,
+     14.8
+    ],
+    [
+     150,
+     14.2
+    ],
+    [
+     158,
+     13.7
+    ],
+    [
+     166,
+     13.1
+    ],
+    [
+     174,
+     12.6
+    ],
+    [
+     182,
+     12.0
+    ],
+    [
+     190,
+     11.3
+    ],
+    [
+     198,
+     10.7
+    ],
+    [
+     206,
+     10.0
+    ],
+    [
+     214,
+     9.3
+    ],
+    [
+     222,
+     8.6
+    ],
+    [
+     230,
+     7.8
+    ],
+    [
+     238,
+     7.0
+    ],
+    [
+     246,
+     6.1
+    ],
+    [
+     254,
+     5.2
+    ],
+    [
+     262,
+     4.3
+    ],
+    [
+     270,
+     3.3
+    ],
+    [
+     278,
+     2.3
+    ],
+    [
+     286,
+     1.2
+    ],
+    [
+     294,
+     0.0
+    ]
+   ],
+   "sigma_hub_section_MPa": 25.5,
+   "net_width_at_hub_mm": 44.0,
+   "contact": {
+    "r": 22.0,
+    "z_inner_face": 38.4
+   },
+   "spoke_clearance": {
+    "seat_min_gap_mm": 1.06,
+    "arms_min_gap_mm": 2.31,
+    "tips_min_gap_mm": null,
+    "collision_points": 0,
+    "tips_side_clear_mm": 11.5,
+    "min_gap_mm": 2.31
+   },
+   "clearance_ok": true,
+   "room": {
+    "40": {
+     "panel_to_spokes": 3.8,
+     "outer_face_z": 39.5
+    },
+    "60": {
+     "panel_to_spokes": 5.6,
+     "outer_face_z": 38.6
+    },
+    "80": {
+     "panel_to_spokes": 6.9,
+     "outer_face_z": 37.3
+    },
+    "100": {
+     "panel_to_spokes": 7.8,
+     "outer_face_z": 35.7
+    },
+    "130": {
+     "panel_to_spokes": 8.3,
+     "outer_face_z": 32.5
+    },
+    "160": {
+     "panel_to_spokes": 7.8,
+     "outer_face_z": 28.3
+    },
+    "200": {
+     "panel_to_spokes": 5.9,
+     "outer_face_z": 21.4
+    },
+    "240": {
+     "panel_to_spokes": 2.8,
+     "outer_face_z": 13.4
+    },
+    "270": {
+     "panel_to_spokes": -0.1,
+     "outer_face_z": 6.9
+    }
+   },
+   "dropout_clear_at_hub": 10.0,
+   "fork_clearance": {
+    "min_mm": 0.8,
+    "governed_by": "LED strip + tie band",
+    "panel_face_mm": 6.0,
+    "led_strip_mm": 0.8,
+    "stack_on_face_mm": 5.27,
+    "where": {
+     "r": 90.9,
+     "strip_outer_z": 41.7,
+     "fork_z": 42.5
+    }
+   },
+   "fork_ok": false,
+   "tie_heads_inside": {
+    "head_mm": [
+     6.0,
+     5.9,
+     4.3
+    ],
+    "tightest_mm": -2.07,
+    "where": {
+     "blade_deg": 39.4,
+     "r": 30.0
+    },
+    "move_outside": [
+     {
+      "blade_deg": 39.4,
+      "r": 30.0,
+      "gap_mm": -2.07
+     },
+     {
+      "blade_deg": 129.4,
+      "r": 30.0,
+      "gap_mm": -2.07
+     },
+     {
+      "blade_deg": 219.4,
+      "r": 30.0,
+      "gap_mm": -2.07
+     },
+     {
+      "blade_deg": 309.4,
+      "r": 30.0,
+      "gap_mm": -2.07
+     }
+    ],
+    "n_move_outside": 4
+   },
+   "plate": true,
+   "plate_grid_holes": 56,
+   "lattice_phase": 0.0,
+   "plate_len_halfwidth_mm": [
+    50.38,
+    41.3
+   ],
+   "plate_taper_mm": 71.12,
+   "plate_taper_end_mm": 121.5,
+   "tip_end_r_bent": 298.4,
+   "min_hole_edge_mm": 4.0,
+   "holes_total": 216
+  },
+  "RIGHT": {
+   "leds_per_strip": 39,
+   "holes_per_row": 20,
+   "hole_pitch_mm": 13.89,
+   "hole_row_offset_mm": 7.0,
+   "cutouts_dropped": 0,
+   "grid_shift_out_mm": 2.41,
+   "gap_first_hole_to_bore_mm": 9.4,
+   "gap_last_hole_to_end_mm": 5.46,
+   "led_start_r": 23.0,
+   "led_end_r": 293.9,
+   "bore_d": 38.1,
+   "w_center": 56.1,
+   "w_tip": 27,
+   "flat_arm_end_rho": 301.8,
+   "bent_arm_end_r": 298.4,
+   "bend_shortening_mm": 3.39,
+   "part_size_in": [
+    17.48,
+    17.48
+   ],
+   "holes_per_blade": [
+    54,
+    54,
+    54,
+    54
+   ],
+   "holes_dropped_where_blades_meet": 0,
+   "area_cm2": 482.0,
+   "mass_g": 142.7,
+   "tip_force_N": 1.76,
+   "clamp_force_on_hub_N": 7.0,
+   "sigma_max_MPa": 25.5,
+   "sigma_ok": true,
+   "stress_along_arm": [
+    [
+     22,
+     13.6
+    ],
+    [
+     30,
+     13.2
+    ],
+    [
+     38,
+     12.8
+    ],
+    [
+     46,
+     12.4
+    ],
+    [
+     54,
+     12.3
+    ],
+    [
+     62,
+     12.5
+    ],
+    [
+     70,
+     12.8
+    ],
+    [
+     78,
+     13.1
+    ],
+    [
+     86,
+     13.5
+    ],
+    [
+     94,
+     13.9
+    ],
+    [
+     102,
+     14.4
+    ],
+    [
+     110,
+     15.0
+    ],
+    [
+     118,
+     15.7
+    ],
+    [
+     126,
+     15.7
+    ],
+    [
+     134,
+     15.3
+    ],
+    [
+     142,
+     14.8
+    ],
+    [
+     150,
+     14.2
+    ],
+    [
+     158,
+     13.7
+    ],
+    [
+     166,
+     13.1
+    ],
+    [
+     174,
+     12.6
+    ],
+    [
+     182,
+     12.0
+    ],
+    [
+     190,
+     11.3
+    ],
+    [
+     198,
+     10.7
+    ],
+    [
+     206,
+     10.0
+    ],
+    [
+     214,
+     9.3
+    ],
+    [
+     222,
+     8.6
+    ],
+    [
+     230,
+     7.8
+    ],
+    [
+     238,
+     7.0
+    ],
+    [
+     246,
+     6.1
+    ],
+    [
+     254,
+     5.2
+    ],
+    [
+     262,
+     4.3
+    ],
+    [
+     270,
+     3.3
+    ],
+    [
+     278,
+     2.3
+    ],
+    [
+     286,
+     1.2
+    ],
+    [
+     294,
+     0.0
+    ]
+   ],
+   "sigma_hub_section_MPa": 25.5,
+   "net_width_at_hub_mm": 44.0,
+   "contact": {
+    "r": 22.0,
+    "z_inner_face": 38.4
+   },
+   "spoke_clearance": {
+    "seat_min_gap_mm": 1.06,
+    "arms_min_gap_mm": 2.31,
+    "tips_min_gap_mm": null,
+    "collision_points": 0,
+    "tips_side_clear_mm": 11.5,
+    "min_gap_mm": 2.31
+   },
+   "clearance_ok": true,
+   "room": {
+    "40": {
+     "panel_to_spokes": 3.8,
+     "outer_face_z": 39.5
+    },
+    "60": {
+     "panel_to_spokes": 5.6,
+     "outer_face_z": 38.6
+    },
+    "80": {
+     "panel_to_spokes": 6.9,
+     "outer_face_z": 37.3
+    },
+    "100": {
+     "panel_to_spokes": 7.8,
+     "outer_face_z": 35.7
+    },
+    "130": {
+     "panel_to_spokes": 8.3,
+     "outer_face_z": 32.5
+    },
+    "160": {
+     "panel_to_spokes": 7.8,
+     "outer_face_z": 28.3
+    },
+    "200": {
+     "panel_to_spokes": 5.9,
+     "outer_face_z": 21.4
+    },
+    "240": {
+     "panel_to_spokes": 2.8,
+     "outer_face_z": 13.4
+    },
+    "270": {
+     "panel_to_spokes": -0.1,
+     "outer_face_z": 6.9
+    }
+   },
+   "dropout_clear_at_hub": 10.0,
+   "fork_clearance": {
+    "min_mm": 0.8,
+    "governed_by": "LED strip + tie band",
+    "panel_face_mm": 6.0,
+    "led_strip_mm": 0.8,
+    "stack_on_face_mm": 5.27,
+    "where": {
+     "r": 90.9,
+     "strip_outer_z": 41.7,
+     "fork_z": 42.5
+    }
+   },
+   "fork_ok": false,
+   "tie_heads_inside": {
+    "head_mm": [
+     6.0,
+     5.9,
+     4.3
+    ],
+    "tightest_mm": -0.41,
+    "where": {
+     "blade_deg": 39.4,
+     "r": 44.0
+    },
+    "move_outside": [
+     {
+      "blade_deg": 39.4,
+      "r": 44.0,
+      "gap_mm": -0.41
+     },
+     {
+      "blade_deg": 129.4,
+      "r": 44.0,
+      "gap_mm": -0.41
+     },
+     {
+      "blade_deg": 219.4,
+      "r": 44.0,
+      "gap_mm": -0.41
+     },
+     {
+      "blade_deg": 309.4,
+      "r": 44.0,
+      "gap_mm": -0.41
+     }
+    ],
+    "n_move_outside": 4
+   },
+   "plate": true,
+   "plate_grid_holes": 56,
+   "lattice_phase": 0.0,
+   "plate_len_halfwidth_mm": [
+    50.38,
+    41.3
+   ],
+   "plate_taper_mm": 71.12,
+   "plate_taper_end_mm": 121.5,
+   "tip_end_r_bent": 298.4,
+   "min_hole_edge_mm": 4.0,
+   "holes_total": 216
+  }
+ },
+ "sandwich": null,
+ "tip_slot": {
+  "width_mm": 5.0,
+  "depth_mm": 3.69,
+  "nipple_inner_end_r": 295.8,
+  "slot_bottom_r_on_wheel": 294.8,
+  "note": "nipple position from the ASSUMED rim wall and nipple length (M20/M23): confirm"
+ },
+ "tips_meet_at_z_mm": 0.0,
+ "imbalance_gmm_per_panel": 0.0,
+ "cut_files": [
+  "700c_32h3x_4strips_g10_063_panel_QTY2_cut_in.dxf (order 2: left and right are the same part)"
+ ],
+ "lateral_g_before_a_panel_lifts": 2.5,
+ "sim_settings": {
+  "stripCount": 4,
+  "ledDensity": 144,
+  "stripStartMm": 23,
+  "autoLength": false,
+  "stripLengthMm": 271,
+  "note": ""
+ }
+}
