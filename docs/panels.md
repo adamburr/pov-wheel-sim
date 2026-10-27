@@ -5,9 +5,9 @@ front hub, one on each side, and carry the LED strips. The battery and electroni
 app designs the panels in the **Panels** tab and writes the cut file.
 
 Target wheel: **700c front, 32 spokes, 3-cross, rim brake (no rotor)**.
-Material: **Baltic birch plywood, .125" (3.18 mm), laser cut by SendCutSend**, with **2 strips** per side so
-both blades run along the face grain (see [Baltic birch](#baltic-birch)). G-10/FR-4 1/16" (waterjet) also works,
-with any of the layouts.
+Material: **G-10/FR-4 1/16" (1.6 mm), waterjet cut**, with any of the layouts. Baltic birch plywood, .125"
+(3.18 mm), laser cut by SendCutSend, also works with **2 strips** per side so both blades run along the face
+grain (see [Baltic birch](#baltic-birch)).
 
 > **Status: not yet verified on the bike.** Only the bore (1.5") and the tip radius (11.75") are measured.
 > Every other wheel and fork dimension is a *typical value*. Read [Before you order](#before-you-order).
@@ -53,7 +53,7 @@ The panels' own settings are part of the setup file:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| Material | Baltic birch 1/8" | See [Materials](#materials) |
+| Material | G-10/FR-4 1/16" | See [Materials](#materials) |
 | Tip radius | 298.45 mm | Radius of the tip end on the wheel (measured 11.75"); 0 = just inside the rim wall |
 | Bore Ø | 38.1 mm | Centre hole (measured 1.5") |
 | Nipple slot | every tip | Slot in the tip end for a spoke nipple |

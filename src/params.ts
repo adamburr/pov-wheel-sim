@@ -134,7 +134,7 @@ export function defaultParams() {
 
     // Panels: the flat-cut LED supports that clamp onto the hub (see src/panels). Strips, LED
     // density, spokes and the rim come from the settings above.
-    panelMaterial: 'birch_125', // SendCutSend .125" Baltic birch, face grain along the blades
+    panelMaterial: 'g10_063',  // G-10/FR-4 1/16", waterjet; 'birch_125' for SendCutSend .125" Baltic birch
     panelBoreMm: 38.1,        // centre hole (measured 1.5")
     panelTipRadiusMm: 298.45, // radius of the blade tips on the wheel (measured 11.75"); 0 = just inside the rim
     panelTipSlot: 'all' as 'all' | 'auto' | 'none', // nipple slot in the tips: always, only when a tip sits on a spoke, or never

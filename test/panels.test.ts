@@ -153,12 +153,11 @@ describe('worker transport', () => {
 
 describe('Baltic birch (SendCutSend .125")', () => {
   const birch = (n: number) => {
-    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: n });
+    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: n, panelMaterial: 'birch_125' });
     return designPanels(wheel, panel);
   };
 
-  it('is the default, and two strips along the face grain pass every check but the (typical) fork', () => {
-    expect(defaultParams().panelMaterial).toBe('birch_125');
+  it('two strips along the face grain pass every check but the (typical) fork', () => {
     const d = birch(2), s = d.sides.LEFT.summary;
     expect(s.blades.map((b) => b.grainDeg)).toEqual([0, 0]);
     expect(s.sigmaOk).toBe(true);
@@ -205,8 +204,9 @@ describe('Baltic birch (SendCutSend .125")', () => {
     expect(birch(4).sides.LEFT.summary.sigmaOk).toBe(false);
   });
 
-  it('isotropic materials stay the same every way', () => {
-    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: 3, panelMaterial: 'g10_063' });
+  it('isotropic materials stay the same every way: G-10 is the default', () => {
+    expect(defaultParams().panelMaterial).toBe('g10_063');
+    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: 3 });
     const s = designPanels(wheel, panel).sides.LEFT.summary;
     expect(new Set(s.blades.map((b) => b.tipForceN)).size).toBe(1);
     expect(s.blades[0].grainDeg).toBeNull();
