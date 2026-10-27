@@ -173,6 +173,30 @@ describe('Baltic birch (SendCutSend .125")', () => {
     expect(d.warnings[0]).toMatch(/fork/);
   });
 
+  it('keeps the hub tabs plain and small: no holes beyond the blade, sized by the weakest hub section', () => {
+    const g = birch(2).sides.LEFT.g;
+    expect(g.holes).toHaveLength(112);
+    // the four beside the bore are gone: the nearest holes are the first ties on the strip rows
+    expect(Math.min(...g.holes.map((h) => Math.hypot(...h.c)))).toBeCloseTo(30.6, 1);
+    // 8 columns of 4 holes across on each blade, out from the hub
+    for (const sign of [1, -1]) {
+      const across = new Map<number, number>();
+      for (const h of g.holes) if (Math.sign(h.x) === sign) across.set(Math.round(h.x), (across.get(Math.round(h.x)) ?? 0) + 1);
+      expect([...across.values()].filter((n) => n === 4)).toHaveLength(8);
+    }
+    expect(Math.max(...g.holes.map((h) => Math.abs(h.y)))).toBeCloseTo(21, 6); // the blade's own rows only
+    expect(g.plateLW).toEqual([17, 54]);
+    expect(g.plateC).toBe(4);
+    // the narrowest section through the hub, not only the one through the bore's centre
+    expect(g.netWCenter).toBeCloseTo(2 * 54 - 38.1, 0);
+  });
+
+  it('checks every hub section: holes beside the bore weaken a section off the centre line', () => {
+    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: 2, panelPlateHoles: true, panelPlateHalfWidthMm: 55.3, panelPlateLengthMm: 20 });
+    const s = designPanels(wheel, panel).sides.LEFT.summary;
+    expect(s.netWidthAtHubMm).toBeLessThan(2 * 55.3 - 38.1 - 1);
+  });
+
   it('warns that blades across the grain bend unequally (3 strips) or overload the ones along it (4 strips)', () => {
     const three = birch(3).sides.LEFT.summary;
     expect(three.blades.map((b) => b.grainDeg)).toEqual([0, 60, 60]);

@@ -94,12 +94,12 @@ function flatScene(d: PanelDesign, s: SideResult): Scene {
     note([-rb * 0.8, -rb * 0.6], [-30, -half - 30], `row gap to bore ${sm.gapFirstHoleToBoreMm} mm · any hole ≥ ${pp.boreEdge} mm from the bore`, 'right');
     if (lw) {
       const [Lp, Wp] = lw;
-      dim([-Lp, -Wp], [-Lp, Wp], 16, `plate ${mmIn(2 * Wp)}`);
-      dim([-Lp, Wp], [Lp, Wp], 9, `plate flat ${mmIn(2 * Lp)}`);
+      dim([-Lp, -Wp], [-Lp, Wp], 16, `${pp.plateHoles ? 'plate' : 'across tabs'} ${mmIn(2 * Wp)}`);
+      dim([-Lp, Wp], [Lp, Wp], 9, `${pp.plateHoles ? 'plate' : 'tab'} flat ${mmIn(2 * Lp)}`);
       dim([Lp, Wp], [Lp + g.plateC!, Wp], 9, `taper ${mmIn(g.plateC!)}`);
       if (cy.length) {
         dim([xs[2], yr], [xs[2], cy[0]], -10, mmIn(py, 2));
-        dim([xs[1], cy.at(-1)! + hole / 2], [xs[1], Wp], -8, `edge ${mmIn(pp.gridEdge)}`);
+        if (pp.plateHoles) dim([xs[1], cy.at(-1)! + hole / 2], [xs[1], Wp], -8, `edge ${mmIn(pp.gridEdge)}`);
       }
     } else {
       dim([0, -g.hw(0)], [0, g.hw(0)], -(E * 0.35), `centre width ${mmIn(2 * g.hw(0))}`);

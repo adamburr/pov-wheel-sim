@@ -47,11 +47,14 @@ export interface PanelSpec {
   holesEvery: number;       // hole pairs every N LED pixels, centred on the gap between pixels
   gridEdge: number;         // minimum material from a hole to the outer edge
   boreEdge: number;         // minimum material from a hole to the centre bore
+  holeMinR: number;         // no hole centre closer than this to the axle (0 = only the boreEdge rule)
   gridStripGap: number;     // (only if rowsOnStripEdges is false) material between a hole and the strip edge
   rowsOnStripEdges: boolean; // the rows beside the LED lane have their hole centres on the strip's edges
   stripStartGap: number;    // LED strip starts this far outside the bore
   plate: boolean; plateSide: 'both' | -1 | 1; // electronics plate along the blades ("both" = identical panels)
-  plateHalfW: number;       // half-width across the blades (snapped to the hole lattice)
+  plateHalfW: number;       // half-width across the blades (snapped to the hole lattice when it has holes)
+  plateHoles: boolean;      // tie holes on the plate beyond the plain blade; without them the plate is sized
+                            // for strength alone: plateHalfW, plateLen and plateTaper are used as they are
   gridPitchY: number | null; // hole pitch ACROSS the blades; null = the strip width
   centerCol: boolean;       // keep the hole column through the hub
   pushOut: boolean;         // shift each blade's hole grid out toward its tip as far as the edge rule allows
@@ -75,8 +78,8 @@ export const PANEL_DEFAULTS: PanelSpec = {
   boreD: 38.1, tipEndR: 298.45, wCenter: 50, hubW: 8, cornerR: 2, tipClear: 3,
   // 40 lb (178 N, 3.6 × 1.27 mm) and 18 lb (80 N, 2.4 × 1.1 mm) ties both fit the 4.6 mm holes.
   tieW: 3.6, tieT: 1.27, tieHead: [6.0, 5.9, 4.3], tieClear: 1,
-  holesEvery: 2, gridEdge: 4, boreEdge: 3, gridStripGap: 1.5, rowsOnStripEdges: true, stripStartGap: 3,
-  plate: true, plateSide: 'both', plateHalfW: 41.3, gridPitchY: null, centerCol: true, pushOut: true,
+  holesEvery: 2, gridEdge: 4, boreEdge: 3, holeMinR: 0, gridStripGap: 1.5, rowsOnStripEdges: true, stripStartGap: 3,
+  plate: true, plateSide: 'both', plateHalfW: 41.3, plateHoles: true, gridPitchY: null, centerCol: true, pushOut: true,
   plateLen: 48, plateTaper: 60, plateTaperEnd: 149.6, plateTaperCols: 4,
   sensor: true, sensorSide: -1, sensorAll: true, sensorR: 110, sensorBoard: [25.4, 17.8],
   minSpokeClear: 1, forkCrownR: 340, forkCrownHalf: 22, minForkClear: 3,
@@ -257,6 +260,8 @@ function holeAt(pp: Spec, x: number, y: number, a: number): Hole {
   return h;
 }
 
+const bboxCentre = (q: Ring): Pt => [(q.bbox.x0 + q.bbox.x1) / 2, (q.bbox.y0 + q.bbox.y1) / 2];
+
 /** Filled ring q lies inside the outline with at least m of material to its edge. */
 const insideBy = (outline: Ring, q: Ring, m: number) => outline.contains(q.pts[0]) && outline.boundaryDist(q, m) >= m;
 
@@ -276,22 +281,28 @@ function flatGeometry(wh: Wheel, pp: Spec, side: number, arms: number[], rhoEnd:
   const hole = holeSize(pp), step = pp.holesEvery * pp.ledPitch, yRow = rowOffset(pp), edge = pp.gridEdge;
   const cols = Array.from({ length: 12 }, (_, k) => yRow + k * pitchY(pp) + hole / 2 + edge);
   const W = Math.max(...cols.filter((v) => v <= pp.plateHalfW + step / 2));
+  const rc = (side < 0 ? wh.p.pcdLeft : wh.p.pcdRight) / 2;
   if (pp.pushOut) {
     // One lattice, phase 0, centre column kept; each half slides outward by the same amount (the
-    // plate end moves with its holes, the taper still ends at plateTaperEnd).
+    // plate end moves with its holes, the taper still ends at plateTaperEnd). A plate without holes
+    // keeps its own size and taper.
+    const plain = !pp.plateHoles;
     const Ls = Array.from({ length: 59 }, (_, i) => (i + 1) * step + hole / 2 + edge);
-    const L = Ls.reduce((b, v) => (Math.abs(v - pp.plateLen) < Math.abs(b - pp.plateLen) ? v : b));
-    const g0 = flatCore(pp, side, arms, rhoEnd, L, W, 0, 0);
+    const L = plain ? pp.plateLen : Ls.reduce((b, v) => (Math.abs(v - pp.plateLen) < Math.abs(b - pp.plateLen) ? v : b));
+    const Wp = plain ? pp.plateHalfW : W;
+    const pq: Spec = plain ? { ...pp, plateTaperEnd: null } : pp;
+    const core = (shift: number) => flatCore(pq, side, arms, rhoEnd, plain ? L : L + shift, Wp, 0, shift);
+    const g0 = core(0);
     const n0 = g0.holeRhos.length;
     let s = Math.max(0, rhoEnd - edge - hole / 2 - g0.holeRhos.at(-1)!); // last row hole lands gridEdge from the tip
     s = Math.min(s, step - 1e-3);
     while (s > 0) {
-      if (flatCore(pp, side, arms, rhoEnd, L + s, W, 0, s).holeRhos.length >= n0) break;
+      if (core(s).holeRhos.length >= n0) break;
       s = Math.max(0, s - 0.05);
     }
     s = Math.floor(s * 100) / 100;
-    let g = flatCore(pp, side, arms, rhoEnd, L + s, W, 0, s);
-    if (hasPlateOn(pp, side) && pp.plateTaperCols) {
+    let g = core(s);
+    if (hasPlateOn(pp, side) && pp.plateTaperCols && !plain) {
       // Steepest taper that still keeps the target hole of the second row gridEdge inside the edge.
       const yt = yRow + pitchY(pp);
       const xFlat = L + s - hole / 2 - edge; // last column of the full-width plate
@@ -313,6 +324,7 @@ function flatGeometry(wh: Wheel, pp: Spec, side: number, arms: number[], rhoEnd:
       }
     }
     g.gridShift = s;
+    g.netWCenter = hubSection(g, rc);
     return g;
   }
   // Without the push-out: the tip end is placed so the gap beyond the last hole equals the gap
@@ -328,7 +340,23 @@ function flatGeometry(wh: Wheel, pp: Spec, side: number, arms: number[], rhoEnd:
     const key: [number, number] = [r3(rhoEnd - end), -g2.holes.length];
     if (!best || lexCmp(key, best.key) < 0) best = { key, g: g2 };
   }
+  best!.g.netWCenter = hubSection(best!.g, rc);
   return best!.g;
+}
+
+/**
+ * Two blades: the narrowest net section across the part inside the contact ring (bore and holes
+ * removed). Between the spoke heads the moment is about the same everywhere, so the bore weakens
+ * every section it cuts, not only the one through its centre.
+ */
+function hubSection(g: Flat, rc: number): number {
+  const a = g.arms[0];
+  let net = Infinity;
+  for (let k = -20; k <= 20; k++) {
+    const x = (rc * k) / 20;
+    net = Math.min(net, lengthInShape(g, rot([x, -400], a), rot([x, 400], a)));
+  }
+  return net;
 }
 
 /**
@@ -366,7 +394,7 @@ function flatStar(wh: Wheel, pp: Spec, side: number, arms: number[], rhoEnd: num
       const frac = off >= 0 ? off / hp : -off / hm;
       if (frac >= 1 - 1e-9) continue; // nearer another blade's axis
       const h = holeAt(pp, x, y, a);
-      if (!insideBy(o.outline, h.ring, edge - 0.05) || h.ring.areaDist([0, 0]) - rBore < pp.boreEdge - 0.01) continue;
+      if (Math.hypot(...h.c) < pp.holeMinR || !insideBy(o.outline, h.ring, edge - 0.05) || h.ring.areaDist([0, 0]) - rBore < pp.boreEdge - 0.01) continue;
       cand.push({ ...h, frac: Math.round(frac * 1e6) / 1e6, blade: bi });
     }
   });
@@ -428,8 +456,10 @@ function flatCore(pp: Spec, side: number, arms: number[], rhoEnd: number,
   // Other layouts: each blade gets its own two rows, placed for equal gaps at the bore and the tip.
   const step = pp.holesEvery * pitch;
   const yRow = rowOffset(pp), edge = pp.gridEdge;
+  // A plate without holes: holes keep to the plain blade (gridEdge inside its outline).
+  const blade = hasPlate && !pp.plateHoles ? filletedOutline(pp, add.slice(0, arms.length), tipSlots(pp, arms, rhoEnd)).outline : undefined;
   const farFromBore = (h: Hole) => Math.hypot(...h.c) - hole * Math.SQRT1_2 - rBore >= pp.boreEdge || h.ring.areaDist([0, 0]) - rBore >= pp.boreEdge - 0.01;
-  const holeOk = (h: Hole) => farFromBore(h) && insideBy(o.outline, h.ring, edge - 0.05);
+  const holeOk = (h: Hole) => Math.hypot(...h.c) >= pp.holeMinR && farFromBore(h) && insideBy(o.outline, h.ring, edge - 0.05) && (!blade || insideBy(blade, h.ring, edge - 0.05));
   const holes: Hole[] = [];
   let nGrid = 0, holeRhos: number[], equalGap: [number, number], latticePhase: number | null = null, holeXY: Pt[] | null = null;
   if (isCollinear(arms)) {
@@ -466,7 +496,7 @@ function flatCore(pp: Spec, side: number, arms: number[], rhoEnd: number,
     nGrid = best.hs.filter((h) => Math.abs(Math.abs(h.y) - yRow) > 1e-6).length;
   } else {
     // keep edge from the outline and from the bore
-    const safe = (q: Ring) => insideBy(o.outline, q, edge - 0.05) && q.areaDist([0, 0]) >= rBore + edge - 0.05;
+    const safe = (q: Ring) => Math.hypot(...bboxCentre(q)) >= pp.holeMinR && insideBy(o.outline, q, edge - 0.05) && q.areaDist([0, 0]) >= rBore + edge - 0.05 && (!blade || insideBy(blade, q, edge - 0.05));
     const gapIn = (rho: number) => holeAt(pp, rho, yRow, 0).ring.areaDist([0, 0]) - rBore;
     const gapOut = (rho: number) => rhoEnd - (rho + hole / 2);
     const fits = (rhos: number[]) => {

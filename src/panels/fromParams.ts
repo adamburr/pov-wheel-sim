@@ -27,8 +27,9 @@ export function panelInputs(p: Params): { wheel: WheelInput; panel: Partial<Pane
       strips: p.stripCount, ledPitch: 1000 / p.ledDensity, material: p.panelMaterial,
       boreD: p.panelBoreMm, tipEndR: p.panelTipRadiusMm > 0 ? p.panelTipRadiusMm : null, tipSlot: p.panelTipSlot,
       stripW: p.panelStripWidthMm, stripT: p.panelStripThickMm, tieW: p.panelTieWidthMm, tieClear: p.panelTieClearMm,
-      holesEvery: p.panelHolesEvery, gridEdge: p.panelEdgeMm, boreEdge: p.panelBoreEdgeMm, cornerR: p.panelCornerMm,
-      wCenter: p.panelBladeWidthMm, centerCol: p.panelCenterHoles, plateHalfW: p.panelPlateHalfWidthMm, plateLen: p.panelPlateLengthMm, plateTaperCols: p.panelTaperCols > 0 ? p.panelTaperCols : null,
+      holesEvery: p.panelHolesEvery, gridEdge: p.panelEdgeMm, boreEdge: p.panelBoreEdgeMm, holeMinR: p.panelHoleMinRMm, cornerR: p.panelCornerMm,
+      wCenter: p.panelBladeWidthMm, centerCol: p.panelCenterHoles, plateHoles: p.panelPlateHoles, plateHalfW: p.panelPlateHalfWidthMm,
+      plateTaper: p.panelPlateTaperMm, plateLen: p.panelPlateLengthMm, plateTaperCols: p.panelTaperCols > 0 ? p.panelTaperCols : null,
       forkCrownR: p.forkCrownRadiusMm, forkCrownHalf: p.forkCrownHalfMm,
       // magnetometer boards under the left blades: one per strip, or one in all
       sensor: p.syncMode === 'hall', sensorAll: p.hallPerStrip,

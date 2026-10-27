@@ -145,12 +145,15 @@ export function defaultParams() {
     panelHolesEvery: 2,       // tie holes every N pixels
     panelEdgeMm: 4,           // minimum material from a hole to the outer edge
     panelBoreEdgeMm: 3,       // ...and to the bore
+    panelHoleMinRMm: 28,      // no tie hole closer than this to the axle (drops the four beside the bore)
     panelCornerMm: 2,         // radius on every outline corner
-    panelBladeWidthMm: 75,    // blade width at the centre, tapering straight to the tip
-    // A wide, short plate round the bore carries the bending through the hub (the electronics go on the hub).
-    panelPlateHalfWidthMm: 55.3, // plate half-width (snapped to the hole grid)
-    panelPlateLengthMm: 20,   // full-width plate length from the centre (snapped to the hole grid)
-    panelTaperCols: 1,        // the plate's taper carries this many columns of the second hole row
+    panelBladeWidthMm: 76,    // blade width at the centre, tapering straight to the tip: 8 columns of 4 holes per blade
+    // Two short tabs beside the bore carry the bending through the hub (the electronics go on the hub).
+    panelPlateHoles: false,   // tie holes on the tabs; with holes, the plate snaps to the hole grid
+    panelPlateHalfWidthMm: 54, // tabs reach this far from the blade's centre line
+    panelPlateLengthMm: 17,   // ...over this far each way along the blade from the centre
+    panelPlateTaperMm: 4,     // ...then taper to the blade over this length (plate without holes)
+    panelTaperCols: 1,        // plate with holes: its taper carries this many columns of the second hole row
     panelCenterHoles: false,  // holes on the line through the bore (they weaken the hub section)
     spokeCrosses: 3,          // lacing
     hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
@@ -300,8 +303,8 @@ export const DEVICE_KEYS = [
   'overflow', 'predictMotion', 'nextOnDark', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
   'panelMaterial', 'panelBoreMm', 'panelTipRadiusMm', 'panelTipSlot', 'panelStripWidthMm', 'panelStripThickMm',
-  'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelBoreEdgeMm', 'panelCornerMm',
-  'panelBladeWidthMm', 'panelPlateHalfWidthMm', 'panelPlateLengthMm', 'panelTaperCols', 'panelCenterHoles', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
+  'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelBoreEdgeMm', 'panelHoleMinRMm', 'panelCornerMm',
+  'panelBladeWidthMm', 'panelPlateHoles', 'panelPlateHalfWidthMm', 'panelPlateLengthMm', 'panelPlateTaperMm', 'panelTaperCols', 'panelCenterHoles', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
   'hubOldMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];

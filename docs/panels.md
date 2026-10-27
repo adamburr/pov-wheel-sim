@@ -61,9 +61,11 @@ The panels' own settings are part of the setup file:
 | Tie width, hole clearance | 3.6, 1.0 mm | Tie strap and hole clearance: the holes are square, 4.6 mm |
 | Holes every N pixels | 2 | Tie holes along the blade |
 | Hole to edge, to bore | 4.0, 3.0 mm | Minimum material from a hole to the outer edge, and to the bore |
+| No holes within r | 28 mm | No tie hole centre closer than this to the axle: drops the four beside the bore, so the nearest are the first ties on the strip rows (r 30.6 mm) |
 | Corner radius | 2.0 mm | On every outline corner |
-| Blade width at centre | 75 mm | The blade tapers straight from this to the tip width (27 mm) |
-| Plate half width, length, taper columns | 55.3, 20 mm, 1 | Hub plate: a wide, short plate round the bore that carries the bending through the hub (snapped to the hole grid) |
+| Blade width at centre | 76 mm | The blade tapers straight from this to the tip width (27 mm) |
+| Tabs: reach, half length, taper | 54, 17, 4 mm | Two plain tabs beside the bore that carry the bending through the hub: they reach 54 mm from the blade's centre line over ±17 mm along it, then taper into the blade |
+| Holes in the tabs | off | On: the tabs become a plate with tie holes, snapped to the hole grid, its taper fitted over *Taper over N hole columns* |
 | Holes beside the bore | off | Holes on the line through the bore; they weaken the hub section |
 | Spoke crosses, flange hole circle, centre to flange, over-locknut | 3, 44, 35, 100 mm | Hub (typical) |
 | Fork crown radius, half-width at crown | 340, 22 mm | Fork (typical, straight legs) |
@@ -109,28 +111,30 @@ tip force and stress scale with its stiffness along its own direction.
   length (along the blades), and check the face veneer when the parts arrive. The cut file has the length along Y.
 - **The blade shape is close to the limit.** A blade this thick, bent this far over this span, carries at least
   about δ·E·t / L² ≈ 38 mm × 16 471 MPa × 3.18 mm / (265 mm)² ≈ 29 MPa, whatever its shape. The design reaches
-  30.1 MPa in the blade and 30.0 MPa in the hub section. That's why the hub plate is wide (110.6 mm) and short,
-  the blades are 75 mm wide at the centre, and no holes sit beside the bore: each moves stress off whichever
-  section was worst.
+  29.8 MPa in the blade and 30.9 MPa in the hub section. The blades are 76 mm wide at the centre, which fits 8
+  columns of 4 tie holes on each blade (4.2 mm of material outside the eighth), and two
+  short tabs beside the bore bring the part to 108 mm across there. The tabs carry no holes: every section the
+  bore cuts (within the spoke-head ring, where the bending moment is about the same everywhere) keeps at least
+  70 mm of material.
 - **Creep:** under the tie preload, plywood creeps and the clamp relaxes to about half (k_def 1.0, service class
-  2), from 27 N to 13.5 N. That still holds the panels down to 11 g sideways. Seal the panels: Baltic birch isn't
+  2), from 26.8 N to 13.4 N. That still holds the panels down to 11 g sideways. Seal the panels: Baltic birch isn't
   weatherproof, and wet plywood creeps more.
 - **Cutting:** every web is 2.03 mm (0.08") or more, SendCutSend's minimum for unsupported features. The holes
-  are 4.6 mm, and the part (4.36 × 23.77 in) is well inside their 30 × 44 in limit. Expect dark edges where the
+  are 4.6 mm, and the part (4.25 × 23.76 in) is well inside their 30 × 44 in limit. Expect dark edges where the
   laser burns the glue lines.
 - **Fork:** the panel is 1.6 mm thicker than G-10, so its outer face and the LED strip stand 1.6 mm further out.
-  On the typical fork the strip plus a tie band hits the fork leg by 0.7 mm at r ≈ 84 mm. The bare panel clears
-  it by 4.6 mm. No blade shape fixes this; measure the fork (see [Before you order](#before-you-order)).
+  On the typical fork the strip plus a tie band hits the fork leg by 0.6 mm at r ≈ 84 mm. The bare panel clears
+  it by 4.7 mm. No blade shape fixes this; measure the fork (see [Before you order](#before-you-order)).
 
 | Baltic birch, 2 strips | |
 |---|---|
-| Part | 4.36 × 23.77 in (110.7 × 603.6 mm), 120 holes, 62.8 g |
-| Blade | 301.8 mm from the centre flat, 298.4 mm bent; 75 → 27 mm wide |
-| Hub plate | 110.6 mm wide, 44.4 mm long, tapering to the blade by r = 29.9 mm |
-| Tip force | 13.5 N per tip (zip ties: 80 N or more) |
-| Clamp on the hub | 27 N, about 13.5 N once crept |
-| Stress | 30.1 MPa blade, 30.0 MPa hub section (target 33.0) |
-| Spokes | 2.34 mm gap, no collisions |
+| Part | 4.25 × 23.76 in (108.1 × 603.6 mm), 112 holes, 62.3 g |
+| Blade | 301.8 mm from the centre flat, 298.4 mm bent; 76 → 27 mm wide; 8 columns of 4 holes from the hub |
+| Hub tabs | 108 mm across, 34 mm long, tapering into the blade over 4 mm; no holes |
+| Tip force | 13.4 N per tip (zip ties: 80 N or more) |
+| Clamp on the hub | 26.8 N, about 13.4 N once crept |
+| Stress | 29.8 MPa blade, 30.9 MPa hub section (target 33.0) |
+| Spokes | 2.33 mm gap, no collisions |
 | LEDs | 39 per blade, r 22.7–293.9 mm |
 
 ## Geometry
@@ -214,8 +218,10 @@ responsive while it works (most of a second per design).
      The hub area adds a little rotation of its own.
    - The model gives the tip force, the clamp force on the hub (N × tip force) and the bent shape.
    - The flat blade is lengthened until the bent tip lands on the measured radius.
-   - Stress is checked along the blade and across the hub section, with the bore and holes removed. For
-     3 and 4 blades, the hub section is limited to each blade's own sector.
+   - Stress is checked along the blade and across the hub, with the bore and holes removed. For 2 blades that's
+     the narrowest of the sections across the part inside the spoke-head ring (the bore weakens all of them, and
+     holes beside it can make one off the centre line the weakest). For 3 and 4 blades, the hub section is at the
+     contact ring, limited to each blade's own sector.
 5. **Checks.**
    - Panel against all 32 spokes in 3D: collisions, gaps along the blade and at the tips, and the sandwiched
      spoke reported separately.
@@ -281,3 +287,5 @@ of typical bending strength: use them for fit checks only.
 - Baltic birch from SendCutSend: plywood is modelled along and across its face grain (Metsä Wood's 3-ply values,
   Eurocode 5 permanent-load targets, creep). Two strips with both blades along the grain; a wide, short hub plate,
   wider blade roots and no holes beside the bore bring the stress to 30 MPa. The electronics moved to the hub.
+- Hub tabs without holes, sized by the weakest section across the hub rather than the one through the bore's
+  centre: a third smaller than the plate they replace, and 8 fewer holes.

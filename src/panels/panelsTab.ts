@@ -46,12 +46,15 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
   holes.add(p, 'panelHolesEvery', 1, 6, 1).name('Holes every N pixels');
   holes.add(p, 'panelEdgeMm', 1, 10, 0.1).name('Hole to edge (mm)');
   holes.add(p, 'panelBoreEdgeMm', 0.5, 10, 0.1).name('Hole to bore (mm)');
+  holes.add(p, 'panelHoleMinRMm', 0, 80, 0.5).name('No holes within r (mm)');
   holes.add(p, 'panelCornerMm', 0.5, 10, 0.1).name('Corner radius (mm)');
-  const plate = gui.addFolder('Blade and hub plate').close();
+  const plate = gui.addFolder('Blade and hub tabs').close();
   plate.add(p, 'panelBladeWidthMm', 40, 140, 1).name('Blade width at centre (mm)');
-  plate.add(p, 'panelPlateHalfWidthMm', 15, 80, 0.1).name('Plate half width (mm)');
-  plate.add(p, 'panelPlateLengthMm', 10, 120, 1).name('Length from centre (mm)');
-  plate.add(p, 'panelTaperCols', 0, 10, 1).name('Taper over N hole columns');
+  plate.add(p, 'panelPlateHalfWidthMm', 15, 80, 0.1).name('Tabs: reach from centre line (mm)');
+  plate.add(p, 'panelPlateLengthMm', 2, 120, 0.5).name('Tabs: half length (mm)');
+  const taperMm = plate.add(p, 'panelPlateTaperMm', 1, 60, 0.5).name('Tabs: taper (mm)');
+  plate.add(p, 'panelPlateHoles').name('Holes in the tabs');
+  const taperCols = plate.add(p, 'panelTaperCols', 0, 10, 1).name('Taper over N hole columns');
   plate.add(p, 'panelCenterHoles').name('Holes beside the bore');
   const hub = gui.addFolder('Hub and fork (typical values)').close();
   hub.add(p, 'spokeCrosses', 0, 4, 1).name('Spoke crosses');
@@ -65,6 +68,9 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
   let state: PanelsState = { busy: true };
 
   function render() {
+    // tabs with holes snap to the hole grid and fit their taper to it; plain tabs take their own taper
+    taperCols.show(p.panelPlateHoles);
+    taperMm.show(!p.panelPlateHoles);
     const d = state.design;
     actions.innerHTML = d ? `
       <button type="button" class="primary" data-act="cut" title="SendCutSend-ready: inches, one layer, closed outlines">⬇ Cut file${d.identical ? '' : 's'} (DXF, inches)</button>
