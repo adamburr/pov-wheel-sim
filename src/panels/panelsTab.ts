@@ -99,10 +99,10 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
       ['Fork', `${fc.minMm} mm (${fc.governedBy}) · bare panel ${Math.min(L.forkClearance.panelFaceMm, R.forkClearance.panelFaceMm)} mm`],
       ['Valve', `${Math.min(L.valveClearMm, R.valveClearMm)} mm clear`],
     ];
-    const across = [d.sides.LEFT, d.sides.RIGHT].reduce((n, s) => n + s.spokeTies.filter((t) => t.across).length, 0);
+    const over = [d.sides.LEFT, d.sides.RIGHT].reduce((n, s) => n + s.spokeTies.filter((t) => t.over).length, 0);
     const notes = [d.rimNote,
+      over ? `${over} spoke tie${over > 1 ? 's go' : ' goes'} over the strip between two LEDs, where a spoke runs under the strip and no tab reaches another: fit ${over > 1 ? 'them' : 'it'} after the strip.` : '',
       d.tipSlot ? `Nipple slot ${d.tipSlot.widthMm} wide × ${d.tipSlot.depthMm} mm deep where a nipple is under a tip (from the assumed rim and nipple: confirm).` : '',
-      across ? `${across} spoke tie${across > 1 ? 's go' : ' goes'} across the strip, between two LEDs, where the spoke runs under the strip.` : '',
       'Bore and tip radius are measured; the other wheel, hub and fork values are typical until measured.'].filter(Boolean);
     // where the simulator's strips are, against where these panels hold the LEDs
     const sd = derive(p);

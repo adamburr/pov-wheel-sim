@@ -81,9 +81,9 @@ function flatScene(d: PanelDesign, s: SideResult): Scene {
   const tie = s.spokeTies.find((t) => t.blade === 0);
   if (tie) {
     const [p, q] = tie.holes.map(R);
-    note(p, [p[0] - 30, p[1] + tie.sg * 50], tie.across
-      ? 'spoke tie across the strip, between LEDs (the spoke runs under the strip)'
-      : `spoke tie: holes ${mmIn(Math.hypot(q[0] - p[0], q[1] - p[1]))} apart, either side of the spoke`, 'right');
+    note(p, [p[0] - 30, p[1] + tie.sg * 50], tie.over
+      ? 'spoke tie over the strip, between LEDs (the spoke runs under the strip): fit after the strip'
+      : `spoke tie: holes ${mmIn(Math.hypot(q[0] - p[0], q[1] - p[1]))} apart, either side of the spoke, on its own tab`, 'right');
   }
   const sb = g.sensors.find((b) => b.blade === 0);
   if (sb) {

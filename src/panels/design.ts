@@ -46,7 +46,7 @@ export interface PanelSpec {
   spokeGap: number;         // spoke ties: room between the spoke and each hole of the pair
   tieSpan: number;          // longest stretch of blade between spoke ties (the disc's ties count)
   tipTieZone: number;       // the outermost spoke tie is within this of the tip end
-  earMax: number;           // farthest a tab reaches beyond the blade's edge for a spoke tie; 0 = half the gap between one side's spokes at the rim
+  earMax: number;           // farthest a tab reaches beyond the blade's edge for a spoke tie; 0 = the gap between one side's spokes at the rim
   valveD: number; valveLen: number; valveClear: number; // valve stem (with its nut) inside the rim, and the room it needs
   sensor: boolean;          // a hall switch beside every strip, on the outer face, tied on
   sensorGap: number;        // from the strip's edge to the sensor's body (clear of the strip ties, their heads and the strip's wiring)
@@ -94,11 +94,13 @@ export interface Hole {
 type HoleSpec = Omit<Hole, 'bulge' | 'ring'>;
 
 /**
- * A spoke tie on a blade: where it is on the wheel, the spoke, and how far its tab reaches past the
- * blade's edge. `across`: the spoke runs under the strip, so the tie goes over the strip between two
- * LEDs (its own holes, either side of the strip and the spoke).
+ * A spoke tie on a blade: where it is on the wheel, the spoke, the edge it holds (sg) and how far its
+ * tab reaches past the blade's edge. Spoke ties have their own holes, clear of the strip and its ties,
+ * so the strips can be fitted before the panels go on the wheel. `over`: the spoke runs under the
+ * strip, so the tie goes over the strip between two LEDs, a hole on each edge outside the strip ties
+ * (holding both edges); it goes on after the strip.
  */
-export interface SpokeTie { blade: number; r: number; spoke: number; sg: 1 | -1; earMm: number; across: boolean; holes: [Pt, Pt] }
+export interface SpokeTie { blade: number; r: number; spoke: number; sg: 1 | -1; earMm: number; over: boolean; holes: [Pt, Pt] }
 /** A disc tie round a spoke crossing. */
 export interface DiscTie { r: number; at: Pt; spokes: [number, number]; holes: [Pt, Pt] }
 
@@ -300,7 +302,7 @@ function discTiesOf(wh: Wheel, pp: Spec, side: number, sf: SurfaceFns): DiscTie[
 const discTieAngle = (t: DiscTie) => deg(Math.atan2(t.holes[1][1] - t.holes[0][1], t.holes[1][0] - t.holes[0][0]));
 
 /** A place a blade could be tied to a spoke: plan position along the blade (x) and across it (e). */
-interface Cand { x: number; e: number; psi: number; spoke: number; sg: 1 | -1; ear: number; across: boolean; lo: number; hi: number; holes: [Pt, Pt] }
+interface Cand { x: number; e: number; psi: number; spoke: number; sg: 1 | -1; ear: number; over: boolean; lo: number; hi: number; holes: [Pt, Pt] }
 
 interface Ctx {
   wh: Wheel; pp: Spec; bladeW: number; rEnd: number; xMax: number;
@@ -310,8 +312,8 @@ interface Ctx {
 /**
  * Every place along a blade at angle a where a hole pair straddling one of the side's spokes fits
  * beside the strip ties (on a tab, if the spoke is outside the blade), sampled every 2 mm. Where a
- * spoke runs under the strip, or none will do beside it, a tie across the strip at a pixel gap with no
- * strip tie: `gaps` are those gaps (plan radius along the blade).
+ * spoke runs under the strip, a tie over the strip at a pixel gap with no strip tie (`gaps`, plan
+ * radius along the blade), its holes outside the strip ties on both edges.
  */
 function spokeTieCands(c: Ctx, side: number, a: number, gaps: number[]): Cand[] {
   const { wh, pp } = c, own = wh.sideSpokes(side);
@@ -348,51 +350,60 @@ function spokeTieCands(c: Ctx, side: number, a: number, gaps: number[]): Cand[] 
       if (lo < xMin || Math.hypot(hi, outer) > rimIn) continue;
       const holes = [1, -1].map((k) => at(x - k * p * sn, e + k * p * cs)) as [Pt, Pt];
       if (blocked(s, holes) || nearNipple(holes)) continue;
-      out.push({ x, e, psi: deg(Math.atan2(sn, cs)), spoke: s.i, sg: e < 0 ? -1 : 1, ear: Math.max(0, ear), across: false, lo, hi, holes });
+      out.push({ x, e, psi: deg(Math.atan2(sn, cs)), spoke: s.i, sg: e < 0 ? -1 : 1, ear: Math.max(0, ear), over: false, lo, hi, holes });
     }
-    // across the blade: one hole on the strip's far edge, one past the spoke (the spoke under the strip,
-    // or beside the blade on a tab), the band over the strip between two LEDs. It holds both edges.
-    const off = (need + hh) / cs;
+    // under the strip: a hole on each edge, as clear of the strip ties as the ones beside it, the band
+    // over the strip between two LEDs and under the spoke
+    const eOut = eIn + h, off = (need + hh) / cs;
     for (const x of gaps) {
       if (x < x0 || x > x1) continue;
       const e = eAt(x);
-      const e1 = Math.min(-rowOffset(pp), e - off), e2 = Math.max(rowOffset(pp), e + off);
+      if (Math.abs(e) - off >= eOut || Math.abs(e) + off < -eOut) continue; // beside the strip: a tab's job
+      const e1 = Math.min(-eOut, e - off), e2 = Math.max(eOut, e + off);
       const outer = Math.max(-e1, e2) + h + edge, ear = outer - wHalf;
       const lo = x - h - edge, hi = x + h + edge;
       if (ear > pp.earMax || lo < xMin || Math.hypot(hi, outer) > rimIn) continue;
       const holes: [Pt, Pt] = [at(x, e1), at(x, e2)];
       if (blocked(s, holes) || nearNipple(holes)) continue;
-      out.push({ x, e, psi: 0, spoke: s.i, sg: e < 0 ? -1 : 1, ear: Math.max(0, ear), across: true, lo, hi, holes });
+      out.push({ x, e, psi: 0, spoke: s.i, sg: e < 0 ? -1 : 1, ear: Math.max(0, ear), over: true, lo, hi, holes });
     }
   }
   return out;
 }
 
+/** Plan radii of the pixel gaps that have no strip tie: where a tie over the strip may go. */
+function freeGaps(pp: Spec, sf: SurfaceFns, rho0: number, nLeds: number): number[] {
+  const out: number[] = [];
+  for (let m = 1; m <= nLeds - 1; m++) if ((m - 1) % pp.holesEvery) out.push(sf.rOf(rho0 + m * pp.ledPitch));
+  return out;
+}
+
 /**
- * Spoke ties for one blade, so each edge is held (against flutter): for each edge in turn (the one
- * with fewer places for a tab first), the
- * smallest tab within tipTieZone of the tip (the farthest out, of equals), then working inward, the
- * smallest tab within tieSpan of the last one (the farthest in, of equals), until the disc's ties are
- * within reach. A tie across the strip holds both edges: one already chosen is used first, and a new
- * one only where no tab will do. `gaps` counts the stretches no tie could cover.
+ * Spoke ties for one blade, each edge on its own tabs (against flutter): the smallest tab within
+ * tipTieZone of the tip (the farthest out, of equals; where there is none, within half as far again),
+ * then working inward, the smallest tab within
+ * tieSpan of the last one (the farthest in, of equals), until the disc's ties are within reach. Only
+ * where an edge has no tab in reach does a tie over the strip hold it (one already chosen first); it
+ * holds both edges. `gaps` counts the stretches no tie could cover.
  */
 function chooseTies(c: Ctx, side: number, cands: Cand[]): { ties: Cand[]; gaps: number } {
   const { pp } = c, support = c.side[side].rSupport, edge = pp.gridEdge;
   const ties: Cand[] = [];
-  const clash = (a: Cand, b: Cand) => a.lo < b.hi + edge && b.lo < a.hi + edge && (a.across || b.across || a.sg === b.sg);
+  const clash = (a: Cand, b: Cand) => a.lo < b.hi + edge && b.lo < a.hi + edge && (a.over || b.over || a.sg === b.sg);
   const pick = (list: Cand[], out: boolean) => {
-    const had = list.filter((x) => ties.includes(x)), beside = list.filter((x) => !x.across);
+    const tabs = list.filter((x) => !x.over), had = list.filter((x) => ties.includes(x));
     const key = (x: Cand) => [Math.ceil(x.ear / 5), out ? -x.x : x.x]; // tabs within 5 mm count as the same
-    return (had.length ? had : beside.length ? beside : list).reduce((b, x) => (lexCmp(key(x), key(b)) < 0 ? x : b));
+    return (tabs.length ? tabs : had.length ? had : list).reduce((b, x) => (lexCmp(key(x), key(b)) < 0 ? x : b));
   };
   let gaps = 0;
-  // the edge with fewer places for a tab of its own goes first: its ties across the strip then hold the other edge too
-  const beside = (sg: number) => cands.filter((x) => !x.across && x.sg === sg).length;
-  for (const sg of beside(1) <= beside(-1) ? [1, -1] : [-1, 1]) {
-    const own = cands.filter((x) => (x.across || x.sg === sg) && (ties.includes(x) || !ties.some((t) => clash(t, x))));
+  for (const sg of [1, -1]) {
+    const own = cands.filter((x) => (x.over || x.sg === sg) && (ties.includes(x) || !ties.some((t) => clash(t, x))));
     const take = (t: Cand) => { if (!ties.includes(t)) ties.push(t); };
     let prev = c.rEnd, inner = Infinity;
-    const tip = own.filter((x) => x.x >= c.rEnd - pp.tipTieZone);
+    // the tip: a tab within tipTieZone of it, else a tab up to half as far again, before a tie over the strip
+    const near = (zone: number) => own.filter((x) => x.x >= c.rEnd - zone);
+    const tabsIn = (zone: number) => near(zone).filter((x) => !x.over);
+    const tip = [tabsIn(pp.tipTieZone), tabsIn(1.5 * pp.tipTieZone), near(pp.tipTieZone)].find((l) => l.length) ?? [];
     if (tip.length) { const t = pick(tip, true); take(t); prev = t.x; inner = t.lo; } else gaps++;
     while (prev - support > pp.tieSpan) {
       const win = own.filter((x) => x.x >= prev - pp.tieSpan && x.hi <= inner - edge && (ties.includes(x) || !ties.some((t) => clash(t, x))));
@@ -481,13 +492,6 @@ function buildFlat(pp: Spec, f: Features): Flat {
 /** Filled ring q lies inside the outline with at least m of material to its edge. */
 const insideBy = (outline: Ring, q: Ring, m: number) => outline.contains(q.pts[0]) && outline.boundaryDist(q, m) >= m;
 
-/** Plan radii of the pixel gaps that have no strip tie: where a tie across the strip may go. */
-function freeGaps(pp: Spec, sf: SurfaceFns, rho0: number, nLeds: number): number[] {
-  const out: number[] = [];
-  for (let m = 1; m <= nLeds - 1; m++) if ((m - 1) % pp.holesEvery) out.push(sf.rOf(rho0 + m * pp.ledPitch));
-  return out;
-}
-
 function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number; rho1: number }, rhoDisc: number): Features {
   const { wh, pp } = c, { sf, ties: allTies } = c.side[side];
   const under = new Set(arms.flatMap((a) => [...discTiesUnderStrip(c, side, a)]));
@@ -498,18 +502,16 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
   for (const t of dTies) { const a = discTieAngle(t); holes.push(...t.holes.map((q) => ({ c: q, a, kind: 'disc' as const, tie }))); tie++; }
   const ears: Pt[][] = [], spokeTies: SpokeTie[] = [];
   let gaps = 0;
-  // pixel gaps with no strip tie, for ties across the strip
   const nLeds = Math.floor((led.rho1 - led.rho0) / pp.ledPitch);
-  const free = freeGaps(pp, sf, led.rho0, nLeds);
   arms.forEach((a, bi) => {
-    const ch = chooseTies(c, side, spokeTieCands(c, side, a, free));
+    const ch = chooseTies(c, side, spokeTieCands(c, side, a, freeGaps(pp, sf, led.rho0, nLeds)));
     gaps += ch.gaps;
     for (const t of ch.ties) {
       const fh = t.holes.map((q) => toFlat(sf, q)) as [Pt, Pt];
-      const ha = t.across ? a : a + t.psi;
+      const ha = t.over ? a : a + t.psi;
       holes.push(...fh.map((q) => ({ c: q, a: ha, kind: 'spoke' as const, tie })));
       tie++;
-      spokeTies.push({ blade: bi, r: r1(t.x), spoke: t.spoke, sg: t.sg, earMm: r1(t.ear), across: t.across, holes: fh });
+      spokeTies.push({ blade: bi, r: r1(t.x), spoke: t.spoke, sg: t.sg, earMm: r1(t.ear), over: t.over, holes: fh });
       if (t.ear <= 0) continue;
       // the tab: the two holes with gridEdge round them, blended into the blade's edge
       const pad = fh.flatMap((q) => squareAt(q, ha, hole + 2 * edge)).map((q) => rot(q, -a));
@@ -802,9 +804,10 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     rEnd = Math.sqrt((wh.p.rimWallR - pp.tipClear) ** 2 - (bladeW / 2) ** 2);
   }
   if (pp.tipSlot === 'none') rEnd = Math.min(rEnd, wh.nippleTipR() - pp.tipSlotClear);
-  if (pp.earMax <= 0) { // a tab that reaches a spoke midway between the blade and the next spoke on that side
-    const half = rEnd * rad(360 / wh.p.spokes), h = holeSize(pp) / 2;
-    pp.earMax = Math.ceil(half + wh.p.spokeD / 2 + pp.spokeGap + 2 * h * Math.SQRT2 + pp.gridEdge - bladeW / 2 + 2);
+  if (pp.earMax <= 0) { // a tab on each edge, as long as it takes: up to a whole gap between one side's
+    // spokes, so an edge whose nearest spoke runs under the strip can reach the next one
+    const far = rEnd * rad(720 / wh.p.spokes), h = holeSize(pp) / 2;
+    pp.earMax = Math.ceil(far + wh.p.spokeD / 2 + pp.spokeGap + 2 * h * Math.SQRT2 + pp.gridEdge - bladeW / 2 + 2);
   }
   const rBore = pp.boreD / 2;
   // the dished surface each panel lies on, the disc's ties, and the disc that holds them
@@ -822,7 +825,7 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     s.rSupport = s.ties.length ? Math.max(...s.ties.map((t) => t.r)) : rBore;
   }
   const c: Ctx = { wh, pp, bladeW, rEnd, xMax: Math.min(rEnd, wh.nippleTipR() - pp.tipSlotClear), side: sideCtx };
-  // the strips start just outside the bore, so the pixel gaps (where ties across a strip go) are known
+  // the strips start just outside the bore, so the pixel gaps (where ties over a strip go) are known
   // before the blades turn; only a nipple slot may shorten the strips later
   const ledStart = rBore + pp.stripStartGap;
   const searchGaps: Record<number, number[]> = {};
@@ -832,19 +835,19 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   }
 
   // Turn all the blades together (they stay evenly spaced) for: every stretch tied, the valve clear,
-  // the two panels mirror images of each other (or else as alike as can be), the smallest tabs, the
-  // fewest ties across a strip, the fewest disc ties under a strip.
+  // the two panels mirror images of each other (or else as alike as can be), the fewest disc ties
+  // under a strip, the smallest tabs, the fewest ties over a strip.
   const N = pp.strips, period = 360 / N, sidePeriod = 1440 / wh.p.spokes;
   // blades at t0 + k·period are symmetric about an axis when t0 is a multiple of 180/N from it
   const axes = mirrorAxes(wh);
   const symmetric = (t0: number) => axes.find((ax) => Math.min(pmod(t0 - ax, 180 / N), 180 / N - pmod(t0 - ax, 180 / N)) < 1e-6) ?? null;
-  const cache = new Map<string, { gaps: number; n: number; across: number; maxEar: number; sumEar: number; under: Set<number> }>();
+  const cache = new Map<string, { gaps: number; n: number; over: number; maxEar: number; sumEar: number; under: Set<number> }>();
   const armEval = (side: number, a: number) => {
     const key = `${side}:${r3(pmod(a, sidePeriod))}`;
     let v = cache.get(key);
     if (!v) {
       const { ties, gaps } = chooseTies(c, side, spokeTieCands(c, side, a, searchGaps[side]));
-      v = { gaps, n: ties.length, across: ties.filter((t) => t.across).length, maxEar: Math.max(0, ...ties.map((t) => t.ear)), sumEar: ties.reduce((s, t) => s + t.ear, 0), under: discTiesUnderStrip(c, side, a) };
+      v = { gaps, n: ties.length, over: ties.filter((t) => t.over).length, maxEar: Math.max(0, ...ties.map((t) => t.ear)), sumEar: ties.reduce((s, t) => s + t.ear, 0), under: discTiesUnderStrip(c, side, a) };
       cache.set(key, v);
     }
     return v;
@@ -858,16 +861,16 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     const ev = [-1, 1].flatMap((side) => arms.map((a) => armEval(side, a)));
     const dropped = [0, 1].reduce((n, k) => n + new Set(ev.slice(k * N, (k + 1) * N).flatMap((v) => [...v.under])).size, 0);
     const valve = valveRoom(c, arms);
-    // how differently the two sides come out: their biggest tabs, their tie counts and ties across a strip
+    // how differently the two sides come out: their biggest tabs and their tie counts
     const side_ = (k: number) => ev.slice(k * N, (k + 1) * N);
     const [l, r] = [side_(0), side_(1)].map((vs) => ({
-      ear: Math.max(...vs.map((v) => v.maxEar)), n: vs.reduce((s, v) => s + v.n, 0), across: vs.reduce((s, v) => s + v.across, 0),
+      ear: Math.max(...vs.map((v) => v.maxEar)), n: vs.reduce((s, v) => s + v.n, 0),
     }));
-    const unlike = Math.ceil(Math.abs(l.ear - r.ear) / 5) + Math.abs(l.n - r.n) + Math.abs(l.across - r.across);
+    const unlike = Math.ceil(Math.abs(l.ear - r.ear) / 5) + Math.abs(l.n - r.n);
     const key = [
       ev.reduce((s, v) => s + v.gaps, 0), valve < pp.valveClear ? 1 : 0, symmetric(t0) === null ? 1 : 0, unlike,
-      Math.ceil(Math.max(...ev.map((v) => v.maxEar)) / 5), ev.reduce((s, v) => s + v.across, 0),
-      dropped, r1(ev.reduce((s, v) => s + v.sumEar, 0)), -r1(valve),
+      dropped, Math.ceil(Math.max(...ev.map((v) => v.maxEar)) / 5), ev.reduce((s, v) => s + v.over, 0),
+      r1(ev.reduce((s, v) => s + v.sumEar, 0)), -r1(valve),
     ];
     if (!best || lexCmp(key, best.key) < 0) best = { key, t0 };
   }
@@ -902,8 +905,8 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     const [cutRot, sz] = bestCutRot(g);
     const area = shapeArea(g);
     const perBlade = g.arms.map((_, bi) => f.spokeTies.filter((x) => x.blade === bi).map((x) => x.r));
-    // each edge of each blade on its own: its beside ties and the ties across the strip
-    const edges = g.arms.flatMap((_, bi) => [1, -1].map((sg) => f.spokeTies.filter((x) => x.blade === bi && (x.across || x.sg === sg)).map((x) => x.r).sort((p, q) => p - q)));
+    // each edge of each blade on its own: its tabs, and any ties over the strip
+    const edges = g.arms.flatMap((_, bi) => [1, -1].map((sg) => f.spokeTies.filter((x) => x.blade === bi && (x.over || x.sg === sg)).map((x) => x.r).sort((p, q) => p - q)));
     const rSupport = sideCtx[side].rSupport;
     const spans = edges.map((rs) => { const all = [rSupport, ...rs]; return Math.max(0, ...all.slice(1).map((r, i) => r - all[i])); });
     const count = (k: HoleKind) => g.holes.filter((h) => h.kind === k).length;

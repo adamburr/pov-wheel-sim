@@ -103,19 +103,23 @@ describe('spoke-tied panels', () => {
         const sm = s.summary;
         expect(sm.tieGaps).toBe(0);
         expect(sm.longestSpanMm).toBeLessThanOrEqual(pp.tieSpan);
-        expect(sm.tipOverhangMm).toBeLessThanOrEqual(pp.tipTieZone);
+        expect(sm.tipOverhangMm).toBeLessThanOrEqual((n === 3 ? 1.5 : 1) * pp.tipTieZone); // 3 strips: a tab a little farther in, not a tie over the strip
         expect(sm.maxEarMm).toBeLessThanOrEqual(pp.earMax);
         expect(sm.closeTies).toEqual([]);
         expect(sm.nippleHits).toEqual([]);
         expect(sm.valveClearMm).toBeGreaterThan(pp.valveClear);
         expect(sm.forkOk).toBe(true);
-        // each edge of each blade is tied near the tip: a tab on that edge, or a tie across the whole blade
+        // each edge of each blade has tabs of its own, one near the tip
         s.g.arms.forEach((_, bi) => {
           for (const sg of [1, -1]) {
-            const rs = s.spokeTies.filter((t) => t.blade === bi && (t.across || t.sg === sg)).map((t) => t.r);
-            expect(Math.max(...rs)).toBeGreaterThanOrEqual(sm.tipR - pp.tipTieZone);
+            const own = s.spokeTies.filter((t) => t.blade === bi && !t.over && t.sg === sg).map((t) => t.r);
+            const held = s.spokeTies.filter((t) => t.blade === bi && (t.over || t.sg === sg)).map((t) => t.r);
+            expect(own.length).toBeGreaterThanOrEqual(2);
+            expect(held).toEqual(own);
+            expect(Math.max(...own)).toBeGreaterThanOrEqual(sm.tipR - (n === 3 ? 1.5 : 1) * pp.tipTieZone);
           }
         });
+        expect(s.spokeTies.filter((t) => t.over)).toEqual([]);
         // the disc reaches the outermost (interlaced) cross and is tied round its 8 crossings, but those under a strip
         expect(sm.discCross).toBe(3);
         expect(sm.discTies + sm.discTiesUnderStrips).toBe(8);
@@ -128,16 +132,15 @@ describe('spoke-tied panels', () => {
             for (const q of t.holes) expect(holeToSpoke(d, s, q, sp)).toBeGreaterThanOrEqual(pp.spokeGap - 0.05);
           }
         }
-        // spoke ties: a hole each side of the spoke, clear of it; beside the strip ties, or across the strip between LEDs
+        // spoke ties: a hole each side of the spoke, clear of it, and every hole clear of the strip's ties (so
+        // the strips go on first); a tie over the strip has a hole on each edge
         for (const t of s.spokeTies) {
           const [a, b] = t.holes.map((q) => toPlan(s.sf, q));
           expect(sideOf(d, t.spoke, a)).toBe(-sideOf(d, t.spoke, b));
           for (const q of t.holes) expect(holeToSpoke(d, s, q, t.spoke)).toBeGreaterThanOrEqual(pp.spokeGap - 0.05);
           const e = t.holes.map((q) => rot(q, -s.g.arms[t.blade])[1]);
-          if (t.across) {
-            expect(Math.min(...e)).toBeLessThanOrEqual(-pp.stripW / 2 + 1e-6);
-            expect(Math.max(...e)).toBeGreaterThanOrEqual(pp.stripW / 2 - 1e-6);
-          } else expect(Math.min(...e.map(Math.abs))).toBeGreaterThan(pp.stripW / 2 + h + pp.gridEdge);
+          expect(Math.min(...e.map(Math.abs))).toBeGreaterThan(pp.stripW / 2 + h + pp.gridEdge);
+          if (t.over) expect(Math.sign(e[0])).toBe(-Math.sign(e[1]));
         }
         // every hole a gridEdge inside the outline, and none under the strip
         for (const hole of s.g.holes) {
@@ -185,13 +188,14 @@ describe('spoke-tied panels', () => {
     expect(mirrorAxes(d.wheel).some(near)).toBe(true);
   });
 
-  it('ties across the strip where no tab of its own reaches a spoke, holding both edges, and leaves out the strip ties beside it', () => {
-    const d = design(2);
-    const s = [d.sides.LEFT, d.sides.RIGHT].find((x) => x.spokeTies.some((t) => t.across))!;
-    const across = s.spokeTies.filter((t) => t.across);
-    expect(across.length).toBeGreaterThan(0);
-    const stations = Math.floor((s.g.nLeds - 2) / d.spec.holesEvery) + 1; // strip ties on a blade with nothing in the way
-    expect(s.summary.stripTiesPerBlade[across[0].blade]).toBeLessThan(stations);
+  it('ties over the strip only where a spoke runs under it and no tab reaches another, and keeps every strip tie', () => {
+    const d = design(3, { spokes: 28 });
+    const s = [d.sides.LEFT, d.sides.RIGHT].find((x) => x.spokeTies.some((t) => t.over))!;
+    const over = s.spokeTies.filter((t) => t.over);
+    expect(over).toHaveLength(1);
+    // it sits at a pixel gap between strip ties, and the strip tie next to it stays
+    const near = s.g.stripTieRhos[over[0].blade].map((r) => Math.abs(s.sf.rOf(r) - over[0].r));
+    expect(Math.min(...near)).toBeCloseTo(d.spec.ledPitch, 0);
   });
 
   it('designs every common lacing, every edge tied', () => {
@@ -260,9 +264,9 @@ describe('cut files', () => {
   });
 
   it('writes a LEFT and a RIGHT file when the panels differ', () => {
-    const d = design(2, { spokes: 28 });
+    const d = design(2, { spokes: 20, spokeCrosses: 2 });
     expect(d.identical).toBe(false);
-    expect(cutFiles(d).map((f) => f.name)).toEqual(['700c_28h3x_2strips_pp_08_LEFT_cut_in.dxf', '700c_28h3x_2strips_pp_08_RIGHT_cut_in.dxf']);
+    expect(cutFiles(d).map((f) => f.name)).toEqual(['700c_20h2x_2strips_pp_08_LEFT_cut_in.dxf', '700c_20h2x_2strips_pp_08_RIGHT_cut_in.dxf']);
     expect(cutDxf(d.sides.RIGHT)).not.toBe(cutDxf(d.sides.LEFT));
   });
 

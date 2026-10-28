@@ -60,7 +60,7 @@ The panels' own settings are part of the setup file:
 | Disc to spoke cross | 0 (the outermost) | The disc reaches this spoke cross, counted from the hub, and is tied at every crossing there. 0 is the outermost, interlaced cross: cross 3 on a 3-cross wheel (r ≈ 80 mm). Radial lacing has no crosses: the disc is tied straight to its spokes |
 | Ties at most every | 80 mm | Longest stretch of each blade edge between spoke ties (the disc's ties count) |
 | Tie within this of each tip | 30 mm | Each blade edge's outermost spoke tie is at most this far in from the tip |
-| Tab reach beyond blade | 0 (auto) | Farthest a tab reaches past the blade's edge to a spoke. Auto: far enough to reach a spoke midway between two on one side at the rim (60 mm on 32 spokes, 95 mm on 20) |
+| Tab reach beyond blade | 0 (auto) | Farthest a tab reaches past the blade's edge to a spoke. Auto: a whole gap between one side's spokes at the rim (118 mm on 32 spokes), so every edge can reach a spoke of its own |
 | Strip width, thickness | 14, 4 mm | Strip in its sleeve (Adafruit 2241) |
 | Tie width, hole clearance | 3.6, 1.0 mm | Tie strap and hole clearance: the holes are square, 4.6 mm |
 | Strip ties every N pixels | 2 | Strip ties along the blade |
@@ -86,15 +86,16 @@ follows the spokes.
   LED strip along its centre line, from r 22 mm to the tip.
 - **Strip ties** hold the strip: hole pairs centred on the strip's edges, every 2 pixels, between LEDs. These
   holes are for the strip only.
-- **Spoke ties hold both edges of every blade** (against flutter), each with its own hole pair, one hole either
-  side of the spoke, 0.5 mm clear of it. Each edge is tied within 30 mm of the tip and at least every 80 mm in
-  from there to the disc's ties. A tie on one edge sits beside the strip ties (at least 4 mm away), on a **tab**
-  where its spoke runs outside the blade.
-- Where an edge has no spoke of its own within reach, or a spoke runs **under the strip**, the tie goes
-  **across the whole blade**: one hole on the strip's far edge, one past the spoke, the band over the strip
-  between two LEDs. That one tie holds both edges. The strip ties next to it, which would be too close, are
-  left out on that blade. The generator ties the edge with fewer places for a tab first, so its ties across
-  the blade serve the other edge too, and uses them only where no tab will do.
+- **Each edge of every blade has its own spoke tabs** (against flutter). Each tab carries a tie with its own
+  hole pair, one hole either side of the spoke, 0.5 mm clear of it, at least 4 mm outside the strip ties.
+  Each edge is tied within 30 mm of the tip (where no tab fits there, within 45 mm) and at least every 80 mm
+  in from there to the disc's ties. Tabs
+  reach as far as their spoke needs: on the default wheel, about 30 mm on one edge and 80 mm on the other.
+- **Spoke ties never use or touch the strip's holes**, so the strips and their ties go on the panels before
+  the panels go on the wheel.
+- Only where a spoke runs **under the strip** and no tab can reach another spoke does a tie go **over the
+  strip**, between two LEDs at a pixel gap with no strip tie, through a hole on each edge outside the strip
+  ties. It holds both edges and goes on after the strip. On the default wheel none are needed.
 - **A hall sensor beside each strip** (Melexis US5881, Adafruit 158), on the disc, 12 mm from the strip's
   edge, as far out as fits (the strip's current falls toward its tip). See [Hall sensors](#hall-sensors).
 - **A wire hole by each strip**: Ø6 mm, in the disc beside the strip's inner end (r ≈ 31 mm) on its sensor's
@@ -111,21 +112,22 @@ that make the panels mirror images). The generator keeps the turn that, in order
 1. ties every stretch of every blade edge;
 2. keeps the valve clear;
 3. makes the two panels mirror images of each other, so one cut file makes both (turn one over), or else
-   as alike as it can: the same biggest tab, tie count and ties across a strip on each side;
-4. needs the smallest tabs (to within 5 mm);
-5. needs the fewest ties across a strip;
-6. leaves the fewest disc ties out from under the strips.
+   as alike as it can: the same biggest tab and tie count on each side;
+4. leaves the fewest disc ties out from under the strips;
+5. needs the smallest tabs (to within 5 mm);
+6. needs the fewest ties over a strip.
 
 A symmetric hub has a mirror axis every half repeat of the spoke pattern (every 22.5° on 32 spokes, from
 16.875°); the blades are tried symmetric about each.
 
 **Strips and spokes.** Near the rim one side's spokes are evenly spaced (22.5° apart on 32 spokes), and the
-left and right sides are offset by half that. To be tied on both edges, a blade tip has to sit close to a spoke
-(tied across the strip) or close to midway between two (a tab each side, or across the blade). Every blade can
-do that when the spoke pattern repeats with the blades, which is easiest when the strips divide the spoke
-count: 2 or 4 strips on 32 spokes, 2, 3 or 4 on 36. With the tips tied within 30 mm and the tab reach on
-auto, 2 to 4 strips all tie on the default 32-spoke 3-cross wheel. When a stretch can't be tied, the tab warns
-and names the strip counts that divide the spoke count.
+left and right sides are offset by half that. A blade's tabs tie each edge to the nearest spoke on that side
+that runs beside the blade, not under the strip. The blades suit the wheel best when the spoke pattern repeats
+with them, which is easiest when the strips divide the spoke count: 2 or 4 strips on 32 spokes, 2, 3 or 4 on
+36. With 3 strips on 32 spokes one blade has a spoke along its strip's edge near the tip, too close for a tab
+beside the strip ties, and the next spokes are over 100 mm away where a tab would reach the rim; its last tabs
+sit a little farther in (up to 45 mm from the tip) and reach up to 110 mm. Across the common lacings every
+edge ties; when a stretch can't, the tab warns and names the strip counts that divide the spoke count.
 
 **The dish.** The spokes form a shallow cone: from the spoke heads at the flange (z ≈ 38 mm) to the rim
 (z ≈ 0), 36 mm over 280 mm. The panel lies on the highest spoke surfaces at each radius, spanned straight over
@@ -145,7 +147,8 @@ the rim) must clear the panel by 3 mm.
    the outer faces with the strip ties. Tie heads go beside the strip.
 3. Put each panel over the hub onto its spokes, each blade at its angle. The drawing gives the angles,
    counter-clockwise seen from the right from rim hole 0, the first hole past the valve.
-4. Tie the disc round its crossings, then each blade to its spokes, tips first, both edges.
+4. Tie the disc round its crossings, then each blade's tabs to their spokes, tips first, both edges, then any
+   tie over a strip.
 5. Pass each strip's and sensor's wires through the wire hole by the strip's inner end, and connect them to
    the electronics.
 
@@ -189,14 +192,14 @@ The tab shows the strip's field at the sensors and the room to the fork for the 
 
 On the default 700c 32-hole 3-cross wheel:
 
-| Strips | Blades at | Parts | Part size (in) | Mass | Spoke ties per blade | Across a strip | Tabs up to | Disc ties |
+| Strips | Blades at | Parts | Part size (in) | Mass | Spoke ties per blade | Over a strip | Tabs up to | Disc ties |
 |---|---|---|---|---|---|---|---|---|
-| 2 | 84.375° + 180° | 2 × one part (mirror images) | 6.83 × 23.5 | 28 g | 4 | 4 per panel | 50 mm | 8 |
-| 3 | 54.375° + 120° steps | 2 × one part (mirror images) | 18.6 × 21.0 | 35 g | 4–5 | 5 per panel | 60 mm | 7 |
-| 4 | 39.375° + 90° steps | 2 × one part (mirror images) | 18.0 × 18.0 | 40 g | 4 | 8 per panel | 50 mm | 8 |
+| 2 | 84.375° + 180° | 2 × one part (mirror images) | 6.83 × 23.5 | 34 g | 6 (3 per edge) | 0 | 81 mm | 8 |
+| 3 | 54.375° + 120° steps | 2 × one part (mirror images) | 20.3 × 21.3 | 47 g | 6 (3 per edge) | 0 | 110 mm | 7 |
+| 4 | 39.375° + 90° steps | 2 × one part (mirror images) | 19.8 × 19.8 | 51 g | 6 (3 per edge) | 0 | 81 mm | 8 |
 
 Every layout has the same disc (Ø 173.6 mm, ties at r 79.7 mm) and the same strips (39 LEDs from r 22.1 mm to
-296.5 mm). Spans between ties are at most 80 mm on each edge, and every edge is tied within 30 mm of the tip.
+296.5 mm). Spans between ties are at most 80 mm on each edge, and every edge is tied within 30 mm of the tip (45 mm on one 3-strip blade).
 The hall sensors sit at r 66–72 mm, all on the disc. The LED strip and a tie band over it clear the typical
 fork by 3.5 mm, at the start of the strip (r 25 mm).
 
@@ -204,11 +207,13 @@ fork by 3.5 mm, at the start of the strip (r 25 mm).
 blade over one side's spokes is midway between the other side's. With 2 and 4 strips the blades sit a quarter
 of a gap off the spokes (360/64 = 5.625° past a rim hole: 84.375°, 39.375°), the same on both sides, and the
 two panels come out as mirror images: one part, cut twice and one turned over, with the same tabs and ties on
-each. With 3 strips one blade sits there and the other two either side of it, mirror images too.
+each. Each blade then has a spoke about a quarter of a gap (≈ 28 mm at the rim) beside one edge and three
+quarters (≈ 83 mm) beside the other, so one edge's tabs are short and the other's long. With 3 strips one
+blade sits there and the other two either side of it, mirror images too.
 
-Across the common lacings (20–36 spokes, radial to 4-cross) with 2 or 4 strips, every edge ties. The few
-combinations that leave one stretch untied are 3 strips on 20 spokes (2- and 3-cross) and on radially laced
-32 spokes; the tab warns.
+Across the common lacings (20–36 spokes, radial to 4-cross) every edge ties, and nearly every layout comes out
+as mirror images. Tabs reach about 70–120 mm on 24–36 spokes and up to 160 mm on 20. A few layouts on 20 and
+28 spokes need a tie or two over a strip.
 
 ## Material
 
@@ -242,8 +247,8 @@ A cheap check before cutting: print the reference DXF at 1:1 and lay it on the w
   takes the small difference by flexing. Stiffer sheets won't.
 - **Ties under the panel catch spokes too.** A strip tie whose band passes under the panel where a spoke runs
   beneath will also wrap that spoke.
-- **Long tabs.** Where a blade sits midway between one side's spokes, its tabs reach 50–60 mm (more on wheels
-  with fewer spokes). They are tied at their ends, but are the floppiest part of the panel.
+- **Long tabs.** Every edge has its own tabs, so the edge farther from its spokes has tabs reaching about
+  80 mm on 32 spokes (more on wheels with fewer spokes). They are tied at their ends.
 - **3.6 mm ties are wider than the gap between pixels.** The 5050 LED packages leave about 1.9 mm between them,
   so 40 lb ties overlap each package edge by about 0.8 mm. 18 lb ties (2.4 mm) nearly fit the gap.
 
@@ -260,12 +265,14 @@ A cheap check before cutting: print the reference DXF at 1:1 and lay it on the w
   when that costs nothing. The flat part is laid out along the dished spokes.
 - The disc reaches the outermost (interlaced) spoke cross, so the strips start at r 22 mm; a crossing under a
   strip isn't tied.
-- Both edges of every blade tied (against flutter), with ties across the whole blade where an edge has no
-  spoke of its own in reach. Tab reach scales with the spoke spacing; tabs near the rim checked against each
-  nipple. Any common lacing (20–36 spokes, radial to 4-cross); radial wheels tie the disc to the spokes.
-  2 to 6 strips.
+- Both edges of every blade tied (against flutter).
 - A hall switch (US5881) per strip, on the disc beside its strip, tied on, marked face toward the fork; the
   strip's stray field estimated at the sensor.
 - A Ø6 mm wire hole per strip in the disc, by the strip's inner end. Polypropylene is the only material.
 - The blades turn for matching sides first: with 2 and 4 strips on 32 spokes they sit a quarter of a spoke
   gap off the spokes, and the two panels are mirror images (one part). 2 to 4 strips.
+- Every blade edge on its own spoke tabs, as long as they need to be (auto reach: a whole spoke gap). Spoke
+  ties never use the strip's holes, so the strips go on before the panels go on the wheel; where a spoke
+  runs under a strip and nothing else is in reach, one tie goes over the strip through its own holes.
+- Where no tab fits within 30 mm of a tip, the last tab may sit up to 45 mm in before a tie goes over the
+  strip: every 32-spoke layout is tabs only.

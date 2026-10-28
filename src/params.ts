@@ -149,7 +149,7 @@ export function defaultParams() {
     panelDiscCross: 0,        // the disc reaches this spoke cross (1 = nearest the hub; 0 = the outermost, interlaced one) and is tied at each crossing there
     panelTieSpanMm: 80,       // longest stretch of blade between spoke ties
     panelTipTieMm: 30,        // a spoke tie within this of each tip
-    panelTabMaxMm: 0,         // farthest a tab reaches beyond the blade's edge to a spoke; 0 = half the gap between one side's spokes
+    panelTabMaxMm: 0,         // farthest a tab reaches beyond the blade's edge to a spoke; 0 = the gap between one side's spokes
     panelSensorGapMm: 12,     // hall sensor's body to its strip's edge (clear of the strip ties, their heads and the strip's wiring)
     spokeCrosses: 3,          // lacing
     hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
