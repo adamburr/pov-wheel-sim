@@ -132,29 +132,25 @@ export function defaultParams() {
     backData: 'independent' as 'same' | 'independent', // independent: each side has its own strips and data
     radialStagger: false,
 
-    // Panels: the flat-cut LED supports that clamp onto the hub (see src/panels). Strips, LED
-    // density, spokes and the rim come from the settings above.
-    panelMaterial: 'g10_063',  // G-10/FR-4 1/16", waterjet; 'birch_125' for SendCutSend .125" Baltic birch
-    panelBoreMm: 38.1,        // centre hole (measured 1.5")
+    // Panels: the flat-cut LED supports, tied to the spokes (see src/panels). Strips, LED density,
+    // spokes and the rim come from the settings above.
+    panelMaterial: 'pp_08',   // polypropylene sheet, 0.8 mm
+    panelBoreMm: 38.1,        // centre hole round the hub (measured 1.5")
     panelTipRadiusMm: 298.45, // radius of the blade tips on the wheel (measured 11.75"); 0 = just inside the rim
-    panelTipSlot: 'all' as 'all' | 'auto' | 'none', // nipple slot in the tips: always, only when a tip sits on a spoke, or never
+    panelTipSlot: 'auto' as 'auto' | 'none', // a nipple under a tip: slot the tip round it, or stop the blades short of the nipples
     panelStripWidthMm: 14,    // LED strip in its sleeve (Adafruit 2241)
     panelStripThickMm: 4,
     panelTieWidthMm: 3.6,     // zip tie strap; holes are square, tie width + clearance
     panelTieClearMm: 1,
-    panelHolesEvery: 2,       // tie holes every N pixels
-    panelEdgeMm: 4,           // minimum material from a hole to the outer edge
-    panelBoreEdgeMm: 3,       // ...and to the bore
-    panelHoleMinRMm: 28,      // no tie hole closer than this to the axle (drops the four beside the bore)
+    panelHolesEvery: 2,       // strip ties every N pixels
+    panelEdgeMm: 4,           // minimum material from a hole to the edge, and between ties
     panelCornerMm: 2,         // radius on every outline corner
-    panelBladeWidthMm: 76,    // blade width at the centre, tapering straight to the tip: 8 columns of 4 holes per blade
-    // Two short tabs beside the bore carry the bending through the hub (the electronics go on the hub).
-    panelPlateHoles: false,   // tie holes on the tabs; with holes, the plate snaps to the hole grid
-    panelPlateHalfWidthMm: 54, // tabs reach this far from the blade's centre line
-    panelPlateLengthMm: 17,   // ...over this far each way along the blade from the centre
-    panelPlateTaperMm: 4,     // ...then taper to the blade over this length (plate without holes)
-    panelTaperCols: 1,        // plate with holes: its taper carries this many columns of the second hole row
-    panelCenterHoles: false,  // holes on the line through the bore (they weaken the hub section)
+    panelBladeWidthMm: 0,     // blade width; 0 = the narrowest that holds the strip ties
+    panelDiscCross: 0,        // the disc reaches this spoke cross (1 = nearest the hub; 0 = the outermost, interlaced one) and is tied at each crossing there
+    panelTieSpanMm: 80,       // longest stretch of blade between spoke ties
+    panelTipTieMm: 30,        // a spoke tie within this of each tip
+    panelTabMaxMm: 0,         // farthest a tab reaches beyond the blade's edge to a spoke; 0 = half the gap between one side's spokes
+    panelSensorGapMm: 12,     // hall sensor's body to its strip's edge (clear of the strip ties, their heads and the strip's wiring)
     spokeCrosses: 3,          // lacing
     hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
     hubFlangeOffsetMm: 35,    // hub centre to each flange (typical)
@@ -303,8 +299,8 @@ export const DEVICE_KEYS = [
   'overflow', 'predictMotion', 'nextOnDark', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
   'panelMaterial', 'panelBoreMm', 'panelTipRadiusMm', 'panelTipSlot', 'panelStripWidthMm', 'panelStripThickMm',
-  'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelBoreEdgeMm', 'panelHoleMinRMm', 'panelCornerMm',
-  'panelBladeWidthMm', 'panelPlateHoles', 'panelPlateHalfWidthMm', 'panelPlateLengthMm', 'panelPlateTaperMm', 'panelTaperCols', 'panelCenterHoles', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
+  'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelCornerMm',
+  'panelBladeWidthMm', 'panelDiscCross', 'panelTieSpanMm', 'panelTipTieMm', 'panelTabMaxMm', 'panelSensorGapMm', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
   'hubOldMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];
@@ -325,8 +321,11 @@ const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
   ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
   ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],
   overflow: ['wrap', 'blank'], hallSensor: ['switch', 'magnetometer'],
-  panelMaterial: Object.keys(MATERIALS), panelTipSlot: ['all', 'auto', 'none'],
+  panelMaterial: Object.keys(MATERIALS), panelTipSlot: ['auto', 'none'],
 };
+
+// Limits for the number settings that have them: a value from storage or a setup file is brought inside.
+const LIMITS: Partial<Record<keyof Params, [number, number]>> = { stripCount: [2, 6] };
 
 export function pick<K extends keyof Params>(p: Params, keys: readonly K[]): Pick<Params, K> {
   const out = {} as Pick<Params, K>;
@@ -347,7 +346,8 @@ export function sanitize<K extends keyof Params>(raw: unknown, keys: readonly K[
     if (typeof v !== typeof d[k]) continue;
     if (typeof v === 'number' && !Number.isFinite(v)) continue;
     if (typeof v === 'string' && CHOICES[k] && !CHOICES[k]!.includes(v)) continue;
-    out[k] = v as Params[K];
+    const lim = LIMITS[k];
+    out[k] = (lim && typeof v === 'number' ? Math.min(lim[1], Math.max(lim[0], v)) : v) as Params[K];
   }
   return out;
 }

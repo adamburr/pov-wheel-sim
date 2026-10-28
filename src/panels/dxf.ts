@@ -80,24 +80,25 @@ export function cutDxf(s: SideResult): string {
   return dxf.toString();
 }
 
-/** Both panels side by side in mm, with the LED strips, sensor boards and labels. For reference, not for cutting. */
+/** Both panels side by side in mm, with the LED strips, sensor boards, spokes and labels. For reference, not for cutting. */
 export function referenceDxf(d: PanelDesign): string {
-  const dxf = new Dxf('mm', [['0', 7], ['OUTLINE', 7], ['LED_STRIP', 30], ['SENSOR_UNDER', 6], ['NOTES', 3]]);
+  const dxf = new Dxf('mm', [['0', 7], ['OUTLINE', 7], ['LED_STRIP', 30], ['SENSOR_UNDER', 6], ['SPOKES', 8], ['NOTES', 3]]);
   const L = d.sides.LEFT, R = d.sides.RIGHT;
-  for (const [dx, label, s] of [[-L.g.rhoEnd - 30, 'LEFT  (reference only, do not cut)', L], [R.g.rhoEnd + 30, 'RIGHT (reference only, do not cut)', R]] as const) {
+  for (const [dx, label, s] of [[-L.g.rhoEnd - 30, 'LEFT  (seen from the right; reference only, do not cut)', L], [R.g.rhoEnd + 30, 'RIGHT (seen from the right; reference only, do not cut)', R]] as const) {
     const mv = <T extends number[]>(p: T) => [p[0] + dx, ...p.slice(1)] as T;
     dxf.polyline(s.g.outlineBulge.map(mv), 'OUTLINE');
     for (const h of s.g.holes) dxf.polyline(h.bulge.map(mv), 'OUTLINE');
     dxf.circle([dx, 0], s.g.rBore, 'OUTLINE');
-    const { leds, sensors } = flatExtras(d, s);
+    const { leds, sensors, spokes } = flatExtras(d, s);
     for (const l of leds) dxf.polyline(l.map(mv), 'LED_STRIP', false);
     for (const b of sensors) dxf.polyline(b.map(mv), 'SENSOR_UNDER');
+    for (const sp of spokes) dxf.polyline(sp.map(mv), 'SPOKES', false);
     dxf.text([dx - 60, -s.g.rhoEnd - 30], 8, label, 'NOTES');
   }
   return dxf.toString();
 }
 
-/** File names for the downloads; identical parts make one cut file, ordered twice. */
+/** File names for the downloads; identical parts (mirror images: one is turned over) make one cut file, ordered twice. */
 export function cutFiles(d: PanelDesign): { name: string; text: string }[] {
   if (d.identical) return [{ name: `${d.name}_panel_QTY2_cut_in.dxf`, text: cutDxf(d.sides.LEFT) }];
   return [d.sides.LEFT, d.sides.RIGHT].map((s) => ({ name: `${d.name}_${s.label}_cut_in.dxf`, text: cutDxf(s) }));

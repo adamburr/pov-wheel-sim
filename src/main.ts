@@ -345,7 +345,7 @@ function updatePanels() {
   if (key === designKey) return;
   designKey = key;
   if (!PANEL_STRIPS.includes(p.stripCount)) {
-    const msg = `The panels come with 2, 3 or 4 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
+    const msg = `The panels come with 2 to 6 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
     designQueued = false;
     designing = 0; // a design still running is for other settings
     ui!.panels.show({ error: msg });

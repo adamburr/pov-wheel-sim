@@ -252,20 +252,43 @@ export class Ring {
   }
   /** Distance from a point to the filled ring (0 inside). */
   areaDist(p: Pt): number { return this.contains(p) ? 0 : this.pointDist(p); }
-  /** Parameters (0..1) along a→b where the segment crosses this ring. */
-  crossings(a: Pt, b: Pt): number[] {
-    const out: number[] = [];
-    const sb = bboxOf([a, b]);
-    for (let i = 0; i < this.pts.length; i++) {
-      if (!near(this.eb[i], sb, 1e-9)) continue;
-      const p = this.pts[i], q = this.pts[(i + 1) % this.pts.length];
-      const dx = b[0] - a[0], dy = b[1] - a[1], ex = q[0] - p[0], ey = q[1] - p[1];
-      const den = dx * ey - dy * ex;
-      if (Math.abs(den) < 1e-15) continue;
-      const t = ((p[0] - a[0]) * ey - (p[1] - a[1]) * ex) / den;
-      const u = ((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / den;
-      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) out.push(t);
+}
+
+/** Mirror image of p across the line through the origin at `axis` degrees. */
+export function mirrorPt([x, y]: Pt, axis: number): Pt {
+  const c = Math.cos(2 * rad(axis)), s = Math.sin(2 * rad(axis));
+  return [x * c + y * s, x * s - y * c];
+}
+
+/** Circle round the origin as a counter-clockwise ring of n vertices (on the circle). */
+export const circlePts = (r: number, n = 360, c: Pt = [0, 0]): Pt[] =>
+  Array.from({ length: n }, (_, i) => [c[0] + r * Math.cos((2 * Math.PI * i) / n), c[1] + r * Math.sin((2 * Math.PI * i) / n)] as Pt);
+
+/**
+ * Bulge points with every run along the circle of radius R round the origin (a circle drawn as many
+ * short chords, filleted or not) turned into true arcs, at most 90° each.
+ */
+export function arcMerge(pts: BulgePt[], R: number, tol = 0.01): BulgePt[] {
+  const n = pts.length;
+  const on = (p: BulgePt) => Math.abs(Math.hypot(p[0], p[1]) - R) < tol;
+  const maxChord = 2 * R * Math.sin(rad(2));
+  const seg = (i: number) => { const a = pts[i], b = pts[(i + 1) % n]; return on(a) && on(b) && dist([a[0], a[1]], [b[0], b[1]]) < maxChord; };
+  const start = Array.from({ length: n }, (_, i) => i).find((i) => !seg(i));
+  if (start === undefined) return pts; // all circle: leave it
+  const out: BulgePt[] = [];
+  for (let k = 0; k < n;) {
+    const i = (start + k) % n;
+    if (!seg(i)) { out.push(pts[i]); k++; continue; }
+    let j = k;
+    while (j < n && seg((start + j) % n)) j++;
+    const a = pts[i], b = pts[(start + j) % n];
+    const a0 = Math.atan2(a[1], a[0]), sweep = pmod(Math.atan2(b[1], b[0]) - a0, 2 * Math.PI);
+    const m = Math.max(1, Math.ceil(sweep / (Math.PI / 2 + 1e-9)));
+    for (let q = 0; q < m; q++) {
+      const t = a0 + (sweep * q) / m;
+      out.push([...(q ? [R * Math.cos(t), R * Math.sin(t)] : [a[0], a[1]]), Math.tan(sweep / m / 4)] as BulgePt);
     }
-    return out;
+    k = j; // b starts the next (non-circle) segment
   }
+  return out;
 }

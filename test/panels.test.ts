@@ -1,25 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams } from '../src/params';
 import { derive } from '../src/sim/timing';
-import { designPanels, designReport, type PanelDesign } from '../src/panels/design';
+import { designPanels, designReport, holeSize, mirrorAxis, type PanelDesign, type SideResult, toPlan } from '../src/panels/design';
 import { cutDxf, cutFiles, referenceDxf } from '../src/panels/dxf';
 import { applyToSim, panelInputs } from '../src/panels/fromParams';
-import { cleanRing, filletRing, outlineOf, type Pt } from '../src/panels/geom';
+import { arcMerge, circlePts, cleanRing, filletRing, mirrorPt, outlineOf, pointSegDist, type Pt, rot } from '../src/panels/geom';
 import { packDesign, unpackDesign } from '../src/panels/transport';
 import { Wheel } from '../src/panels/wheel';
 
-// The reference: the original Python generator (shapely + ezdxf) on the same typical 700c wheel.
-const WHEEL = { size: '700c', erd: 600, rimWallR: 296 };
-const PYTHON = {
-  2: { arms: [84.35, 264.35], holes: 122, perBlade: null, sizeIn: [3.26, 23.77], mass: 78.7, sigma: 31.7, hub: 31.7, net: 35.3, sideClear: 11.5, plateGrid: 42 },
-  3: { arms: [56.25, 176.25, 296.25], holes: 168, perBlade: [56, 56, 56], sizeIn: [18.25, 21.04], mass: 114.5, sigma: 16.0, hub: 14.7, net: 76.2, sideClear: 3.4, plateGrid: 48 },
-  4: { arms: [39.4, 129.4, 219.4, 309.4], holes: 216, perBlade: [54, 54, 54, 54], sizeIn: [17.48, 17.48], mass: 142.7, sigma: 25.5, hub: 25.5, net: 44.0, sideClear: 11.5, plateGrid: 56 },
-} as const;
+// The app's own settings (0.8 mm polypropylene), with the strip count changed.
+const designs = new Map<string, PanelDesign>();
+const design = (strips: number, more: Partial<ReturnType<typeof defaultParams>> = {}) => {
+  const key = JSON.stringify([strips, more]);
+  if (!designs.has(key)) {
+    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: strips, ...more });
+    designs.set(key, designPanels(wheel, panel));
+  }
+  return designs.get(key)!;
+};
 
-const designs = new Map<number, PanelDesign>();
-const design = (n: 2 | 3 | 4) => {
-  if (!designs.has(n)) designs.set(n, designPanels(WHEEL, { strips: n }));
-  return designs.get(n)!;
+/** Which side of the spoke's line (in plan) a point is on. */
+const sideOf = (d: PanelDesign, spoke: number, p: Pt) => {
+  const s = d.wheel.spokes[spoke];
+  return Math.sign((s.b[0] - s.a[0]) * (p[1] - s.a[1]) - (s.b[1] - s.a[1]) * (p[0] - s.a[0]));
+};
+/** Distance from a hole's edge (in plan) to a spoke's surface. */
+const holeToSpoke = (d: PanelDesign, s: SideResult, c: Pt, spoke: number) => {
+  const sp = d.wheel.spokes[spoke], h = s.g.holes.find((x) => Math.hypot(x.c[0] - c[0], x.c[1] - c[1]) < 1e-9)!;
+  return Math.min(...h.ring.pts.map((q) => pointSegDist(toPlan(s.sf, q), sp.a, sp.b))) - d.wheel.p.spokeD / 2;
 };
 
 describe('wheel model', () => {
@@ -46,75 +54,189 @@ describe('outline geometry', () => {
     expect(bulge.filter((p) => p[2]).map((p) => p[2].toFixed(4))).toEqual(Array(4).fill(Math.tan(Math.PI / 8).toFixed(4)));
     expect(Math.min(...sampled.map(([x]) => x))).toBeCloseTo(0, 6);
   });
+
+  it('turns a disc drawn as chords back into true arcs of at most 90°', () => {
+    const ring = cleanRing(outlineOf([circlePts(40), [[0, -5], [100, -5], [100, 5], [0, 5]]]));
+    const merged = arcMerge(filletRing(ring, 2).bulge, 40);
+    expect(merged.length).toBeLessThan(20);
+    const arcs = merged.filter((p) => Math.abs(Math.hypot(p[0], p[1]) - 40) < 0.01 && p[2] > 0.01);
+    expect(arcs.length).toBeGreaterThanOrEqual(4);
+    for (const p of arcs) expect(p[2]).toBeLessThanOrEqual(Math.tan(Math.PI / 8) + 1e-9);
+  });
+
+  it('mirrors across an axis', () => {
+    const [x, y] = mirrorPt([10, 0], 45);
+    expect(x).toBeCloseTo(0, 9);
+    expect(y).toBeCloseTo(10, 9);
+  });
 });
 
-describe('panel design (matches the Python generator)', () => {
-  for (const n of [2, 3, 4] as const) {
-    it(`${n} strips`, () => {
-      const d = design(n), ref = PYTHON[n];
-      const s = d.sides.LEFT.summary;
-      expect(d.arms.map((a) => Math.round(a * 100) / 100)).toEqual(ref.arms);
-      expect(d.identical).toBe(true);
-      expect(s.holesTotal).toBe(ref.holes);
-      expect(s.holesPerBlade).toEqual(ref.perBlade);
-      expect(s.plateGridHoles).toBe(ref.plateGrid);
-      expect(s.partSizeIn).toEqual(ref.sizeIn);
-      expect(s.massG).toBeCloseTo(ref.mass, 1);
-      expect(s.sigmaMaxMPa).toBeCloseTo(ref.sigma, 1);
-      expect(s.sigmaHubSectionMPa).toBeCloseTo(ref.hub, 1);
-      expect(s.netWidthAtHubMm).toBeCloseTo(ref.net, 1);
-      expect(s.spokeClearance.tipsSideClearMm).toBeCloseTo(ref.sideClear, 1);
-      // the same for every layout
-      expect(s.ledsPerStrip).toBe(39);
-      expect(s.holesPerRow).toBe(20);
-      expect(s.gridShiftOutMm).toBe(2.41);
-      expect(s.ledStartR).toBe(23);
-      expect(s.ledEndR).toBe(293.9);
-      expect(s.wCenter).toBe(56.1);
-      expect(s.wTip).toBe(27);
-      expect(s.flatArmEndRho).toBe(301.8);
-      expect(s.bentArmEndR).toBe(298.4);
-      expect(s.tipForceN).toBe(1.76);
-      expect(s.plateLenHalfwidthMm).toEqual([50.38, 41.3]);
-      expect(s.plateTaperMm).toBe(71.12);
-      expect(s.plateTaperEndMm).toBe(121.5);
-      expect(s.spokeClearance).toMatchObject({ seatMinGapMm: 1.06, armsMinGapMm: 2.31, tipsMinGapMm: null, collisionPoints: 0 });
-      expect(s.forkClearance).toMatchObject({ minMm: 0.8, panelFaceMm: 6, ledStripMm: 0.8, governedBy: 'LED strip + tie band' });
-      expect(s.room[270].panelToSpokes).toBe(-0.1);
-      expect(d.tipSlot).toMatchObject({ widthMm: 5, depthMm: 3.69 });
-      expect(d.tipsMeetAtZMm).toBe(0);
+describe('the surface the panel lies on', () => {
+  it('dishes from the spoke heads at the hub to the rim, so the flat part is a little longer than its plan', () => {
+    const s = design(2).sides.LEFT;
+    expect(s.sf.zAt(20)).toBeCloseTo(35 + 1.4 + 2, 6); // the spoke heads on the flange's outer face
+    expect(s.sf.zAt(150)).toBeLessThan(s.sf.zAt(60));
+    expect(s.sf.zAt(290)).toBeLessThan(5);
+    for (const r of [30, 100, 250]) {
+      expect(s.sf.rhoOf(r)).toBeGreaterThan(r);
+      expect(s.sf.rOf(s.sf.rhoOf(r))).toBeCloseTo(r, 6);
+    }
+    expect(s.summary.lengthOnSlopeMm).toBeGreaterThan(2);
+    expect(s.summary.lengthOnSlopeMm).toBeLessThan(3);
+  });
+});
+
+describe('spoke-tied panels', () => {
+  for (const n of [2, 3, 4]) {
+    it(`${n} strips: evenly spaced blades, both edges tied, ties straddle their spokes, the strip ties apart`, () => {
+      const d = design(n), pp = d.spec, h = holeSize(pp);
+      expect(d.warnings).toEqual([]);
+      expect(d.armSpacing).toBeCloseTo(360 / n, 9);
+      for (const s of [d.sides.LEFT, d.sides.RIGHT]) {
+        const sm = s.summary;
+        expect(sm.tieGaps).toBe(0);
+        expect(sm.longestSpanMm).toBeLessThanOrEqual(pp.tieSpan);
+        expect(sm.tipOverhangMm).toBeLessThanOrEqual(pp.tipTieZone);
+        expect(sm.maxEarMm).toBeLessThanOrEqual(pp.earMax);
+        expect(sm.closeTies).toEqual([]);
+        expect(sm.nippleHits).toEqual([]);
+        expect(sm.valveClearMm).toBeGreaterThan(pp.valveClear);
+        expect(sm.forkOk).toBe(true);
+        // each edge of each blade is tied near the tip: a tab on that edge, or a tie across the whole blade
+        s.g.arms.forEach((_, bi) => {
+          for (const sg of [1, -1]) {
+            const rs = s.spokeTies.filter((t) => t.blade === bi && (t.across || t.sg === sg)).map((t) => t.r);
+            expect(Math.max(...rs)).toBeGreaterThanOrEqual(sm.tipR - pp.tipTieZone);
+          }
+        });
+        // the disc reaches the outermost (interlaced) cross and is tied round its 8 crossings, but those under a strip
+        expect(sm.discCross).toBe(3);
+        expect(sm.discTies + sm.discTiesUnderStrips).toBe(8);
+        expect(sm.discTies).toBeGreaterThanOrEqual(4);
+        expect(sm.discTieR).toBeCloseTo(79.7, 1);
+        for (const t of s.discTies) {
+          const [a, b] = t.holes.map((q) => toPlan(s.sf, q));
+          for (const sp of t.spokes) {
+            expect(sideOf(d, sp, a)).toBe(-sideOf(d, sp, b));
+            for (const q of t.holes) expect(holeToSpoke(d, s, q, sp)).toBeGreaterThanOrEqual(pp.spokeGap - 0.05);
+          }
+        }
+        // spoke ties: a hole each side of the spoke, clear of it; beside the strip ties, or across the strip between LEDs
+        for (const t of s.spokeTies) {
+          const [a, b] = t.holes.map((q) => toPlan(s.sf, q));
+          expect(sideOf(d, t.spoke, a)).toBe(-sideOf(d, t.spoke, b));
+          for (const q of t.holes) expect(holeToSpoke(d, s, q, t.spoke)).toBeGreaterThanOrEqual(pp.spokeGap - 0.05);
+          const e = t.holes.map((q) => rot(q, -s.g.arms[t.blade])[1]);
+          if (t.across) {
+            expect(Math.min(...e)).toBeLessThanOrEqual(-pp.stripW / 2 + 1e-6);
+            expect(Math.max(...e)).toBeGreaterThanOrEqual(pp.stripW / 2 - 1e-6);
+          } else expect(Math.min(...e.map(Math.abs))).toBeGreaterThan(pp.stripW / 2 + h + pp.gridEdge);
+        }
+        // every hole a gridEdge inside the outline, and none under the strip
+        for (const hole of s.g.holes) {
+          expect(s.g.outline.boundaryDist(hole.ring, pp.gridEdge)).toBeGreaterThanOrEqual(pp.gridEdge - 0.06);
+          const lane = s.g.arms.some((a) => { const [x, y] = rot(hole.c, -a); return x > s.g.rhoLed0 && x < s.g.rhoLed1 && Math.abs(y) < pp.stripW / 2 - 1e-6; });
+          expect(lane).toBe(false);
+        }
+        // the strip runs from just outside the bore to the tip
+        expect(sm.ledStartR).toBeCloseTo(pp.boreD / 2 + pp.stripStartGap, 0);
+        expect(sm.ledEndR).toBeGreaterThan(290);
+        // a hall switch on the disc beside each strip, sensorGap clear of it, on two ties of its own
+        expect(s.g.sensors.map((b) => b.blade)).toEqual(s.g.arms.map((_, i) => i));
+        expect(sm.sensorsOnDisc).toBe(n);
+        for (const b of s.g.sensors) {
+          expect(Math.abs(b.e) - pp.sensorBody[0] / 2).toBeCloseTo(pp.stripW / 2 + pp.sensorGap, 6);
+          const ties = s.g.holes.filter((x) => x.kind === 'sensor' && Math.hypot(...rot(x.c, -s.g.arms[b.blade]).map((v, k) => v - [b.rho, b.e][k])) < 15);
+          expect(ties).toHaveLength(4);
+          expect(new Set(ties.map((x) => x.tie)).size).toBe(2);
+        }
+        expect(sm.sensorFieldUT!).toBeLessThan(pp.sensorReleaseMT * 10); // under 1% of the switch's release point
+        // a round wire hole in the disc by each strip's inner end, beside the strip
+        const wires = s.g.holes.filter((x) => x.kind === 'wire');
+        expect(wires).toHaveLength(n);
+        for (const w of wires) {
+          expect(w.d).toBe(pp.wireHoleD);
+          expect(Math.hypot(...w.c) + pp.wireHoleD / 2 + pp.gridEdge).toBeLessThanOrEqual(s.g.rhoDisc + 1e-6);
+          expect(Math.hypot(...w.c)).toBeLessThan(s.g.rhoLed0 + 20);
+        }
+        expect(sm.forkClearance.sensorFaceToForkMm).toBeGreaterThan(5);
+        expect(sm.massG).toBeLessThan(12 * n + 15); // the disc is about 10 g
+      }
     });
   }
 
-  it('centres one tip on a spoke when three even tips cannot all sit between spokes', () => {
-    const d = design(3);
-    expect(d.sandwich).toEqual({ bladeDeg: 56.25, rimHole: 5 });
-    expect(d.sides.LEFT.summary.spokeClearance.sandwichedSpoke).toMatchObject({ rimHole: 5, spokeSide: 'R', spokeOffsetAtTiesMm: 1.82 });
+  it('turns the blades so the two panels are mirror images when that costs no bigger tabs (3 strips on 36 spokes)', () => {
+    const d = design(3, { spokes: 36 });
+    expect(d.identical).toBe(true);
+    const L = d.sides.LEFT.g, R = d.sides.RIGHT.g, axis = mirrorAxis(d.wheel)!;
+    expect(R.holes).toHaveLength(L.holes.length);
+    // every right hole is a left hole mirrored (across the axis that swaps the two sides' spokes)
+    for (const hole of R.holes) {
+      const m = mirrorPt(hole.c, axis);
+      expect(Math.min(...L.holes.map((x) => Math.hypot(x.c[0] - m[0], x.c[1] - m[1])))).toBeLessThan(1e-6);
+    }
   });
 
-  it('warns once for both panels about the tight (typical) fork', () => {
-    const w = design(2).warnings;
-    expect(w).toHaveLength(1);
-    expect(w[0]).toMatch(/^Both panels: LED strip \+ tie band clears the \(typical\) fork by only 0.8 mm/);
+  it('ties across the strip where no tab of its own reaches a spoke, holding both edges, and leaves out the strip ties beside it', () => {
+    const d = design(2);
+    const s = [d.sides.LEFT, d.sides.RIGHT].find((x) => x.spokeTies.some((t) => t.across))!;
+    const across = s.spokeTies.filter((t) => t.across);
+    expect(across.length).toBeGreaterThan(0);
+    const full = Math.max(...d.sides.LEFT.summary.stripTiesPerBlade, ...d.sides.RIGHT.summary.stripTiesPerBlade);
+    expect(s.summary.stripTiesPerBlade[across[0].blade]).toBeLessThan(full);
+  });
+
+  it('designs every common lacing, every edge tied', () => {
+    for (const [spokes, crosses] of [[24, 3], [28, 3], [32, 0], [32, 1], [32, 2], [32, 4], [36, 0], [36, 2], [36, 3], [36, 4]]) {
+      const d = design(2, { spokes, spokeCrosses: crosses });
+      expect(d.sides.LEFT.summary.tieGaps + d.sides.RIGHT.summary.tieGaps, `${spokes} spokes ${crosses}-cross`).toBe(0);
+      expect(d.sides.LEFT.summary.discCross).toBe(crosses); // the outermost cross
+      expect(d.sides.LEFT.summary.discTies, `${spokes} spokes ${crosses}-cross`).toBeGreaterThan(0);
+    }
+  });
+
+  it('ties a radially laced disc straight to its spokes', () => {
+    const s = design(2, { spokeCrosses: 0 }).sides.LEFT;
+    expect(s.discTies.length).toBeGreaterThan(0);
+    for (const t of s.discTies) {
+      expect(t.spokes[0]).toBe(t.spokes[1]);
+      const [a, b] = t.holes.map((q) => toPlan(s.sf, q));
+      expect(sideOf(design(2, { spokeCrosses: 0 }), t.spokes[0], a)).toBe(-sideOf(design(2, { spokeCrosses: 0 }), t.spokes[0], b));
+    }
+  });
+
+  it('designs every strip count the simulator has, and names the ones that suit the wheel when a blade can\'t be tied', () => {
+    for (const n of [5, 6]) expect(design(n).arms).toHaveLength(n);
+    const d = design(3, { panelTabMaxMm: 20 });
+    expect(d.warnings.some((w) => /can't be tied to a spoke within 20 mm.*2, 4 strips on 32 spokes/.test(w))).toBe(true);
+  });
+
+  it('stops the blades short of the nipples instead of slotting them', () => {
+    const slotted = design(3), short = design(3, { panelTipSlot: 'none' });
+    expect(slotted.sides.LEFT.summary.nippleSlots).toBeGreaterThan(0);
+    expect(short.sides.LEFT.summary.nippleSlots).toBe(0);
+    expect(short.sides.LEFT.summary.tipR).toBeLessThan(short.wheel.nippleTipR());
+    expect(short.sides.LEFT.summary.nippleHits).toEqual([]);
   });
 
   it('reports plain data', () => {
     const r = JSON.parse(JSON.stringify(designReport(design(2))));
-    expect(r.sides.LEFT.holesTotal).toBe(122);
-    expect(r.simSettings).toMatchObject({ stripCount: 2, ledDensity: 144, stripStartMm: 23, stripLengthMm: 271 });
+    expect(r.sides.LEFT.spokeTies[0]).toHaveProperty('bladeDeg');
+    expect(r.simSettings).toMatchObject({ stripCount: 2, ledDensity: 144, stripStartMm: 22, stripLengthMm: 272 });
   });
 });
 
 describe('cut files', () => {
-  it('writes one R12 DXF in inches: the outline, one closed polyline per hole, and the bore', () => {
-    const d = design(4);
+  it('writes one R12 DXF in inches for mirror-image panels: the outline (the disc as true arcs), one closed polyline per hole, and the bore', () => {
+    const d = design(3, { spokes: 36 });
     const files = cutFiles(d);
-    expect(files.map((f) => f.name)).toEqual(['700c_32h3x_4strips_g10_063_panel_QTY2_cut_in.dxf']);
+    expect(files.map((f) => f.name)).toEqual(['700c_36h3x_3strips_pp_08_panel_QTY2_cut_in.dxf']);
     const text = files[0].text;
     expect(text).toMatch(/\$ACADVER\n {2}1\nAC1009/);
     expect(text).toMatch(/\$INSUNITS\n 70\n1\n/);
-    expect(text.match(/\nPOLYLINE\n/g)).toHaveLength(1 + 216);
+    expect(text.match(/\nPOLYLINE\n/g)).toHaveLength(1 + d.sides.LEFT.g.holes.length);
     expect(text.match(/\nCIRCLE\n/g)).toHaveLength(1);
+    expect(d.sides.LEFT.g.outlineBulge.length).toBeLessThan(400); // not hundreds of chords round the disc
     expect(text.trimEnd().endsWith('EOF')).toBe(true);
     // every coordinate on the sheet is positive, and the part is the reported size
     const xs: number[] = [], ys: number[] = [];
@@ -124,14 +246,22 @@ describe('cut files', () => {
       if (lines[i].trim() === '20' && lines[i + 1] !== '0.0') ys.push(Number(lines[i + 1]));
     }
     expect(Math.min(...xs, ...ys)).toBeGreaterThan(0);
-    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(17.48 - 0.05, 0);
-    expect(cutDxf(d.sides.RIGHT)).toBe(text);
+    const [w, l] = d.sides.LEFT.summary.partSizeIn;
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(w, 0);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(l, 0);
+  });
+
+  it('writes a LEFT and a RIGHT file when the panels differ', () => {
+    const d = design(2);
+    expect(d.identical).toBe(false);
+    expect(cutFiles(d).map((f) => f.name)).toEqual(['700c_32h3x_2strips_pp_08_LEFT_cut_in.dxf', '700c_32h3x_2strips_pp_08_RIGHT_cut_in.dxf']);
+    expect(cutDxf(d.sides.RIGHT)).not.toBe(cutDxf(d.sides.LEFT));
   });
 
   it('writes the reference drawing in mm with its layers', () => {
     const text = referenceDxf(design(2));
     expect(text).toMatch(/\$INSUNITS\n 70\n4\n/);
-    for (const layer of ['OUTLINE', 'LED_STRIP', 'SENSOR_UNDER', 'NOTES']) expect(text).toContain(`\n${layer}\n`);
+    for (const layer of ['OUTLINE', 'LED_STRIP', 'SENSOR_UNDER', 'SPOKES', 'NOTES']) expect(text).toContain(`\n${layer}\n`);
   });
 });
 
@@ -140,77 +270,14 @@ describe('worker transport', () => {
     const d = design(3);
     const back = unpackDesign(structuredClone(packDesign(d)));
     const [a, b] = [d.sides.LEFT, back.sides.LEFT];
-    for (const rho of [10, 100, 250, 301, 320]) {
-      expect(b.m.planR(rho)).toBe(a.m.planR(rho));
-      expect(b.m.zAtRho(rho)).toBe(a.m.zAtRho(rho));
-      expect(b.g.hw(rho)).toBe(a.g.hw(rho));
+    for (const r of [10, 100, 250, 301, 320]) {
+      expect(b.sf.zAt(r)).toBe(a.sf.zAt(r));
+      expect(b.sf.rhoOf(r)).toBe(a.sf.rhoOf(r));
+      expect(b.sf.rOf(r)).toBe(a.sf.rOf(r));
     }
     expect(b.g.outline.contains([100, 0])).toBe(a.g.outline.contains([100, 0]));
     expect(back.wheel.spokes[5].at(0.5)).toEqual(d.wheel.spokes[5].at(0.5));
     expect(cutFiles(back)[0].text).toBe(cutFiles(d)[0].text);
-  });
-});
-
-describe('Baltic birch (SendCutSend .125")', () => {
-  const birch = (n: number) => {
-    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: n, panelMaterial: 'birch_125' });
-    return designPanels(wheel, panel);
-  };
-
-  it('two strips along the face grain pass every check but the (typical) fork', () => {
-    const d = birch(2), s = d.sides.LEFT.summary;
-    expect(s.blades.map((b) => b.grainDeg)).toEqual([0, 0]);
-    expect(s.sigmaOk).toBe(true);
-    expect(s.sigmaMaxMPa).toBeLessThanOrEqual(31);
-    expect(s.sigmaTargetMPa).toBe(33);
-    expect(s.sigmaHubSectionMPa).toBeLessThanOrEqual(31);
-    expect(s.clearanceOk).toBe(true);
-    expect(s.clampAfterCreepN).toBeCloseTo(s.clampForceOnHubN / 2, 0);
-    expect(s.partSizeIn[1]).toBeLessThanOrEqual(30);
-    expect(d.orderNote).toMatch(/face grain along the part's length/);
-    expect(d.warnings).toHaveLength(1);
-    expect(d.warnings[0]).toMatch(/fork/);
-  });
-
-  it('keeps the hub tabs plain and small: no holes beyond the blade, sized by the weakest hub section', () => {
-    const g = birch(2).sides.LEFT.g;
-    expect(g.holes).toHaveLength(112);
-    // the four beside the bore are gone: the nearest holes are the first ties on the strip rows
-    expect(Math.min(...g.holes.map((h) => Math.hypot(...h.c)))).toBeCloseTo(30.6, 1);
-    // 8 columns of 4 holes across on each blade, out from the hub
-    for (const sign of [1, -1]) {
-      const across = new Map<number, number>();
-      for (const h of g.holes) if (Math.sign(h.x) === sign) across.set(Math.round(h.x), (across.get(Math.round(h.x)) ?? 0) + 1);
-      expect([...across.values()].filter((n) => n === 4)).toHaveLength(8);
-    }
-    expect(Math.max(...g.holes.map((h) => Math.abs(h.y)))).toBeCloseTo(21, 6); // the blade's own rows only
-    expect(g.plateLW).toEqual([17, 54]);
-    expect(g.plateC).toBe(4);
-    // the narrowest section through the hub, not only the one through the bore's centre
-    expect(g.netWCenter).toBeCloseTo(2 * 54 - 38.1, 0);
-  });
-
-  it('checks every hub section: holes beside the bore weaken a section off the centre line', () => {
-    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: 2, panelPlateHoles: true, panelPlateHalfWidthMm: 55.3, panelPlateLengthMm: 20 });
-    const s = designPanels(wheel, panel).sides.LEFT.summary;
-    expect(s.netWidthAtHubMm).toBeLessThan(2 * 55.3 - 38.1 - 1);
-  });
-
-  it('warns that blades across the grain bend unequally (3 strips) or overload the ones along it (4 strips)', () => {
-    const three = birch(3).sides.LEFT.summary;
-    expect(three.blades.map((b) => b.grainDeg)).toEqual([0, 60, 60]);
-    expect(three.blades[1].tipForceN).toBeLessThan(three.blades[0].tipForceN / 5);
-    expect(birch(3).warnings.some((w) => /bend unequally/.test(w))).toBe(true);
-    expect(birch(4).sides.LEFT.summary.sigmaOk).toBe(false);
-  });
-
-  it('isotropic materials stay the same every way: G-10 is the default', () => {
-    expect(defaultParams().panelMaterial).toBe('g10_063');
-    const { wheel, panel } = panelInputs({ ...defaultParams(), stripCount: 3 });
-    const s = designPanels(wheel, panel).sides.LEFT.summary;
-    expect(new Set(s.blades.map((b) => b.tipForceN)).size).toBe(1);
-    expect(s.blades[0].grainDeg).toBeNull();
-    expect(s.clampAfterCreepN).toBeNull();
   });
 });
 
@@ -219,11 +286,11 @@ describe('shared settings', () => {
     const p = { ...defaultParams(), stripCount: 2 };
     const { wheel, panel } = panelInputs(p);
     expect(wheel).toMatchObject({ size: '700c', spokes: 32, crosses: 3, rimWallR: 289, erd: 586 });
-    expect(panel).toMatchObject({ strips: 2, tipEndR: 298.45, sensor: true, sensorAll: false });
+    expect(panel).toMatchObject({ strips: 2, material: 'pp_08', tipEndR: 298.45, discCross: 0, sensorGap: 12 });
     const d = designPanels(wheel, panel);
     expect(d.rimNote).toMatch(/Rim wall assumed/); // the default rim is deeper than the measured tips allow
     applyToSim(p, d);
-    expect(p).toMatchObject({ stripStartMm: 23, stripLengthMm: 271, autoLength: false, rimDepthMm: 9 });
+    expect(p).toMatchObject({ stripStartMm: 22, stripLengthMm: 272, autoLength: false, rimDepthMm: 9 });
     expect(derive(p).ledsPerStrip).toBe(d.sides.LEFT.summary.ledsPerStrip);
   });
 });

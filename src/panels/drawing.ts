@@ -1,8 +1,8 @@
 // The panels' drafting view: the flat part as cut with its dimensions, the bent panel on the
 // wheel, and a side section through the hub. Pan by dragging, zoom with the wheel or a pinch,
 // double-click (or F) to fit, and M to measure between snapped points.
-import { flatExtras, type PanelDesign, type SideResult, toPlan } from './design';
-import { densify, pol, type Pt, rot } from './geom';
+import { flatExtras, type HoleKind, type PanelDesign, type SideResult, toPlan } from './design';
+import { densify, pmod, pol, type Pt, rot } from './geom';
 
 type Mode = 'flat' | 'plan' | 'section';
 interface Style { stroke?: string; fill?: string; width?: number; dash?: number[]; alpha?: number }
@@ -16,8 +16,8 @@ interface Scene { prims: Prim[]; snaps: Pt[]; bounds: [Pt, Pt]; xScale: number; 
 
 const C = {
   bg: '#0b0e15', grid: '#161b26', gridText: '#4b5466', part: '#1c2330', edge: '#c5cfdd', hole: '#8d98aa',
-  dim: '#6fb3ff', grain: '#c9a26b', led: '#ff9f1c', angle: '#c08cff', sensor: '#b07cd8', red: '#ff5a67', measure: '#ffd166',
-  text: '#d8dde6', muted: '#8b93a3', spokeIn: '#8a949c', spokeOut: '#c08a2c', spokeOther: '#262c38',
+  dim: '#6fb3ff', led: '#ff9f1c', angle: '#c08cff', sensor: '#b07cd8', red: '#ff5a67', measure: '#ffd166',
+  text: '#d8dde6', muted: '#8b93a3', spokeIn: '#8a949c', spokeOut: '#c08a2c', spokeOther: '#262c38', tie: '#4fd1a5', board: '#ff7ab6', wire: '#f2c94c',
 };
 const SECTION_X = 3; // lateral exaggeration of the side section
 
@@ -39,114 +39,107 @@ function boundsOf(prims: Prim[]): [Pt, Pt] {
 function partPath(rings: Pt[][]): Prim {
   return { k: 'path', rings, closed: true, s: { fill: C.part, stroke: C.edge, width: 1.2 } };
 }
+const HOLE: Record<HoleKind, string> = { strip: C.hole, spoke: C.tie, disc: C.angle, sensor: C.board, wire: C.wire };
+const LEGEND = 'holes: grey strip ties, green spoke ties, purple disc ties round the spoke crossings, pink hall sensor ties, yellow wire holes';
 
 /** The flat part as cut, blade 1 pointing right, with the dimensions needed to check or rebuild it. */
 function flatScene(d: PanelDesign, s: SideResult): Scene {
   const { g } = s, pp = d.spec, sm = s.summary;
-  const a0 = g.arms[0];
-  const R = (p: Pt) => rot(p, -a0);
+  const a0 = g.arms[0], R = (p: Pt) => rot(p, -a0);
+  const { sensors, spokes } = flatExtras(d, s);
   const prims: Prim[] = [partPath([g.outline.pts.map(R), ...g.holes.map((h) => h.ring.pts.map(R)), circle(g.rBore)])];
-  const E = g.rhoEnd, hole = pp.tieW + pp.tieClear, step = pp.holesEvery * pp.ledPitch;
-  const yr = g.yRow, wt = g.wTip, rb = g.rBore, xs = g.holeRhos;
-  const dim = (a: Pt, b: Pt, off: number, text: string) => prims.push({ k: 'dim', a, b, off, text, color: C.dim });
-  const note = (at: Pt, textAt: Pt, text: string, align?: 'left' | 'right') => prims.push({ k: 'note', at, textAt, text, color: C.dim, align });
-  const rel = g.arms.map((a) => ((a - a0) % 360 + 360) % 360).sort((u, v) => u - v);
+  for (const sp of spokes) prims.push({ k: 'path', rings: [sp.map(R)], closed: false, s: { stroke: C.spokeIn, width: 0.8, dash: [4, 4], alpha: 0.5 } });
+  for (const h of g.holes) prims.push({ k: 'path', rings: [h.ring.pts.map(R)], closed: true, s: { stroke: HOLE[h.kind], width: 1.4 } });
+  for (const b of sensors) prims.push({ k: 'path', rings: [b.map(R)], closed: true, s: { fill: C.sensor, alpha: 0.35 } });
+  const rel = g.arms.map((a) => pmod(a - a0, 360));
   for (const r of rel) { // LED lanes
     for (const sg of [1, -1]) {
-      prims.push({ k: 'path', rings: [[rot([rb + 2, (sg * pp.stripW) / 2], r), rot([E, (sg * pp.stripW) / 2], r)]], closed: false, s: { stroke: C.led, width: 1, dash: [6, 4] } });
+      prims.push({ k: 'path', rings: [[rot([g.rhoLed0, (sg * pp.stripW) / 2], r), rot([g.rhoLed1, (sg * pp.stripW) / 2], r)]], closed: false, s: { stroke: C.led, width: 1, dash: [6, 4] } });
     }
   }
-  prims.push({ k: 'text', at: [E * 0.6, 0], text: `LED strip lane ${mmIn(pp.stripW)}`, color: C.led });
-  if (pp.ETrans) { // plywood: the face grain runs along blade 1
-    const y = g.star ? g.plateLW![1] + 40 : Math.max(g.hw(0), g.plateLW?.[1] ?? 0) + 36;
-    prims.push({ k: 'dim', a: [-E * 0.9, y], b: [-E * 0.45, y], off: 0, text: 'face grain', color: C.grain });
+  const E = g.rhoEnd, w = g.bladeW, hole = pp.tieW + pp.tieClear, y = pp.stripW / 2;
+  const dim = (a: Pt, b: Pt, off: number, text: string) => prims.push({ k: 'dim', a, b, off, text, color: C.dim });
+  const note = (at: Pt, textAt: Pt, text: string, align?: 'left' | 'right') => prims.push({ k: 'note', at, textAt, text, color: C.dim, align });
+  prims.push({ k: 'text', at: [(g.rhoLed0 + g.rhoLed1) / 2, 0], text: `LED strip ${mmIn(pp.stripW)} · ${sm.ledsPerStrip} LEDs`, color: C.led });
+  dim([E, -w / 2], [E, w / 2], -12, `blade ${mmIn(w)}`);
+  const below = -w / 2 - Math.max(0, ...s.spokeTies.filter((t) => t.blade === 0 && t.sg < 0).map((t) => t.earMm));
+  dim([0, below], [E, below], -18, `centre to tip ${mmIn(E)} flat (${sm.tipR} mm on the wheel)`);
+  // the disc, measured between two blades
+  const between = rel.length > 1 ? rel[1] / 2 : 90;
+  dim(pol(g.rhoDisc, between), pol(g.rhoDisc, between + 180), 0, `disc Ø ${mmIn(2 * g.rhoDisc)}`);
+  note(pol(g.rBore, between + 90), pol(g.rhoDisc + 40, between + 120), `Ø ${mmIn(2 * g.rBore, 2)} bore`);
+  const st = g.stripTieRhos[0];
+  if (st.length >= 3) {
+    dim([st.at(-3)!, y], [st.at(-2)!, y], 10 + hole / 2, `strip ties every ${mmIn(st.at(-2)! - st.at(-3)!, 2)}`);
+    dim([st.at(-3)!, -y], [st.at(-3)!, y], -8, `${mmIn(2 * y)}`);
   }
-  dim([E, -wt / 2], [E, wt / 2], -12, `tip ${mmIn(wt)}`);
-  dim([xs.at(-1)! + hole / 2, yr + hole / 2 + 1], [E, yr + hole / 2 + 1], 9, `gap ${mmIn(sm.gapLastHoleToEndMm)}`);
-  if (xs.length >= 4) dim([xs.at(-4)!, yr], [xs.at(-3)!, yr], 12 + hole / 2, `pitch ${mmIn(step, 2)}`);
-  if (xs.length >= 6) dim([xs.at(-6)!, -yr], [xs.at(-6)!, yr], -10, `rows ${mmIn(2 * yr)}`);
-  if (pp.slot) {
-    const [sw, sd] = pp.slot;
-    note([E - sd / 2, 0], [E - 70, wt / 2 + 24], `nipple slot ${sw.toFixed(1)} wide × ${sd.toFixed(1)} deep, every tip`);
+  note([st.at(-1) ?? E, -y - hole / 2], [(st.at(-1) ?? E) - 40, -w / 2 - 34], `□ ${mmIn(hole)} holes, R${pp.cutCornerR} corners`, 'right');
+  if (rel.length > 1) { // angle between the first two blades
+    prims.push({ k: 'path', rings: [Array.from({ length: 41 }, (_, k) => pol(g.rhoDisc + 25, 6 + (k * (rel[1] - 12)) / 40))], closed: false, s: { stroke: C.angle, width: 1 } });
+    prims.push({ k: 'text', at: pol(g.rhoDisc + 42, rel[1] / 2), text: `${d.armSpacing.toFixed(2)}°`, color: C.angle, size: 13 });
   }
-  const lw = g.plateLW;
-  const half = Math.max(g.hw(0), lw ? lw[1] : 0);
-  note([xs.at(-2)!, -yr - hole / 2], [xs.at(-2)! - 30, -half - 30], `□ ${mmIn(hole)} holes, R${pp.cutCornerR} corners`, 'right');
-  const py = pp.gridPitchY || pp.stripW;
-  const cy = lw ? [1, 2, 3, 4, 5].map((k) => yr + k * py).filter((v) => v + hole / 2 + pp.gridEdge <= lw[1] + 1e-6) : [];
-  if (g.star) {
-    // angles between the blades
-    rel.forEach((r, i) => {
-      const nxt = i === rel.length - 1 ? rel[0] + 360 : rel[i + 1];
-      prims.push({ k: 'path', rings: [Array.from({ length: 41 }, (_, k) => pol(95, r + 14 + (k * (nxt - r - 28)) / 40))], closed: false, s: { stroke: C.angle, width: 1 } });
-      prims.push({ k: 'text', at: pol(112, (r + nxt) / 2), text: `${(nxt - r).toFixed(2)}°`, color: C.angle, size: 13 });
-    });
-    const [Lp, Wp] = lw!;
-    dim([0, -Wp], [E, -Wp], -30, `centre to tip ${mmIn(E)}`);
-    dim([Lp, -Wp], [Lp, Wp], -8, `plate ${mmIn(2 * Wp)}`);
-    dim([0, -Wp], [Lp, -Wp], -12, `plate ${mmIn(Lp)} from centre`);
-    dim([Lp, -Wp], [Lp + g.plateC!, -Wp], -12, `taper ${mmIn(g.plateC!)}`);
-    if (cy.length) dim([xs[2], yr], [xs[2], cy[0]], -10, mmIn(py, 2));
-    note([-rb * 0.7, -rb * 0.7], [-E * 0.55, -E * 0.15], `Ø ${mmIn(2 * rb, 2)} bore`);
-  } else {
-    dim([-E, -half], [E, -half], -14, `overall ${mmIn(2 * E)}`);
-    note([rb * 0.7, -rb * 0.7], [30, -half - 46], `Ø ${mmIn(2 * rb, 2)} bore`, 'left');
-    note([-rb * 0.8, -rb * 0.6], [-30, -half - 30], `row gap to bore ${sm.gapFirstHoleToBoreMm} mm · any hole ≥ ${pp.boreEdge} mm from the bore`, 'right');
-    if (lw) {
-      const [Lp, Wp] = lw;
-      dim([-Lp, -Wp], [-Lp, Wp], 16, `${pp.plateHoles ? 'plate' : 'across tabs'} ${mmIn(2 * Wp)}`);
-      dim([-Lp, Wp], [Lp, Wp], 9, `${pp.plateHoles ? 'plate' : 'tab'} flat ${mmIn(2 * Lp)}`);
-      dim([Lp, Wp], [Lp + g.plateC!, Wp], 9, `taper ${mmIn(g.plateC!)}`);
-      if (cy.length) {
-        dim([xs[2], yr], [xs[2], cy[0]], -10, mmIn(py, 2));
-        if (pp.plateHoles) dim([xs[1], cy.at(-1)! + hole / 2], [xs[1], Wp], -8, `edge ${mmIn(pp.gridEdge)}`);
-      }
-    } else {
-      dim([0, -g.hw(0)], [0, g.hw(0)], -(E * 0.35), `centre width ${mmIn(2 * g.hw(0))}`);
-    }
+  const tie = s.spokeTies.find((t) => t.blade === 0);
+  if (tie) {
+    const [p, q] = tie.holes.map(R);
+    note(p, [p[0] - 30, p[1] + tie.sg * 50], tie.across
+      ? 'spoke tie across the strip, between LEDs (the spoke runs under the strip)'
+      : `spoke tie: holes ${mmIn(Math.hypot(q[0] - p[0], q[1] - p[1]))} apart, either side of the spoke`, 'right');
   }
-  const snaps: Pt[] = [[0, 0], ...[0, 90, 180, 270].map((a) => pol(rb, a)), ...g.outlineBulge.map((p) => R([p[0], p[1]])),
+  const sb = g.sensors.find((b) => b.blade === 0);
+  if (sb) {
+    const at: Pt = [sb.rho, sb.e + Math.sign(sb.e) * (pp.sensorBody[0] / 2)];
+    note(at, [sb.rho + 50, at[1] + Math.sign(sb.e) * 40],
+      `hall sensor (US5881, marked face out), ${mmIn(pp.sensorGap)} from the strip: a tie across its body, one across its leads`, 'left');
+  }
+  const dt = s.discTies[0];
+  if (dt) { const p = R(dt.holes[0]); note(p, [p[0] - 60, p[1] - 70], `disc tie round the spoke crossing at r ${dt.r.toFixed(1)} mm`, 'right'); }
+  if (g.slots.length && d.tipSlot) {
+    const a = d.wheel.spokes[g.slots[0].rimHole].rimDeg - a0, at = pol(E - d.tipSlot.depthMm / 2, a), out = pol(E + 30, a);
+    note(at, [out[0], out[1] + 40], `nipple slot ${d.tipSlot.widthMm.toFixed(1)} wide × ${d.tipSlot.depthMm.toFixed(1)} deep`);
+  }
+  const snaps: Pt[] = [[0, 0], ...[0, 90, 180, 270].map((a) => pol(g.rBore, a)), ...g.outlineBulge.map((p) => R([p[0], p[1]])),
     ...g.holes.flatMap((h) => [R(h.c), ...h.bulge.map((p) => R([p[0], p[1]]))])];
-  const per = sm.holesPerBlade ? ` (${sm.holesPerBlade.join('/')} per blade)` : '';
   return {
     prims, snaps, bounds: boundsOf(prims), xScale: 1,
-    title: `${d.identical ? 'LEFT = RIGHT' : s.label} panel · flat, as cut · ${sm.partSizeIn[0]} × ${sm.partSizeIn[1]} in · `
-      + `${pp.label} ${pp.thickness.toFixed(2)} mm · ${sm.holesTotal} holes${per} · outline corners R${pp.cornerR}${d.identical ? ' · order 2' : ''}`,
-    hint: 'Blade 1 points right. Dimensions in mm (inches).',
+    title: `${d.identical ? 'LEFT = RIGHT turned over' : s.label} panel · flat, as cut · ${sm.partSizeIn[0]} × ${sm.partSizeIn[1]} in · `
+      + `${pp.label} · ${sm.holesTotal} holes · outline corners R${pp.cornerR}${d.identical ? ' · order 2' : ''}`,
+    hint: `Blade 1 points right. Dimensions in mm (inches). Dashed: the spokes it lies on · ${LEGEND}.`,
   };
 }
 
-/** The panel on the wheel, bent by the tip ties, seen from the right, with every spoke. */
+/** The panel on the wheel, seen from the right, with every spoke. */
 function planScene(d: PanelDesign, s: SideResult): Scene {
-  const wh = d.wheel, { g, m } = s, prims: Prim[] = [];
-  const P = (p: Pt) => toPlan(m, p);
+  const wh = d.wheel, { g } = s, prims: Prim[] = [];
+  const P = (p: Pt) => toPlan(s.sf, p);
   const DIR: Record<number, string> = { 1: C.spokeIn, [-1]: C.spokeOut };
+  const tied = new Set(s.spokeTies.map((t) => t.spoke));
   const spokes = [...wh.spokes].sort((a, b) => Number(a.side === s.side) - Number(b.side === s.side));
   for (const sp of spokes) {
-    const own = sp.side === s.side, sand = d.sandwich?.rimHole === sp.i;
-    prims.push({ k: 'path', rings: [[sp.a, sp.b]], closed: false, s: { stroke: sand ? C.red : own ? DIR[sp.direction] : C.spokeOther, width: sand ? 2.4 : own ? 1.2 : 0.8 } });
+    const own = sp.side === s.side;
+    prims.push({ k: 'path', rings: [[sp.a, sp.b]], closed: false, s: { stroke: own ? DIR[sp.direction] : C.spokeOther, width: own ? 1.2 : 0.8 } });
   }
   prims.push({ k: 'path', rings: [circle(wh.p.rimWallR, 360)], closed: true, s: { stroke: '#4b5466', width: 1, dash: [6, 5] } });
   prims.push(partPath([densify(g.outline.pts, 2).map(P), ...g.holes.map((h) => h.ring.pts.map(P)), circle(g.rBore)]));
+  for (const sp of wh.spokes) if (tied.has(sp.i)) prims.push({ k: 'path', rings: [[sp.a, sp.b]], closed: false, s: { stroke: C.tie, width: 1.2, alpha: 0.6 } });
+  for (const h of g.holes) prims.push({ k: 'path', rings: [h.ring.pts.map(P)], closed: true, s: { stroke: HOLE[h.kind], width: 1.4 } });
   const { leds, sensors } = flatExtras(d, s);
   for (const b of sensors) prims.push({ k: 'path', rings: [densify(b, 2).map(P)], closed: true, s: { fill: C.sensor, alpha: 0.55 } });
-  for (const [a, b] of leds) prims.push({ k: 'path', rings: [[P(a), P(b)]], closed: false, s: { stroke: C.led, width: 3 } });
+  for (const [a, b] of leds) prims.push({ k: 'path', rings: [[P(a), P(b)]], closed: false, s: { stroke: C.led, width: 3, alpha: 0.8 } });
   for (const sp of wh.spokes) prims.push({ k: 'dot', c: pol(wh.p.erd / 2, sp.rimDeg), r: 2.5, fill: sp.side === s.side ? C.edge : '#4b5466' });
   const vd = wh.valveDeg(), rw = wh.p.rimWallR;
-  prims.push({ k: 'path', rings: [[pol(rw + 6, vd), pol(rw - 35, vd)]], closed: false, s: { stroke: C.angle, width: 5 } });
+  prims.push({ k: 'path', rings: [[pol(rw + 6, vd), pol(rw - d.spec.valveLen, vd)]], closed: false, s: { stroke: C.angle, width: 5 } });
   prims.push({ k: 'text', at: pol(rw + 22, vd), text: 'valve', color: C.angle });
   g.arms.forEach((a, i) => prims.push({ k: 'text', at: pol(rw + 24, a), text: `blade ${i + 1} · ${a.toFixed(2)}°`, color: C.text }));
   const sm = s.summary;
   return {
     prims, snaps: [[0, 0], ...wh.spokes.map((sp) => pol(wh.p.erd / 2, sp.rimDeg)), ...g.holes.map((h) => P(h.c))],
     bounds: boundsOf(prims), xScale: 1,
-    title: `${s.label} panel on the wheel, bent (seen from the right) · ${sm.ledsPerStrip} LEDs per blade · ${sm.areaCm2} cm² · ${sm.massG} g`,
-    hint: `Own-side spokes: grey heads-in, amber heads-out${d.sandwich ? ', red: the spoke clamped between the tips' : ''}`
-      + `${sensors.length ? ' · purple: magnetometer boards (inner face)' : ''} · dashed: rim wall`,
+    title: `${s.label} panel on the wheel (seen from the right) · ${sm.ledsPerStrip} LEDs per blade · ${sm.spokeTiesPerBlade.join('/')} spoke ties per blade · ${sm.massG} g`,
+    hint: `Own-side spokes: grey heads-in, amber heads-out; green: tied to a blade${sensors.length ? ' · purple: hall sensors and their leads (outer face)' : ''} · dashed: rim wall · ${LEGEND}`,
   };
 }
 
-/** Section through the axle: every spoke, both panels bent by the ties, flanges, fork and rim. */
+/** Section through the axle: every spoke, both panels on their spokes, flanges, fork and rim. */
 function sectionScene(d: PanelDesign): Scene {
   const wh = d.wheel, pp = d.spec, X = SECTION_X, prims: Prim[] = [];
   const t = pp.thickness, old = wh.p.old / 2, top = wh.p.rimWallR + 14;
@@ -172,30 +165,28 @@ function sectionScene(d: PanelDesign): Scene {
   }
   const stack = pp.stripT + pp.tieT;
   for (const s of [d.sides.LEFT, d.sides.RIGHT]) {
-    const { g, m, side } = s;
-    const rhos = Array.from({ length: 301 }, (_, k) => g.rBore + (k * (g.rhoEnd - g.rBore)) / 300);
-    const inner = rhos.map((rho) => [side * (m.zAtRho(rho) - t / 2) * X, m.planR(rho)] as Pt);
-    const outer = rhos.map((rho) => [side * (m.zAtRho(rho) + t / 2) * X, m.planR(rho)] as Pt);
+    const { g, sf, side } = s, rEnd = sf.rOf(g.rhoEnd);
+    const rs = Array.from({ length: 301 }, (_, k) => g.rBore + (k * (rEnd - g.rBore)) / 300);
+    const inner = rs.map((r) => [side * sf.zAt(r) * X, r] as Pt);
+    const outer = rs.map((r) => [side * (sf.zAt(r) + t) * X, r] as Pt);
     prims.push({ k: 'path', rings: [[...inner, ...outer.reverse()]], closed: true, s: { fill: '#aab4c3', stroke: '#aab4c3', width: 1 } });
-    const lane = rhos.filter((rho) => rho >= g.rhoLed0 && rho <= g.rhoLed1).map((rho) => [side * (m.zAtRho(rho) + t / 2 + stack) * X, m.planR(rho)] as Pt);
+    const r0 = sf.rOf(g.rhoLed0), r1_ = sf.rOf(g.rhoLed1);
+    const lane = rs.filter((r) => r >= r0 && r <= r1_).map((r) => [side * (sf.zAt(r) + t + stack) * X, r] as Pt);
     prims.push({ k: 'path', rings: [lane], closed: false, s: { stroke: C.led, width: 1.5 } });
+    for (const tie of s.spokeTies) prims.push({ k: 'dot', c: [side * (sf.zAt(tie.r) + t) * X, tie.r], r: 2.5, fill: C.tie });
     const fc = s.summary.forkClearance;
     if (fc.where && s.side > 0) {
       const r = fc.where.r;
       prims.push({ k: 'note', at: [forkZ(r) * X, r], textAt: [forkZ(r) * X - 25, r - 45], text: `${fc.minMm} mm to the fork (${fc.governedBy})`, color: fc.minMm >= pp.minForkClear ? C.dim : C.red });
     }
   }
-  const R = d.sides.RIGHT;
   prims.push({ k: 'path', rings: [[[0, wh.nippleTipR()], [0, wh.p.rimWallR]]], closed: false, s: { stroke: C.edge, width: 4 } });
   prims.push({ k: 'path', rings: [[[-12 * X, wh.p.rimWallR], [12 * X, wh.p.rimWallR]]], closed: false, s: { stroke: C.edge, width: 2 } });
   prims.push({ k: 'text', at: [16 * X + 30, wh.p.rimWallR], text: 'rim wall / nipple', color: C.muted, size: 11 });
-  const rt = R.m.planR(R.g.rhoTie);
-  prims.push({ k: 'path', rings: [[[-6 * X, rt], [6 * X, rt]]], closed: false, s: { stroke: C.red, width: 2.5 } });
-  prims.push({ k: 'note', at: [6 * X, rt], textAt: [20 * X, rt - 20], text: 'tip-to-tip zip tie', color: C.red });
   return {
     prims, snaps: [[0, 0]], bounds: boundsOf(prims), xScale: X,
-    title: `Side section through the axle · all ${wh.p.spokes} spokes · panels bent from flat by the tip ties · lateral scale ×${X}`,
-    hint: 'Grey: heads-in spokes, amber: heads-out · orange: LED strip + tie band on the outer face · fork, hub and flanges are typical values',
+    title: `Side section through the axle · all ${wh.p.spokes} spokes · each panel lies on its own spokes · lateral scale ×${X}`,
+    hint: 'Grey: heads-in spokes, amber: heads-out · orange: LED strip + tie band on the outer face · green dots: spoke ties · fork, hub and flanges are typical values',
   };
 }
 

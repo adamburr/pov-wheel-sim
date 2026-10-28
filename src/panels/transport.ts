@@ -1,25 +1,23 @@
 // A design crosses from the worker to the page as plain data (structured clone keeps no functions
-// or classes): rings travel as their points, the wheel as its dimensions, and the bent shape as its
-// tables. Unpacking builds the helpers again.
-import { bendFns, type Flat, type Hole, hwFn, type Mech, type PanelDesign, type SideResult } from './design';
+// or classes): rings travel as their points, the wheel as its dimensions, and the surface the panel
+// lies on as its table. Unpacking builds the helpers again.
+import { type Flat, type Hole, type PanelDesign, type SideResult, surfaceFns } from './design';
 import { type Pt, Ring } from './geom';
 import { Wheel, type WheelSpec } from './wheel';
 
 type PackedHole = Omit<Hole, 'ring'> & { ring: Pt[] };
-type PackedFlat = Omit<Flat, 'outline' | 'holes' | 'hw'> & { outline: Pt[]; holes: PackedHole[] };
-type PackedMech = Omit<Mech, keyof ReturnType<typeof bendFns>>;
-type PackedSide = Omit<SideResult, 'g' | 'm'> & { g: PackedFlat; m: PackedMech };
+type PackedFlat = Omit<Flat, 'outline' | 'holes'> & { outline: Pt[]; holes: PackedHole[] };
+type PackedSide = Omit<SideResult, 'g' | 'sf'> & { g: PackedFlat };
 export type PackedDesign = Omit<PanelDesign, 'wheel' | 'sides'> & { wheel: WheelSpec; sides: { LEFT: PackedSide; RIGHT: PackedSide } };
 
-function packSide(s: SideResult): PackedSide {
-  const { hw: _hw, outline, holes, ...g } = s.g;
-  const { planR: _p, rhoOf: _r, zAtRho: _z, zMid: _m, ...m } = s.m;
-  return { ...s, g: { ...g, outline: outline.pts, holes: holes.map((h) => ({ ...h, ring: h.ring.pts })) }, m };
+function packSide({ sf: _sf, ...s }: SideResult): PackedSide {
+  const { outline, holes, ...g } = s.g;
+  return { ...s, g: { ...g, outline: outline.pts, holes: holes.map((h) => ({ ...h, ring: h.ring.pts })) } };
 }
 
 function unpackSide(s: PackedSide): SideResult {
-  const g: Flat = { ...s.g, outline: new Ring(s.g.outline), holes: s.g.holes.map((h) => ({ ...h, ring: new Ring(h.ring) })), hw: hwFn(s.g.hwSpec) };
-  return { ...s, g, m: { ...s.m, ...bendFns(s.m.bend) } };
+  const g: Flat = { ...s.g, outline: new Ring(s.g.outline), holes: s.g.holes.map((h) => ({ ...h, ring: new Ring(h.ring) })) };
+  return { ...s, g, sf: surfaceFns(s.surface) };
 }
 
 export function packDesign(d: PanelDesign): PackedDesign {

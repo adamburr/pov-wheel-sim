@@ -4,7 +4,7 @@ import { type Params, WHEELS } from '../params';
 import type { PanelDesign, PanelSpec, WheelInput } from './design';
 
 /** Strip counts the panel layouts cover. */
-export const PANEL_STRIPS = [2, 3, 4];
+export { PANEL_STRIP_RANGE as PANEL_STRIPS } from './design';
 
 /** A short wheel size for file names: "700c", "29in", or the bead seat diameter when it's custom. */
 function sizeName(p: Params): string {
@@ -27,12 +27,9 @@ export function panelInputs(p: Params): { wheel: WheelInput; panel: Partial<Pane
       strips: p.stripCount, ledPitch: 1000 / p.ledDensity, material: p.panelMaterial,
       boreD: p.panelBoreMm, tipEndR: p.panelTipRadiusMm > 0 ? p.panelTipRadiusMm : null, tipSlot: p.panelTipSlot,
       stripW: p.panelStripWidthMm, stripT: p.panelStripThickMm, tieW: p.panelTieWidthMm, tieClear: p.panelTieClearMm,
-      holesEvery: p.panelHolesEvery, gridEdge: p.panelEdgeMm, boreEdge: p.panelBoreEdgeMm, holeMinR: p.panelHoleMinRMm, cornerR: p.panelCornerMm,
-      wCenter: p.panelBladeWidthMm, centerCol: p.panelCenterHoles, plateHoles: p.panelPlateHoles, plateHalfW: p.panelPlateHalfWidthMm,
-      plateTaper: p.panelPlateTaperMm, plateLen: p.panelPlateLengthMm, plateTaperCols: p.panelTaperCols > 0 ? p.panelTaperCols : null,
+      holesEvery: p.panelHolesEvery, gridEdge: p.panelEdgeMm, cornerR: p.panelCornerMm, bladeW: p.panelBladeWidthMm,
+      discCross: p.panelDiscCross, tieSpan: p.panelTieSpanMm, tipTieZone: p.panelTipTieMm, earMax: p.panelTabMaxMm, sensorGap: p.panelSensorGapMm,
       forkCrownR: p.forkCrownRadiusMm, forkCrownHalf: p.forkCrownHalfMm,
-      // magnetometer boards under the left blades: one per strip, or one in all
-      sensor: p.syncMode === 'hall', sensorAll: p.hallPerStrip,
     },
   };
 }
