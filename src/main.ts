@@ -290,8 +290,17 @@ const rideEl = document.getElementById('ride')!;
 const rideSpeed = document.getElementById('ride-speed')!;
 const rideUnit = document.getElementById('ride-unit')!;
 const rideSlider = document.getElementById('ride-slider') as HTMLInputElement;
+// Auto: stop-and-go riding and the next preset at each stop, together. Turned off, the bike rides on
+// steadily at the cruise speed; turned on, the trips start from the speed it was riding at.
 const autoNext = document.getElementById('auto-next') as HTMLInputElement;
-autoNext.addEventListener('change', () => { p.nextOnDark = autoNext.checked; hooks.onDeviceEdit('nextOnDark'); refreshGui(); });
+autoNext.addEventListener('change', () => {
+  const on = autoNext.checked;
+  if (on && !p.cityMode) { if (p.speed > 0) p.citySpeed = p.speed; p.cityMode = true; city.start(simTime, p); }
+  if (!on && p.cityMode) { p.cityMode = false; p.speed = p.citySpeed; p.braking = false; }
+  p.nextOnDark = on;
+  hooks.onDeviceEdit('nextOnDark');
+  refreshGui();
+});
 rideSlider.addEventListener('input', () => {
   const v = Number(rideSlider.value);
   if (p.cityMode) {
@@ -308,7 +317,7 @@ function updateRidePanel(actualMps: number) {
   rideSlider.max = mph ? '40' : '65';
   // The slider sets the target: the cruise speed in stop-and-go, otherwise the riding speed.
   if (document.activeElement !== rideSlider) rideSlider.value = String(p.cityMode ? p.citySpeed : p.speed);
-  autoNext.checked = p.nextOnDark; // also set from the Hardware panel
+  autoNext.checked = p.cityMode && p.nextOnDark; // the preset switching can also be set in the Hardware panel
 }
 ui = buildUi(p, hooks);
 loadSource();
@@ -345,7 +354,7 @@ function updatePanels() {
   if (key === designKey) return;
   designKey = key;
   if (!PANEL_STRIPS.includes(p.stripCount)) {
-    const msg = `The panels come with 2 to 6 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
+    const msg = `The panels come with 2 to 4 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
     designQueued = false;
     designing = 0; // a design still running is for other settings
     ui!.panels.show({ error: msg });

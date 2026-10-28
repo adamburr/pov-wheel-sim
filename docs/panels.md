@@ -45,7 +45,7 @@ The panels use the same build as the simulator. From the **Hardware** tab:
 
 | Setting | Used for |
 |---|---|
-| *Strips* | Blades per side, 2 to 6. Also under Panels |
+| *Strips* | Blades per side, 2 to 4. Also under Panels |
 | *LEDs / m* | Pixel pitch: the strip ties sit every *Strip ties every N pixels* LEDs, between pixels |
 | *Spokes* | The laced wheel model |
 | *Wheel size*, *Rim BSD*, *Rim depth* | The rim's inner wall (BSD/2 − depth) and the spoke ends (ERD = 2 × (wall radius + 4 mm)). When the measured tips don't fit inside that wall, the rim is assumed just outside them |
@@ -98,7 +98,8 @@ follows the spokes.
 - **A hall sensor beside each strip** (Melexis US5881, Adafruit 158), on the disc, 12 mm from the strip's
   edge, as far out as fits (the strip's current falls toward its tip). See [Hall sensors](#hall-sensors).
 - **A wire hole by each strip**: Ø6 mm, in the disc beside the strip's inner end (r ≈ 31 mm) on its sensor's
-  side, clear of the strip ties. The strip's four wires and the sensor's three go through it to the inner
+  side, clear of the strip ties (on a small tab beside the strip where the disc is too small, as on 1-cross
+  wheels). The strip's four wires and the sensor's three go through it to the inner
   side, toward the electronics on the hub.
 
 Near the rim, 3-cross spokes run almost parallel to the blades (4–12° off radial), so a spoke can run beside
@@ -109,17 +110,21 @@ that make the panels mirror images). The generator keeps the turn that, in order
 
 1. ties every stretch of every blade edge;
 2. keeps the valve clear;
-3. needs the smallest tabs (to within 5 mm);
-4. needs the fewest ties across a strip;
-5. makes the two panels mirror images of each other, so one cut file makes both (turn one over);
+3. makes the two panels mirror images of each other, so one cut file makes both (turn one over), or else
+   as alike as it can: the same biggest tab, tie count and ties across a strip on each side;
+4. needs the smallest tabs (to within 5 mm);
+5. needs the fewest ties across a strip;
 6. leaves the fewest disc ties out from under the strips.
+
+A symmetric hub has a mirror axis every half repeat of the spoke pattern (every 22.5° on 32 spokes, from
+16.875°); the blades are tried symmetric about each.
 
 **Strips and spokes.** Near the rim one side's spokes are evenly spaced (22.5° apart on 32 spokes), and the
 left and right sides are offset by half that. To be tied on both edges, a blade tip has to sit close to a spoke
 (tied across the strip) or close to midway between two (a tab each side, or across the blade). Every blade can
 do that when the spoke pattern repeats with the blades, which is easiest when the strips divide the spoke
-count: 2 or 4 strips on 32 spokes, 2, 3, 4 or 6 on 36. With the tips tied within 30 mm and the tab reach on
-auto, 2 to 6 strips all tie on the default 32-spoke 3-cross wheel. When a stretch can't be tied, the tab warns
+count: 2 or 4 strips on 32 spokes, 2, 3 or 4 on 36. With the tips tied within 30 mm and the tab reach on
+auto, 2 to 4 strips all tie on the default 32-spoke 3-cross wheel. When a stretch can't be tied, the tab warns
 and names the strip counts that divide the spoke count.
 
 **The dish.** The spokes form a shallow cone: from the spoke heads at the flange (z ≈ 38 mm) to the rim
@@ -184,22 +189,22 @@ The tab shows the strip's field at the sensors and the room to the fork for the 
 
 On the default 700c 32-hole 3-cross wheel:
 
-| Strips | Parts | Part size (in) | Mass (L / R) | Spoke ties per blade (L / R) | Across a strip (L / R) | Tabs up to | Disc ties (L / R) |
-|---|---|---|---|---|---|---|---|
-| 2 | LEFT + RIGHT | 6.83 × 23.2 | 24 / 31 g | 3 / 6 | 6 / 0 | 50 mm | 8 / 6 |
-| 3 | LEFT + RIGHT | 18.6 × 21.0 | 35 / 34 g | 4–5 / 4–5 | 5 / 6 | 60 mm | 7 / 7 |
-| 4 | LEFT + RIGHT | 17.4 × 17.4, 19.2 × 19.2 | 31 / 45 g | 3 / 6 | 12 / 0 | 50 mm | 8 / 4 |
-| 5 | LEFT + RIGHT | 21.7 × 23.0 | 47 / 45 g | 3–7 | 10 / 10 | 60 mm | 5 / 6 |
-| 6 | LEFT + RIGHT | 21.0 × 23.7 | 54 / 52 g | 4–5 | 10 / 12 | 60 mm | 6 / 6 |
+| Strips | Blades at | Parts | Part size (in) | Mass | Spoke ties per blade | Across a strip | Tabs up to | Disc ties |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 84.375° + 180° | 2 × one part (mirror images) | 6.83 × 23.5 | 28 g | 4 | 4 per panel | 50 mm | 8 |
+| 3 | 54.375° + 120° steps | 2 × one part (mirror images) | 18.6 × 21.0 | 35 g | 4–5 | 5 per panel | 60 mm | 7 |
+| 4 | 39.375° + 90° steps | 2 × one part (mirror images) | 18.0 × 18.0 | 40 g | 4 | 8 per panel | 50 mm | 8 |
 
 Every layout has the same disc (Ø 173.6 mm, ties at r 79.7 mm) and the same strips (39 LEDs from r 22.1 mm to
-293.8 mm, where a nipple slot cuts into a strip's lane). Spans between ties are at most 80 mm on each edge,
-and every edge is tied within 30 mm of the tip. The hall sensors sit at r 66–72 mm, all on the disc. The LED
-strip and a tie band over it clear the typical fork by 3.5 mm, at the start of the strip (r 25 mm).
+296.5 mm). Spans between ties are at most 80 mm on each edge, and every edge is tied within 30 mm of the tip.
+The hall sensors sit at r 66–72 mm, all on the disc. The LED strip and a tie band over it clear the typical
+fork by 3.5 mm, at the start of the strip (r 25 mm).
 
-With 2 and 4 strips, one panel's tips sit over its spokes (tied across the strip) and the other's midway
-between them (tabs each side): the left and right sides' spokes are offset by half a gap. On 36 spokes the
-panels can come out as mirror images (3 or 4 strips with 2- or 3-cross): one part, cut twice.
+**Both sides alike.** The left and right sides' spokes are offset by half a spoke gap (360/32 = 11.25°), so a
+blade over one side's spokes is midway between the other side's. With 2 and 4 strips the blades sit a quarter
+of a gap off the spokes (360/64 = 5.625° past a rim hole: 84.375°, 39.375°), the same on both sides, and the
+two panels come out as mirror images: one part, cut twice and one turned over, with the same tabs and ties on
+each. With 3 strips one blade sits there and the other two either side of it, mirror images too.
 
 Across the common lacings (20–36 spokes, radial to 4-cross) with 2 or 4 strips, every edge ties. The few
 combinations that leave one stretch untied are 3 strips on 20 spokes (2- and 3-cross) and on radially laced
@@ -262,3 +267,5 @@ A cheap check before cutting: print the reference DXF at 1:1 and lay it on the w
 - A hall switch (US5881) per strip, on the disc beside its strip, tied on, marked face toward the fork; the
   strip's stray field estimated at the sensor.
 - A Ø6 mm wire hole per strip in the disc, by the strip's inner end. Polypropylene is the only material.
+- The blades turn for matching sides first: with 2 and 4 strips on 32 spokes they sit a quarter of a spoke
+  gap off the spokes, and the two panels are mirror images (one part). 2 to 4 strips.

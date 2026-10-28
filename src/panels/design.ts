@@ -79,7 +79,7 @@ export const PANEL_DEFAULTS: PanelSpec = {
 
 export type Spec = PanelSpec & Material;
 /** Strips per side the panels are made for. */
-export const PANEL_STRIP_RANGE = [2, 3, 4, 5, 6];
+export const PANEL_STRIP_RANGE = [2, 3, 4];
 export type HoleKind = 'strip' | 'spoke' | 'disc' | 'sensor' | 'wire';
 
 export interface Hole {
@@ -435,19 +435,21 @@ function valveRoom(c: Ctx, arms: number[]): number {
 
 // ---------------------------------------------------------------- mirror images
 /**
- * The axis (deg) that mirrors the left spokes onto the right ones in plan, if there is one (a
- * symmetric hub): blades placed symmetrically about it make the two panels mirror images.
+ * The axes (deg, 0–180) that mirror the left spokes onto the right ones in plan (a symmetric hub has
+ * several, a spoke pattern's repeat apart): blades placed symmetrically about one make the two panels
+ * mirror images.
  */
-export function mirrorAxis(wh: Wheel): number | null {
-  if (wh.p.pcdLeft !== wh.p.pcdRight) return null;
-  const L = wh.sideSpokes(-1), R = wh.sideSpokes(1);
+export function mirrorAxes(wh: Wheel): number[] {
+  if (wh.p.pcdLeft !== wh.p.pcdRight) return [];
+  const L = wh.sideSpokes(-1), R = wh.sideSpokes(1), out: number[] = [];
   const same = (x: number, y: number) => adiff(x, y) < 1e-6;
   for (const q of R) {
-    for (const b of [(L[0].rimDeg + q.rimDeg) / 2, (L[0].rimDeg + q.rimDeg) / 2 + 90]) {
-      if (L.every((l) => R.some((rr) => same(rr.rimDeg, 2 * b - l.rimDeg) && same(rr.hubDeg, 2 * b - l.hubDeg)))) return pmod(b, 180);
+    for (const b of [(L[0].rimDeg + q.rimDeg) / 2, (L[0].rimDeg + q.rimDeg) / 2 + 90].map((v) => pmod(v, 180))) {
+      if (out.some((o) => same(2 * o, 2 * b))) continue;
+      if (L.every((l) => R.some((rr) => same(rr.rimDeg, 2 * b - l.rimDeg) && same(rr.hubDeg, 2 * b - l.hubDeg)))) out.push(b);
     }
   }
-  return null;
+  return out.sort((a, b) => a - b);
 }
 
 // ---------------------------------------------------------------- one panel
@@ -597,8 +599,9 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
       tie++;
     });
   }
-  // wire holes: one per strip, in the disc, as near the strip's inner end as it can be beside the strip
-  // (on its sensor's side), for the strip's and the sensor's wires to the inner side
+  // wire holes: one per strip, as near the strip's inner end as it can be beside the strip (on its
+  // sensor's side), for the strip's and the sensor's wires to the inner side: in the disc, or on a small
+  // tab off the blade where the disc is too small
   if (pp.wireHoleD > 0) {
     const r = pp.wireHoleD / 2, lane = pp.stripW / 2;
     const feet = f.sensors.map((b) => new Ring(sensorAt(pp, arms[b.blade], b.rho, b.e, 1)));
@@ -606,23 +609,36 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
       const sg = Math.sign(f.sensors.find((b) => b.blade === bi)?.e ?? 1);
       const end: Pt = [led.rho0, sg * lane];
       const spots: Pt[] = [];
-      for (let x = rBore + edge + r; x <= rhoDisc - edge - r; x += 0.5) {
+      for (let x = rBore + edge + r; x <= Math.max(rhoDisc, led.rho0 + 40); x += 0.5) {
         for (let e = lane + r + 1; e <= lane + 40; e += 0.5) spots.push([x, sg * e]);
       }
       spots.sort((p, q) => dist(p, end) - dist(q, end));
-      for (const [x, e] of spots) {
+      const fits = (x: number, e: number, onPart: boolean) => {
         const spec = { c: rot([x, e], a), a, kind: 'wire' as const, tie, d: pp.wireHoleD };
-        if (Math.hypot(...spec.c) + r + edge > rhoDisc) continue;
         const q = holeAt(pp, spec).ring;
         // clear of the other strips, every other hole, the sensors and the bore
         const lanes = arms.every((b) => b === a || q.pts.every((p) => { const [u, v] = rot(p, -b); return u < 0 || Math.abs(v) >= lane + 1; }));
-        if (!lanes || q.areaDist([0, 0]) - rBore < edge || !insideBy(outline, q, edge - 0.05)) continue;
-        if (others.some((o) => o.boundaryDist(q, edge) < edge - 0.05) || feet.some((o) => o.boundaryDist(q, 1) < 1 || o.contains(q.pts[0]))) continue;
-        holes.push(spec);
-        others.push(q);
-        tie++;
-        break;
+        if (!lanes || q.areaDist([0, 0]) - rBore < edge || (onPart && !insideBy(outline, q, edge - 0.05))) return null;
+        if (others.some((o) => o.boundaryDist(q, edge) < edge - 0.05) || feet.some((o) => o.boundaryDist(q, 1) < 1 || o.contains(q.pts[0]))) return null;
+        return { spec, q };
+      };
+      let hit = null as { spec: HoleSpec; q: Ring; x: number; e: number } | null;
+      for (const [x, e] of spots) { const ok = fits(x, e, true); if (ok) { hit = { ...ok, x, e }; break; } }
+      if (!hit) { // a tab off the blade for it, blended into the blade's edge
+        for (const [x, e] of spots) {
+          if (Math.abs(e) + r + edge - wHalf > 20) continue;
+          const ok = fits(x, e, false);
+          if (!ok) continue;
+          hit = { ...ok, x, e };
+          const m = r + edge, ey = sg * (wHalf - 0.5);
+          ears.push(rotRing(convexHull([[x - m, e - m], [x + m, e - m], [x + m, e + m], [x - m, e + m], [x - m - 6, ey], [x + m + 6, ey]]), a));
+          break;
+        }
       }
+      if (!hit) return;
+      holes.push(hit.spec);
+      others.push(hit.q);
+      tie++;
     });
   }
   return f;
@@ -653,7 +669,7 @@ function mirrorFeatures(wh: Wheel, f: Features, axis: number): Features {
     spokeTies: f.spokeTies.map((t) => ({
       ...t, blade: blade(t.blade), spoke: holeOf(wh.spokes[t.spoke].rimDeg), sg: -t.sg as 1 | -1, holes: t.holes.map(M) as [Pt, Pt],
     })),
-    sensors: f.sensors.map((b) => ({ ...b, blade: blade(b.blade), e: -b.e })),
+    sensors: f.sensors.map((b) => ({ ...b, blade: blade(b.blade), e: -b.e })).sort((p, q) => p.blade - q.blade),
     discTies: f.discTies.map((t) => ({
       ...t, at: M(t.at), spokes: t.spokes.map((i) => holeOf(wh.spokes[i].rimDeg)) as [number, number], holes: t.holes.map(M) as [Pt, Pt],
     })),
@@ -816,39 +832,47 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   }
 
   // Turn all the blades together (they stay evenly spaced) for: every stretch tied, the valve clear,
-  // the smallest tabs, the two panels mirror images of each other, the fewest disc ties under a strip.
+  // the two panels mirror images of each other (or else as alike as can be), the smallest tabs, the
+  // fewest ties across a strip, the fewest disc ties under a strip.
   const N = pp.strips, period = 360 / N, sidePeriod = 1440 / wh.p.spokes;
-  const axis = mirrorAxis(wh);
-  const symmetric = (t0: number) => axis !== null && Math.min(pmod(t0 - axis, 180 / N), 180 / N - pmod(t0 - axis, 180 / N)) < 1e-6;
-  const cache = new Map<string, { gaps: number; across: number; maxEar: number; sumEar: number; under: Set<number> }>();
+  // blades at t0 + k·period are symmetric about an axis when t0 is a multiple of 180/N from it
+  const axes = mirrorAxes(wh);
+  const symmetric = (t0: number) => axes.find((ax) => Math.min(pmod(t0 - ax, 180 / N), 180 / N - pmod(t0 - ax, 180 / N)) < 1e-6) ?? null;
+  const cache = new Map<string, { gaps: number; n: number; across: number; maxEar: number; sumEar: number; under: Set<number> }>();
   const armEval = (side: number, a: number) => {
     const key = `${side}:${r3(pmod(a, sidePeriod))}`;
     let v = cache.get(key);
     if (!v) {
       const { ties, gaps } = chooseTies(c, side, spokeTieCands(c, side, a, searchGaps[side]));
-      v = { gaps, across: ties.filter((t) => t.across).length, maxEar: Math.max(0, ...ties.map((t) => t.ear)), sumEar: ties.reduce((s, t) => s + t.ear, 0), under: discTiesUnderStrip(c, side, a) };
+      v = { gaps, n: ties.length, across: ties.filter((t) => t.across).length, maxEar: Math.max(0, ...ties.map((t) => t.ear)), sumEar: ties.reduce((s, t) => s + t.ear, 0), under: discTiesUnderStrip(c, side, a) };
       cache.set(key, v);
     }
     return v;
   };
   const starts: number[] = [];
   for (let k = 0; k * 0.25 < period - 1e-9; k++) starts.push(k * 0.25);
-  if (axis !== null) for (let k = 0; k < 2; k++) starts.push(pmod(axis + (k * 180) / N, period));
+  for (const ax of axes) for (let k = 0; k < 2; k++) starts.push(pmod(ax + (k * 180) / N, period));
   let best: { key: number[]; t0: number } | undefined;
   for (const t0 of starts) {
     const arms = Array.from({ length: N }, (_, k) => pmod(t0 + k * period, 360));
     const ev = [-1, 1].flatMap((side) => arms.map((a) => armEval(side, a)));
     const dropped = [0, 1].reduce((n, k) => n + new Set(ev.slice(k * N, (k + 1) * N).flatMap((v) => [...v.under])).size, 0);
     const valve = valveRoom(c, arms);
+    // how differently the two sides come out: their biggest tabs, their tie counts and ties across a strip
+    const side_ = (k: number) => ev.slice(k * N, (k + 1) * N);
+    const [l, r] = [side_(0), side_(1)].map((vs) => ({
+      ear: Math.max(...vs.map((v) => v.maxEar)), n: vs.reduce((s, v) => s + v.n, 0), across: vs.reduce((s, v) => s + v.across, 0),
+    }));
+    const unlike = Math.ceil(Math.abs(l.ear - r.ear) / 5) + Math.abs(l.n - r.n) + Math.abs(l.across - r.across);
     const key = [
-      ev.reduce((s, v) => s + v.gaps, 0), valve < pp.valveClear ? 1 : 0, Math.ceil(Math.max(...ev.map((v) => v.maxEar)) / 5),
-      ev.reduce((s, v) => s + v.across, 0),
-      symmetric(t0) ? 0 : 1, dropped, r1(ev.reduce((s, v) => s + v.sumEar, 0)), -r1(valve),
+      ev.reduce((s, v) => s + v.gaps, 0), valve < pp.valveClear ? 1 : 0, symmetric(t0) === null ? 1 : 0, unlike,
+      Math.ceil(Math.max(...ev.map((v) => v.maxEar)) / 5), ev.reduce((s, v) => s + v.across, 0),
+      dropped, r1(ev.reduce((s, v) => s + v.sumEar, 0)), -r1(valve),
     ];
     if (!best || lexCmp(key, best.key) < 0) best = { key, t0 };
   }
   const arms = Array.from({ length: N }, (_, k) => pmod(best!.t0 + k * period, 360)).sort((a, b) => a - b);
-  const mirrored = symmetric(best!.t0);
+  const axis = symmetric(best!.t0), mirrored = axis !== null;
 
   // the strips: all the same, from just outside the bore to the tip or a nipple slot
   const sfR = sideCtx[1].sf;
@@ -868,7 +892,7 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   const led = { rho0: sfR.rhoOf(ledStart), rho1 };
 
   const fL = sideFeatures(c, -1, arms, led, rhoDisc);
-  const fR = mirrored ? mirrorFeatures(wh, fL, axis!) : sideFeatures(c, 1, arms, led, rhoDisc);
+  const fR = axis !== null ? mirrorFeatures(wh, fL, axis) : sideFeatures(c, 1, arms, led, rhoDisc);
   const name = `${size}_${wh.p.spokes}h${wh.p.crosses}x_${N}strips_${mat}`;
   const t = pp.thickness;
 
@@ -940,7 +964,7 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     if (sm.valveClearMm < pp.valveClear) out.push(`the valve (${pp.valveD} mm with its nut, ${pp.valveLen} mm inside the rim) ${sm.valveClearMm < 0 ? 'hits the panel' : `clears the panel by only ${sm.valveClearMm} mm`}.`);
     if (sm.nippleHits.length) out.push(`${sm.nippleHits.length} nipple${sm.nippleHits.length > 1 ? 's' : ''} (rim hole ${sm.nippleHits.join(', ')}) under the panel. Slot the tips (Nipple slot) or shorten the blades.`);
     if (sm.sensorFieldUT !== null && sm.sensorFieldUT > 100 * pp.sensorReleaseMT) out.push(`the strip's stray field at a hall sensor is up to ${sm.sensorFieldUT} µT at full white, within 10× of the switch's ${pp.sensorReleaseMT} mT release point: widen the gap to the strip.`);
-    if (pp.wireHoleD > 0 && sm.holes.wire < s.g.arms.length) out.push(`no room in the disc for a wire hole by ${s.g.arms.length - sm.holes.wire} of the strips.`);
+    if (pp.wireHoleD > 0 && sm.holes.wire < s.g.arms.length) out.push(`no room for a wire hole by ${s.g.arms.length - sm.holes.wire} of the strips.`);
     if (pp.sensor && s.g.sensors.length < s.g.arms.length) out.push(`no room for a hall sensor beside the strip on ${s.g.arms.length - s.g.sensors.length} blade${s.g.arms.length - s.g.sensors.length > 1 ? 's' : ''}.`);
     if (sm.closeTies.length) out.push(`${sm.closeTies.length} pairs of ties are closer than ${pp.gridEdge} mm (tightest ${Math.min(...sm.closeTies.map((x) => x.gapMm))} mm at r ${sm.closeTies[0].r} mm).`);
     if (!sm.discTies) {

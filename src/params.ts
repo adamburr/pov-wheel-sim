@@ -189,7 +189,7 @@ export function defaultParams() {
     minLinesPerSec: fw.minLinesPerSec,
     hallPollMs: fw.hallPollMs,
     debounceMs: fw.debounceMs,
-    hallPerStrip: false,      // a hall sensor beside each strip: a magnet pass every 1/strips turn
+    hallPerStrip: true,       // a hall sensor beside each strip: a magnet pass every 1/strips turn
     hallSensor: 'switch' as 'switch' | 'magnetometer', // switch: trips at a threshold; magnetometer: the field's peak is found
     magOdrHz: 1000,           // magnetometer output data rate
     overflow: 'wrap' as 'wrap' | 'blank',
@@ -325,7 +325,7 @@ const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
 };
 
 // Limits for the number settings that have them: a value from storage or a setup file is brought inside.
-const LIMITS: Partial<Record<keyof Params, [number, number]>> = { stripCount: [2, 6] };
+const LIMITS: Partial<Record<keyof Params, [number, number]>> = { stripCount: [2, 4] };
 
 export function pick<K extends keyof Params>(p: Params, keys: readonly K[]): Pick<Params, K> {
   const out = {} as Pick<Params, K>;

@@ -167,12 +167,12 @@ describe('setup file', () => {
     s.select(1);
     s.active.media = { id: 'm1', name: 'cat.gif', type: 'image/gif' };
     s.capture({ ...defaultParams(), useMedia: true });
-    const p = { ...defaultParams(), chip: 'ESP32-S3', stripCount: 5, setupName: 'Test rig' };
+    const p = { ...defaultParams(), chip: 'ESP32-S3', stripCount: 4, setupName: 'Test rig' };
     const bytes = new Uint8Array([0, 1, 2, 250, 255]);
     const text = serializeSetup(p, s, { m1: { name: 'cat.gif', type: 'image/gif', bytes }, unused: { name: 'x', type: 'image/png', bytes } });
     const back = parseSetup(text);
     expect(back.device.chip).toBe('ESP32-S3');
-    expect(back.device.stripCount).toBe(5);
+    expect(back.device.stripCount).toBe(4);
     expect(back.device.setupName).toBe('Test rig');
     expect(back.device).not.toHaveProperty('speed');
     expect(back.presets.map((x) => x.name)).toEqual(s.presets.map((x) => x.name));
@@ -213,9 +213,11 @@ describe('setup file', () => {
 
   it('keeps the hardware build in storage', () => {
     const st = memoryStorage();
-    saveDevice(st, { ...defaultParams(), stripCount: 6, speed: 30 });
+    saveDevice(st, { ...defaultParams(), stripCount: 2, speed: 30 });
     const d = loadDevice(st);
-    expect(d.stripCount).toBe(6);
+    expect(d.stripCount).toBe(2);
+    saveDevice(st, { ...defaultParams(), stripCount: 8 }); // out of range: brought inside
+    expect(loadDevice(st).stripCount).toBe(4);
     expect(d).not.toHaveProperty('speed');
   });
 });

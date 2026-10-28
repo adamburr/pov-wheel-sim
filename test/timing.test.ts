@@ -103,7 +103,7 @@ describe('firmware model', () => {
   };
 
   it('dead-reckons braking far better with a hall sensor per strip', () => {
-    const one = deadReckoningError(p, 0.25, 19, 30), per = deadReckoningError({ ...p, hallPerStrip: true }, 0.25, 19, 30);
+    const one = deadReckoningError({ ...p, hallPerStrip: false }, 0.25, 19, 30), per = deadReckoningError({ ...p, hallPerStrip: true }, 0.25, 19, 30);
     expect(per).toBeLessThan(one / 4);
   });
 
@@ -153,13 +153,20 @@ describe('banner mode dead reckoning', () => {
     }
   });
 
-  it('lags behind the true angle by up to one poll interval', () => {
-    const q = { ...banner, hallPollMs: 4 };
+  it('lags behind the true angle by up to one poll interval (one sensor)', () => {
+    const q = { ...banner, hallPollMs: 4, hallPerStrip: false };
     const w = (10 * MPH) / d.tireRadius;
     for (const s of buildSlices(q, d, motion, 10, 10.5, Math.PI, 2)) {
       expect(s.delta0).toBeLessThanOrEqual(1e-9);
       expect(s.delta0).toBeGreaterThanOrEqual(-w * 0.004 - 1e-9);
     }
+  });
+
+  it('stays within one poll interval of the true angle with a sensor per strip', () => {
+    // each strip's sensor times a third of a turn, so the poll jitter can put it a little ahead as well as behind
+    const q = { ...banner, hallPollMs: 4, hallPerStrip: true };
+    const w = (10 * MPH) / d.tireRadius;
+    for (const s of buildSlices(q, d, motion, 10, 10.5, Math.PI, 2)) expect(Math.abs(s.delta0)).toBeLessThanOrEqual(w * 0.004 + 1e-9);
   });
 
   it('pins the banner to the road in chase view', () => {

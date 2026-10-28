@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams } from '../src/params';
 import { derive } from '../src/sim/timing';
-import { designPanels, designReport, holeSize, mirrorAxis, type PanelDesign, type SideResult, toPlan } from '../src/panels/design';
+import { designPanels, designReport, holeSize, mirrorAxes, type PanelDesign, type SideResult, toPlan } from '../src/panels/design';
 import { cutDxf, cutFiles, referenceDxf } from '../src/panels/dxf';
 import { applyToSim, panelInputs } from '../src/panels/fromParams';
-import { arcMerge, circlePts, cleanRing, filletRing, mirrorPt, outlineOf, pointSegDist, type Pt, rot } from '../src/panels/geom';
+import { arcMerge, circlePts, cleanRing, filletRing, mirrorPt, outlineOf, pmod, pointSegDist, type Pt, rot } from '../src/panels/geom';
 import { packDesign, unpackDesign } from '../src/panels/transport';
 import { Wheel } from '../src/panels/wheel';
 
@@ -92,6 +92,13 @@ describe('spoke-tied panels', () => {
       const d = design(n), pp = d.spec, h = holeSize(pp);
       expect(d.warnings).toEqual([]);
       expect(d.armSpacing).toBeCloseTo(360 / n, 9);
+      // the panels are mirror images: blades a quarter of a spoke gap off the spokes on both sides (with 3
+      // strips, one blade there and the other two either side of it)
+      expect(d.identical).toBe(true);
+      const quarter = d.arms.filter((a) => Math.abs(pmod(a - 360 / 64 + 0.01, 360 / 32) - 0.01) < 1e-6);
+      expect(quarter).toHaveLength(n === 3 ? 1 : n);
+      expect(d.sides.RIGHT.summary.maxEarMm).toBe(d.sides.LEFT.summary.maxEarMm);
+      expect([...d.sides.RIGHT.summary.spokeTiesPerBlade].sort()).toEqual([...d.sides.LEFT.summary.spokeTiesPerBlade].sort());
       for (const s of [d.sides.LEFT, d.sides.RIGHT]) {
         const sm = s.summary;
         expect(sm.tieGaps).toBe(0);
@@ -168,13 +175,14 @@ describe('spoke-tied panels', () => {
   it('turns the blades so the two panels are mirror images when that costs no bigger tabs (3 strips on 36 spokes)', () => {
     const d = design(3, { spokes: 36 });
     expect(d.identical).toBe(true);
-    const L = d.sides.LEFT.g, R = d.sides.RIGHT.g, axis = mirrorAxis(d.wheel)!;
+    const L = d.sides.LEFT.g, R = d.sides.RIGHT.g;
     expect(R.holes).toHaveLength(L.holes.length);
     // every right hole is a left hole mirrored (across the axis that swaps the two sides' spokes)
-    for (const hole of R.holes) {
+    const near = (axis: number) => R.holes.every((hole) => {
       const m = mirrorPt(hole.c, axis);
-      expect(Math.min(...L.holes.map((x) => Math.hypot(x.c[0] - m[0], x.c[1] - m[1])))).toBeLessThan(1e-6);
-    }
+      return Math.min(...L.holes.map((x) => Math.hypot(x.c[0] - m[0], x.c[1] - m[1]))) < 1e-6;
+    });
+    expect(mirrorAxes(d.wheel).some(near)).toBe(true);
   });
 
   it('ties across the strip where no tab of its own reaches a spoke, holding both edges, and leaves out the strip ties beside it', () => {
@@ -182,8 +190,8 @@ describe('spoke-tied panels', () => {
     const s = [d.sides.LEFT, d.sides.RIGHT].find((x) => x.spokeTies.some((t) => t.across))!;
     const across = s.spokeTies.filter((t) => t.across);
     expect(across.length).toBeGreaterThan(0);
-    const full = Math.max(...d.sides.LEFT.summary.stripTiesPerBlade, ...d.sides.RIGHT.summary.stripTiesPerBlade);
-    expect(s.summary.stripTiesPerBlade[across[0].blade]).toBeLessThan(full);
+    const stations = Math.floor((s.g.nLeds - 2) / d.spec.holesEvery) + 1; // strip ties on a blade with nothing in the way
+    expect(s.summary.stripTiesPerBlade[across[0].blade]).toBeLessThan(stations);
   });
 
   it('designs every common lacing, every edge tied', () => {
@@ -206,7 +214,7 @@ describe('spoke-tied panels', () => {
   });
 
   it('designs every strip count the simulator has, and names the ones that suit the wheel when a blade can\'t be tied', () => {
-    for (const n of [5, 6]) expect(design(n).arms).toHaveLength(n);
+    for (const n of [2, 3, 4]) expect(design(n).arms).toHaveLength(n);
     const d = design(3, { panelTabMaxMm: 20 });
     expect(d.warnings.some((w) => /can't be tied to a spoke within 20 mm.*2, 4 strips on 32 spokes/.test(w))).toBe(true);
   });
@@ -222,7 +230,7 @@ describe('spoke-tied panels', () => {
   it('reports plain data', () => {
     const r = JSON.parse(JSON.stringify(designReport(design(2))));
     expect(r.sides.LEFT.spokeTies[0]).toHaveProperty('bladeDeg');
-    expect(r.simSettings).toMatchObject({ stripCount: 2, ledDensity: 144, stripStartMm: 22, stripLengthMm: 272 });
+    expect(r.simSettings).toMatchObject({ stripCount: 2, ledDensity: 144, stripStartMm: 22, stripLengthMm: 274 });
   });
 });
 
@@ -252,9 +260,9 @@ describe('cut files', () => {
   });
 
   it('writes a LEFT and a RIGHT file when the panels differ', () => {
-    const d = design(2);
+    const d = design(2, { spokes: 28 });
     expect(d.identical).toBe(false);
-    expect(cutFiles(d).map((f) => f.name)).toEqual(['700c_32h3x_2strips_pp_08_LEFT_cut_in.dxf', '700c_32h3x_2strips_pp_08_RIGHT_cut_in.dxf']);
+    expect(cutFiles(d).map((f) => f.name)).toEqual(['700c_28h3x_2strips_pp_08_LEFT_cut_in.dxf', '700c_28h3x_2strips_pp_08_RIGHT_cut_in.dxf']);
     expect(cutDxf(d.sides.RIGHT)).not.toBe(cutDxf(d.sides.LEFT));
   });
 
@@ -290,7 +298,7 @@ describe('shared settings', () => {
     const d = designPanels(wheel, panel);
     expect(d.rimNote).toMatch(/Rim wall assumed/); // the default rim is deeper than the measured tips allow
     applyToSim(p, d);
-    expect(p).toMatchObject({ stripStartMm: 22, stripLengthMm: 272, autoLength: false, rimDepthMm: 9 });
+    expect(p).toMatchObject({ stripStartMm: 22, stripLengthMm: 274, autoLength: false, rimDepthMm: 7 });
     expect(derive(p).ledsPerStrip).toBe(d.sides.LEFT.summary.ledsPerStrip);
   });
 });

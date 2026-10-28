@@ -31,7 +31,7 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
   const actions = pane.querySelector<HTMLElement>('.panels-actions')!;
   const summary = pane.querySelector<HTMLElement>('.panels-result')!;
   const gui = new GUI({ container: pane.querySelector<HTMLElement>('.gui')!, autoPlace: false });
-  gui.add(p, 'stripCount', 2, 6, 1).name('Strips per side');
+  gui.add(p, 'stripCount', 2, 4, 1).name('Strips per side');
   gui.add(p, 'panelTipRadiusMm', 0, 400, 0.05).name('Tip radius (mm, 0 = rim)');
   gui.add(p, 'panelBoreMm', 10, 80, 0.1).name('Bore Ø (mm)');
   gui.add(p, 'panelTipSlot', { 'Where a nipple is under a tip': 'auto', 'None: stop short of the nipples': 'none' }).name('Nipple slot');
@@ -69,7 +69,7 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
       <button type="button" data-act="report" title="Every computed number">Report (JSON)</button>
       ${d.identical ? '<p class="hint order-note">📝 Left and right are mirror images: cut two and turn one over.</p>' : ''}` : '';
     if (!PANEL_STRIPS.includes(p.stripCount)) {
-      summary.innerHTML = `<p class="hint">The panels come with 2 to 6 blades per side, one per strip. The hardware has ${p.stripCount} strips: pick 2–6 below.</p>`;
+      summary.innerHTML = `<p class="hint">The panels come with 2 to 4 blades per side, one per strip. The hardware has ${p.stripCount} strips: pick 2–4 below.</p>`;
       return;
     }
     if (!d) {

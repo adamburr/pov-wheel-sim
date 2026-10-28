@@ -209,7 +209,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
 
   const leds = hg.addFolder('LEDs');
   leds.add(p, 'ledType', Object.keys(LEDS)).name('Type').onChange(() => applyElectronics(p));
-  leds.add(p, 'stripCount', 2, 6, 1).name('Strips').onChange(() => applyElectronics(p));
+  leds.add(p, 'stripCount', 2, 4, 1).name('Strips').onChange(() => applyElectronics(p));
   const density = { get v() { return String(p.ledDensity); }, set v(s: string) { p.ledDensity = Number(s); } };
   leds.add(density, 'v', ['30', '60', '96', '144', '200']).name('LEDs / m');
   leds.add(p, 'doubleSided').name('Both sides');
