@@ -28,7 +28,7 @@ export function panelInputs(p: Params): { wheel: WheelInput; panel: Partial<Pane
       boreD: p.panelBoreMm, tipEndR: p.panelTipRadiusMm > 0 ? p.panelTipRadiusMm : null, tipSlot: p.panelTipSlot,
       stripW: p.panelStripWidthMm, stripT: p.panelStripThickMm, tieW: p.panelTieWidthMm, tieClear: p.panelTieClearMm,
       holesEvery: p.panelHolesEvery, gridEdge: p.panelEdgeMm, cornerR: p.panelCornerMm, bladeW: p.panelBladeWidthMm,
-      discCross: p.panelDiscCross, tieSpan: p.panelTieSpanMm, tipTieZone: p.panelTipTieMm, earMax: p.panelTabMaxMm, sensorGap: p.panelSensorGapMm,
+      discCross: p.panelDiscCross, tieSpan: p.panelTieSpanMm, tipTieZone: p.panelTipTieMm, earMax: p.panelTabMaxMm,
       forkCrownR: p.forkCrownRadiusMm, forkCrownHalf: p.forkCrownHalfMm,
     },
   };

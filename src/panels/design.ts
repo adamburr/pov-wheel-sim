@@ -9,9 +9,10 @@
 // runs outside the blade: one pair near each tip, and more along the blade so no stretch is longer
 // than asked.
 //
-// designPanels() turns the blades (all together) for the smallest tabs, places the ties, lays the
-// flat part onto the dished spokes (the flat part is a little longer than its plan, by the slope),
-// and checks the fork, the valve and the nipples. See docs/panels.md for the design notes.
+// designPanels() turns the blades (all together) for the smallest tabs, places the ties, and checks
+// the fork, the valve and the nipples. The part is laid out as it sits on the wheel, seen from the
+// right: thin polypropylene follows the shallow dish of the spokes by flexing, so the flat part and
+// the panel on the wheel are taken to be the same shape (the dish is used only for the clearances). See docs/panels.md for the design notes.
 //
 // Wheel dimensions other than the bore and tip radius are TYPICAL VALUES until measured.
 import {
@@ -48,14 +49,13 @@ export interface PanelSpec {
   tipTieZone: number;       // the outermost spoke tie is within this of the tip end
   earMax: number;           // farthest a tab reaches beyond the blade's edge for a spoke tie; 0 = the gap between one side's spokes at the rim
   valveD: number; valveLen: number; valveClear: number; // valve stem (with its nut) inside the rim, and the room it needs
-  sensor: boolean;          // a hall switch beside every strip, on the outer face, tied on
-  sensorGap: number;        // from the strip's edge to the sensor's body (clear of the strip ties, their heads and the strip's wiring)
+  sensor: boolean;          // a hall switch per strip, midway between strips near the disc's edge, on the outer face, tied on
   sensorBody: [number, number, number]; // body width (across the blade) × length (along it) × thickness
   sensorLeads: number;      // its leads run this far toward the hub, past the body
   ledMa: number;            // most current one LED draws (full white)
   stripTraceSep: number;    // the strip's supply and ground run this far apart (for the stray field)
   sensorReleaseMT: number;  // the switch's lowest release point: the strip's field must stay far under it
-  wireHoleD: number;        // a round hole per strip in the disc, by the strip's inner end, for its and its sensor's wires to the inner side (0 = none)
+  wireHoleD: number;        // a round hole per strip in the disc, just inside its hall sensor, for the strip's and the sensor's wires to the inner side (0 = none)
   forkCrownR: number; forkCrownHalf: number; minForkClear: number; // straight fork blades, dropouts (OLD/2) to crown
 }
 
@@ -72,8 +72,8 @@ export const PANEL_DEFAULTS: PanelSpec = {
   valveD: 8, valveLen: 35, valveClear: 3,
   // Melexis US5881LUA unipolar hall switch (Adafruit 158): 4.08 × 3.00 × 1.51 mm, marked face out. It
   // switches on at 15–30 mT and off at 9.5–28 mT (south pole). SK9822 / APA102: 20 mA per colour.
-  sensor: true, sensorGap: 12, sensorBody: [4.08, 3.0, 1.51], sensorLeads: 14,
-  ledMa: 60, stripTraceSep: 10, sensorReleaseMT: 9.5, wireHoleD: 6,
+  sensor: true, sensorBody: [4.08, 3.0, 1.51], sensorLeads: 14,
+  ledMa: 60, stripTraceSep: 10, sensorReleaseMT: 9.5, wireHoleD: 10,
   forkCrownR: 340, forkCrownHalf: 22, minForkClear: 3,
 };
 
@@ -115,10 +115,11 @@ export interface Flat {
   stripTieRhos: number[][]; // each blade's strip ties
   slots: { blade: number; rimHole: number }[];
   /**
-   * Hall switches beside the strips: the blade, where along it and across it (the body's centre), on
-   * the disc or on a tab, and the strip's stray field there at full white (µT).
+   * Hall switches, one per strip, on the bisector half a blade spacing on from it: the strip (blade),
+   * the bisector's angle and the body's centre along it, on the disc or on a lobe off it, and the
+   * strips' stray field there at full white (µT).
    */
-  sensors: { blade: number; rho: number; e: number; onDisc: boolean; fieldUT: number }[];
+  sensors: { blade: number; a: number; rho: number; onDisc: boolean; fieldUT: number }[];
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -156,11 +157,11 @@ export const bodyArea = (g: Flat) => Math.abs(polyArea(g.outline.pts)) - Math.PI
 export const shapeArea = (g: Flat) => bodyArea(g) - g.holes.reduce((s, h) => s + Math.abs(polyArea(h.ring.pts)), 0);
 
 // ---------------------------------------------------------------- the dished surface the panel lies on
-/** The panel's inner face on the wheel: its height |z| every dr of plan radius, and the flat radius that lands there. */
-export interface Surface { dr: number; z: number[]; rho: number[] }
+/** The panel's inner face on the wheel: its height |z| every dr of radius (for the clearances). */
+export interface Surface { dr: number; z: number[] }
 
 export function surfaceFns(s: Surface) {
-  const n = s.z.length, rMax = (n - 1) * s.dr;
+  const n = s.z.length;
   const at = (arr: number[], r: number) => {
     const k = clamp(r / s.dr, 0, n - 1 - 1e-9), i = Math.floor(k);
     return arr[i] + (arr[i + 1] - arr[i]) * (k - i);
@@ -168,24 +169,9 @@ export function surfaceFns(s: Surface) {
   return {
     /** Height of the inner face at plan radius r. */
     zAt: (r: number) => at(s.z, r),
-    /** Flat radius of the point that lies at plan radius r. */
-    rhoOf: (r: number) => (r <= rMax ? at(s.rho, r) : s.rho[n - 1] + r - rMax),
-    /** Plan radius of flat radius rho. */
-    rOf: (rho: number) => {
-      if (rho >= s.rho[n - 1]) return rMax + rho - s.rho[n - 1];
-      let lo = 0, hi = n - 1;
-      while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (s.rho[mid] <= rho) lo = mid; else hi = mid; }
-      return (lo + (rho - s.rho[lo]) / (s.rho[hi] - s.rho[lo] || 1)) * s.dr;
-    },
   };
 }
 export type SurfaceFns = ReturnType<typeof surfaceFns>;
-
-const scaleTo = (p: Pt, r: number): Pt => { const L = Math.hypot(...p); return L > 1e-9 ? [(p[0] * r) / L, (p[1] * r) / L] : p; };
-/** Flat point → where it lies on the wheel (plan view). */
-export const toPlan = (sf: SurfaceFns, p: Pt): Pt => scaleTo(p, sf.rOf(Math.hypot(...p)));
-/** Plan point → where it is on the flat part. */
-export const toFlat = (sf: SurfaceFns, p: Pt): Pt => scaleTo(p, sf.rhoOf(Math.hypot(...p)));
 
 /** Parameter t where spoke s (in plan) is at radius r, or null. */
 function tAtRadius(s: Spoke, r: number): number | null {
@@ -218,16 +204,15 @@ function surfaceOf(wh: Wheel, side: number, rMax: number): Surface {
     while (hull.length >= 2 && cross(hull[hull.length - 2], hull[hull.length - 1], q) >= 0) hull.pop();
     hull.push(q);
   }
-  const z: number[] = [], rho: number[] = [];
+  const z: number[] = [];
   let h = 0;
   for (let k = 0; k * dr <= rMax; k++) {
     const r = k * dr;
     while (h + 1 < hull.length && hull[h + 1][0] <= r) h++;
     const [x0, z0] = hull[h], [x1, z1] = hull[Math.min(h + 1, hull.length - 1)];
     z.push(r <= x0 || x1 === x0 ? z0 : z0 + ((z1 - z0) * (r - x0)) / (x1 - x0));
-    rho.push(k ? rho[k - 1] + Math.hypot(dr, z[k] - z[k - 1]) : 0);
   }
-  return { dr, z, rho };
+  return { dr, z };
 }
 
 // ---------------------------------------------------------------- ties
@@ -258,14 +243,14 @@ const squareAt = (c: Pt, a: number, size: number) => rectPts(c[0], c[1], a, size
  * lacing has no crossings: there, one straddling each spoke, discRadialR out from the flange.
  * Ties too near the bore are left out.
  */
-function discTiesOf(wh: Wheel, pp: Spec, side: number, sf: SurfaceFns): DiscTie[] {
+function discTiesOf(wh: Wheel, pp: Spec, side: number): DiscTie[] {
   const h = holeSize(pp) / 2, need = wh.p.spokeD / 2 + pp.spokeGap, rBore = pp.boreD / 2;
   const unit = (s: Spoke): Pt => { const L = dist(s.a, s.b); return [(s.b[0] - s.a[0]) / L, (s.b[1] - s.a[1]) / L]; };
   const out: DiscTie[] = [];
   const add = (at: Pt, spokes: [number, number], w: Pt, q: number) => {
     const plan = [1, -1].map((sg) => [at[0] + sg * q * w[0], at[1] + sg * q * w[1]] as Pt);
     if (plan.some((p) => Math.hypot(...p) - h * Math.SQRT2 - rBore < pp.gridEdge)) return;
-    out.push({ r: Math.hypot(...at), at, spokes, holes: plan.map((p) => toFlat(sf, p)) as [Pt, Pt] });
+    out.push({ r: Math.hypot(...at), at, spokes, holes: plan as [Pt, Pt] });
   };
   if (wh.p.crosses < 1) {
     const r = (side < 0 ? wh.p.pcdLeft : wh.p.pcdRight) / 2 + pp.discRadialR;
@@ -320,10 +305,10 @@ function spokeTieCands(c: Ctx, side: number, a: number, gaps: number[]): Cand[] 
   const u: Pt = [Math.cos(rad(a)), Math.sin(rad(a))], n: Pt = [-u[1], u[0]];
   const hole = holeSize(pp), h = hole / 2, need = wh.p.spokeD / 2 + pp.spokeGap, p = need + h, edge = pp.gridEdge;
   const eIn = rowOffset(pp) + h + edge, wHalf = c.bladeW / 2;
-  const { rSupport: xMin, sf, ties } = c.side[side], out: Cand[] = [];
+  const { rSupport: xMin, ties } = c.side[side], out: Cand[] = [];
   const at = (x: number, e: number): Pt => [x * u[0] + e * n[0], x * u[1] + e * n[1]];
-  // the disc's ties, in plan: a spoke tie may sit over the disc's edge, clear of them
-  const discHoles = ties.flatMap((t) => t.holes.map((q) => toPlan(sf, q)));
+  // the disc's ties: a spoke tie may sit over the disc's edge, clear of them
+  const discHoles = ties.flatMap((t) => t.holes);
   // a tie can't go down through a hole that another spoke runs under
   const blocked = (s: Spoke, holes: Pt[]) => own.some((o) => o !== s && holes.some((q) => pointSegDist(q, o.a, o.b) < h * Math.SQRT2 + wh.p.spokeD / 2))
     || holes.some((q) => discHoles.some((dq) => dist(q, dq) < hole * Math.SQRT2 + edge));
@@ -371,10 +356,10 @@ function spokeTieCands(c: Ctx, side: number, a: number, gaps: number[]): Cand[] 
   return out;
 }
 
-/** Plan radii of the pixel gaps that have no strip tie: where a tie over the strip may go. */
-function freeGaps(pp: Spec, sf: SurfaceFns, rho0: number, nLeds: number): number[] {
+/** Radii of the pixel gaps that have no strip tie: where a tie over the strip may go. */
+function freeGaps(pp: Spec, rho0: number, nLeds: number): number[] {
   const out: number[] = [];
-  for (let m = 1; m <= nLeds - 1; m++) if ((m - 1) % pp.holesEvery) out.push(sf.rOf(rho0 + m * pp.ledPitch));
+  for (let m = 1; m <= nLeds - 1; m++) if ((m - 1) % pp.holesEvery) out.push(rho0 + m * pp.ledPitch);
   return out;
 }
 
@@ -421,9 +406,9 @@ function chooseTies(c: Ctx, side: number, cands: Cand[]): { ties: Cand[]; gaps: 
  */
 function discTiesUnderStrip(c: Ctx, side: number, a: number): Set<number> {
   const { pp } = c, h = (holeSize(pp) / 2) * Math.SQRT2, lane = pp.stripW / 2;
-  const sf = c.side[side].sf, out = new Set<number>();
+  const out = new Set<number>();
   c.side[side].ties.forEach((t, i) => {
-    const q = t.holes.map((f) => rot(toPlan(sf, f), -a));
+    const q = t.holes.map((f) => rot(f, -a));
     const e0 = Math.min(q[0][1], q[1][1]) - h, e1 = Math.max(q[0][1], q[1][1]) + h;
     if (Math.max(q[0][0], q[1][0]) > 0 && e1 > -lane && e0 < lane) out.add(i);
   });
@@ -493,10 +478,10 @@ function buildFlat(pp: Spec, f: Features): Flat {
 const insideBy = (outline: Ring, q: Ring, m: number) => outline.contains(q.pts[0]) && outline.boundaryDist(q, m) >= m;
 
 function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number; rho1: number }, rhoDisc: number): Features {
-  const { wh, pp } = c, { sf, ties: allTies } = c.side[side];
+  const { wh, pp } = c, { ties: allTies } = c.side[side];
   const under = new Set(arms.flatMap((a) => [...discTiesUnderStrip(c, side, a)]));
   const dTies = allTies.filter((_, i) => !under.has(i));
-  const hole = holeSize(pp), edge = pp.gridEdge, wHalf = c.bladeW / 2, rhoEnd = sf.rhoOf(c.rEnd);
+  const hole = holeSize(pp), edge = pp.gridEdge, wHalf = c.bladeW / 2, rhoEnd = c.rEnd;
   const holes: HoleSpec[] = [];
   let tie = 0;
   for (const t of dTies) { const a = discTieAngle(t); holes.push(...t.holes.map((q) => ({ c: q, a, kind: 'disc' as const, tie }))); tie++; }
@@ -504,10 +489,10 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
   let gaps = 0;
   const nLeds = Math.floor((led.rho1 - led.rho0) / pp.ledPitch);
   arms.forEach((a, bi) => {
-    const ch = chooseTies(c, side, spokeTieCands(c, side, a, freeGaps(pp, sf, led.rho0, nLeds)));
+    const ch = chooseTies(c, side, spokeTieCands(c, side, a, freeGaps(pp, led.rho0, nLeds)));
     gaps += ch.gaps;
     for (const t of ch.ties) {
-      const fh = t.holes.map((q) => toFlat(sf, q)) as [Pt, Pt];
+      const fh = t.holes;
       const ha = t.over ? a : a + t.psi;
       holes.push(...fh.map((q) => ({ c: q, a: ha, kind: 'spoke' as const, tie })));
       tie++;
@@ -524,7 +509,7 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
   // nipple slots: a nipple (either side's) under a tip
   const slotRings: Pt[][] = [], slots: Features['slots'] = [];
   if (pp.tipSlot === 'auto') {
-    const sw = pp.nippleD + 1, bottom = sf.rhoOf(wh.nippleTipR() - pp.tipSlotClear);
+    const sw = pp.nippleD + 1, bottom = wh.nippleTipR() - pp.tipSlotClear;
     arms.forEach((a, bi) => {
       for (const s of wh.spokes) {
         const e = wh.nippleTipR() * Math.sin(rad(s.rimDeg - a));
@@ -534,47 +519,43 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
       }
     });
   }
-  // hall switches: one beside each strip on the outer face, marked face out, sensorGap from the strip's
-  // edge, on the disc as far out as fits (the strip's current falls towards its tip), else on a tab off
-  // the blade just past the disc. Two ties hold it: one across its body, one across its leads.
+  // hall switches: one per strip, on the bisector half a blade spacing on from it, marked face out,
+  // leads toward the hub, all at one radius so they repeat with the strips: as far out on the disc as
+  // clears the disc ties, else on a small lobe off the disc. Two ties hold each: one across its body,
+  // one across its leads.
   const sensors: Flat['sensors'] = [];
   if (pp.sensor) {
-    const [bw, bl] = pp.sensorBody, rBore = pp.boreD / 2, h = hole / 2;
-    const off = pp.stripW / 2 + pp.sensorGap + bw / 2, tieE = bw / 2 + 0.5 + h, leadTie = bl / 2 + hole + edge;
-    const placed: Ring[] = [];
-    arms.forEach((a, bi) => {
-      let best: { key: number[]; rho: number; e: number; specs: HoleSpec[]; onDisc: boolean; foot: Ring } | undefined;
-      const rings = holes.map((x) => holeAt(pp, x).ring);
-      for (const e of [off, -off]) {
-        for (let rho = Math.ceil(rBore + pp.sensorLeads + 5); rho <= rhoEnd - pp.tipTieZone - bl; rho += 1) {
-          const specs = [rho, rho - leadTie].flatMap((x) => [-1, 1].map((j) => ({ c: rot([x, e + j * tieE], a), a, kind: 'sensor' as const, tie: 0 })));
-          const outer = sensorArea(pp, a, rho, e, h + edge);
-          if (outer.some((q) => Math.hypot(...q) < rBore + 2)) continue;
-          const onDisc = outer.every((q) => Math.hypot(...q) <= rhoDisc);
-          const key = onDisc ? [0, -rho] : [1, rho];
-          if (best && lexCmp(key, best.key) >= 0) continue;
-          // clear of the other strips, the other ties (their bands and heads) and the other sensors
-          const foot = new Ring(sensorAt(pp, a, rho, e, 1));
-          const lanes = arms.filter((b) => b !== a).every((b) => outer.every((q) => { const [x, y] = rot(q, -b); return x < 0 || Math.abs(y) >= pp.stripW / 2 + pp.sensorGap; }));
-          if (!lanes || rings.some((o) => foot.boundaryDist(o, 1) < 1 || foot.contains(o.pts[0])) || placed.some((o) => foot.boundaryDist(o, edge) < edge)) continue;
-          if (!specs.every((sp) => { const q = holeAt(pp, sp).ring; return rings.every((o) => o.boundaryDist(q, edge) >= edge - 0.05); })) continue;
-          best = { key, rho, e, specs, onDisc, foot };
-        }
-      }
-      if (!best) return;
-      for (let k = 0; k < 2; k++) { holes.push(...best.specs.slice(2 * k, 2 * k + 2).map((sp) => ({ ...sp, tie }))); tie++; }
-      placed.push(best.foot);
-      // the strip's stray field at the sensor: its supply and ground carry the current of every LED beyond
-      const amps = (clamp((led.rho1 - best.rho) / pp.ledPitch, 0, nLeds) * pp.ledMa) / 1000;
-      const L = Math.abs(best.e) / 1000, d = pp.stripTraceSep / 1000;
-      const fieldUT = (2e-7 * amps * d) / (L * L - (d * d) / 4) * 1e6;
-      sensors.push({ blade: bi, rho: best.rho, e: best.e, onDisc: best.onDisc, fieldUT: r1(fieldUT) });
-      if (!best.onDisc) { // a tab off the blade for it, blended into the blade's edge
-        const ring = sensorArea(pp, 0, best.rho, best.e, h + edge), ey = Math.sign(best.e) * (wHalf - 0.5);
-        const x0 = Math.min(...ring.map((q) => q[0])), x1 = Math.max(...ring.map((q) => q[0]));
-        ears.push(rotRing(convexHull([...ring, [x0 - 6, ey], [x1 + 6, ey]]), a));
-      }
+    const [bw, bl] = pp.sensorBody, rBore = pp.boreD / 2, h = hole / 2, half = 180 / arms.length;
+    const tieE = bw / 2 + 0.5 + h, leadTie = bl / 2 + hole + edge;
+    const rings = holes.map((x) => holeAt(pp, x).ring);
+    const at = (a: number, rho: number) => ({
+      specs: [rho, rho - leadTie].flatMap((x) => [-1, 1].map((j) => ({ c: rot([x, j * tieE], a), a, kind: 'sensor' as const, tie: 0 }))),
+      foot: new Ring(sensorAt(pp, a, rho, 0, 1)), outer: sensorArea(pp, a, rho, 0, h + edge),
     });
+    // clear of the bore, the strips and every other hole
+    const fits = (rho: number) => arms.map((b) => at(b + half, rho)).every(({ specs, foot, outer }) =>
+      outer.every((q) => Math.hypot(...q) >= rBore + 2)
+      && arms.every((b) => outer.every((q) => { const [x, y] = rot(q, -b); return x < 0 || Math.abs(y) >= pp.stripW / 2 + edge; }))
+      && !rings.some((o) => foot.boundaryDist(o, 1) < 1 || foot.contains(o.pts[0]))
+      && specs.every((sp) => { const q = holeAt(pp, sp).ring; return rings.every((o) => o.boundaryDist(q, edge) >= edge - 0.05); }));
+    const onDisc = (rho: number) => at(arms[0] + half, rho).outer.every((q) => Math.hypot(...q) <= rhoDisc);
+    let rho: number | undefined, lobe = false;
+    for (let x = Math.floor(rhoDisc); x > rBore && rho === undefined; x -= 0.5) if (onDisc(x) && fits(x)) rho = x;
+    for (let x = Math.floor(rhoDisc); x <= rhoDisc + 40 && rho === undefined; x += 0.5) if (fits(x)) { rho = x; lobe = true; }
+    if (rho !== undefined) {
+      const r = rho;
+      arms.forEach((b, bi) => {
+        const a = pmod(b + half, 360), s = at(a, r);
+        for (let k = 0; k < 2; k++) { holes.push(...s.specs.slice(2 * k, 2 * k + 2).map((sp) => ({ ...sp, tie }))); tie++; }
+        const fieldUT = arms.reduce((sum, st) => sum + stripField(pp, led, nLeds, st, a, r), 0);
+        sensors.push({ blade: bi, a, rho: r, onDisc: !lobe, fieldUT: r1(fieldUT) });
+        if (lobe) { // a lobe off the disc for it
+          const ring = sensorArea(pp, 0, r, 0, h + edge), w = Math.max(...ring.map((q) => Math.abs(q[1]))) + 6;
+          const x0 = Math.min(rhoDisc - 2, ...ring.map((q) => q[0]));
+          ears.push(rotRing(convexHull([...ring, [x0, -w], [x0, w]]), a));
+        }
+      });
+    }
   }
   const f: Features = {
     arms, bladeW: c.bladeW, rBore: pp.boreD / 2, rhoDisc, rhoEnd, ears, slotRings, slots, holes,
@@ -601,53 +582,65 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
       tie++;
     });
   }
-  // wire holes: one per strip, as near the strip's inner end as it can be beside the strip (on its
-  // sensor's side), for the strip's and the sensor's wires to the inner side: in the disc, or on a small
-  // tab off the blade where the disc is too small
+  // wire holes: one per strip, for the strip's and its sensor's wires to the inner side. With the
+  // sensors placed, each goes just inside its sensor's leads, every one at the same spot beside its
+  // sensor so they repeat with the strips; else as near the strip's inner end as it can be beside the
+  // strip: in the disc, or on a small tab off the blade where the disc is too small.
   if (pp.wireHoleD > 0) {
     const r = pp.wireHoleD / 2, lane = pp.stripW / 2;
-    const feet = f.sensors.map((b) => new Ring(sensorAt(pp, arms[b.blade], b.rho, b.e, 1)));
-    arms.forEach((a, bi) => {
-      const sg = Math.sign(f.sensors.find((b) => b.blade === bi)?.e ?? 1);
+    const feet = f.sensors.map((b) => new Ring(sensorAt(pp, b.a, b.rho, 0, 1)));
+    // spot [x, e] in the frame at angle a: clear of the strips, every other hole, the sensors and the bore
+    const fits = (x: number, e: number, a: number, onPart: boolean) => {
+      const spec = { c: rot([x, e], a), a, kind: 'wire' as const, tie, d: pp.wireHoleD };
+      const q = holeAt(pp, spec).ring;
+      const lanes = arms.every((b) => q.pts.every((p) => { const [u, v] = rot(p, -b); return u < 0 || Math.abs(v) >= lane + 1; }));
+      if (!lanes || q.areaDist([0, 0]) - rBore < edge || (onPart && !insideBy(outline, q, edge - 0.05))) return null;
+      if (others.some((o) => o.boundaryDist(q, edge) < edge - 0.05) || feet.some((o) => o.boundaryDist(q, 1) < 1 || o.contains(q.pts[0]))) return null;
+      return { spec, q };
+    };
+    const place = (spec: HoleSpec, q: Ring) => { holes.push(spec); others.push(q); tie++; };
+    let done = false;
+    if (f.sensors.length === arms.length) {
+      const s0 = f.sensors[0], leadEnd = s0.rho - pp.sensorBody[1] / 2 - pp.sensorLeads, target: Pt = [leadEnd - r - 1, 0];
+      const spots: Pt[] = [];
+      for (let x = rBore + edge + r; x <= rhoDisc; x += 0.5) for (let e = -15; e <= 15; e += 0.5) spots.push([x, e]);
+      spots.sort((p, q) => dist(p, target) - dist(q, target) || Math.abs(p[1]) - Math.abs(q[1]));
+      for (const [x, e] of spots) {
+        const hits = f.sensors.map((b) => fits(x, e, b.a, true));
+        if (hits.some((h) => !h) || hits.some((h, i) => hits.slice(i + 1).some((k) => k!.q.boundaryDist(h!.q, edge) < edge))) continue;
+        for (const b of arms.map((_, bi) => f.sensors.findIndex((x) => x.blade === bi))) place(hits[b]!.spec, hits[b]!.q);
+        done = true;
+        break;
+      }
+    }
+    if (!done) arms.forEach((a, bi) => {
+      const sb = f.sensors.find((b) => b.blade === bi), sg = sb ? Math.sign(Math.sin(rad(sb.a - a))) || 1 : 1;
       const end: Pt = [led.rho0, sg * lane];
       const spots: Pt[] = [];
       for (let x = rBore + edge + r; x <= Math.max(rhoDisc, led.rho0 + 40); x += 0.5) {
         for (let e = lane + r + 1; e <= lane + 40; e += 0.5) spots.push([x, sg * e]);
       }
       spots.sort((p, q) => dist(p, end) - dist(q, end));
-      const fits = (x: number, e: number, onPart: boolean) => {
-        const spec = { c: rot([x, e], a), a, kind: 'wire' as const, tie, d: pp.wireHoleD };
-        const q = holeAt(pp, spec).ring;
-        // clear of the other strips, every other hole, the sensors and the bore
-        const lanes = arms.every((b) => b === a || q.pts.every((p) => { const [u, v] = rot(p, -b); return u < 0 || Math.abs(v) >= lane + 1; }));
-        if (!lanes || q.areaDist([0, 0]) - rBore < edge || (onPart && !insideBy(outline, q, edge - 0.05))) return null;
-        if (others.some((o) => o.boundaryDist(q, edge) < edge - 0.05) || feet.some((o) => o.boundaryDist(q, 1) < 1 || o.contains(q.pts[0]))) return null;
-        return { spec, q };
-      };
-      let hit = null as { spec: HoleSpec; q: Ring; x: number; e: number } | null;
-      for (const [x, e] of spots) { const ok = fits(x, e, true); if (ok) { hit = { ...ok, x, e }; break; } }
+      let hit = null as { spec: HoleSpec; q: Ring } | null;
+      for (const [x, e] of spots) { hit = fits(x, e, a, true); if (hit) break; }
       if (!hit) { // a tab off the blade for it, blended into the blade's edge
         for (const [x, e] of spots) {
           if (Math.abs(e) + r + edge - wHalf > 20) continue;
-          const ok = fits(x, e, false);
-          if (!ok) continue;
-          hit = { ...ok, x, e };
+          hit = fits(x, e, a, false);
+          if (!hit) continue;
           const m = r + edge, ey = sg * (wHalf - 0.5);
           ears.push(rotRing(convexHull([[x - m, e - m], [x + m, e - m], [x + m, e + m], [x - m, e + m], [x - m - 6, ey], [x + m + 6, ey]]), a));
           break;
         }
       }
-      if (!hit) return;
-      holes.push(hit.spec);
-      others.push(hit.q);
-      tie++;
+      if (hit) place(hit.spec, hit.q);
     });
   }
   return f;
 }
 
 /** A hall switch on the part (grown by m): its body centred at rho along the blade and e across, its leads toward the hub. */
-const sensorAt = (pp: Spec, a: number, rho: number, e: number, m = 0) => {
+const sensorAt = (pp: Spec, a: number, rho: number, e = 0, m = 0) => {
   const [bw, bl] = pp.sensorBody;
   return rotRing(box(rho - bl / 2 - pp.sensorLeads - m, e - bw / 2 - m, rho + bl / 2 + m, e + bw / 2 + m), a);
 };
@@ -656,6 +649,17 @@ const sensorArea = (pp: Spec, a: number, rho: number, e: number, m: number) => {
   const [bw, bl] = pp.sensorBody, h = holeSize(pp) / 2, tieE = bw / 2 + 0.5 + h, leadTie = bl / 2 + 2 * h + pp.gridEdge;
   return rotRing(box(rho - Math.max(bl / 2 + pp.sensorLeads, leadTie) - m, e - tieE - m, rho + Math.max(bl / 2, h) + m, e + tieE + m), a);
 };
+
+/**
+ * The stray field (µT) at the point rho along angle a from the strip at angle b: its supply and ground,
+ * stripTraceSep apart, carry the current of every LED beyond the point (all of them inside the strip).
+ */
+function stripField(pp: Spec, led: { rho0: number; rho1: number }, nLeds: number, b: number, a: number, rho: number) {
+  const [x, y] = rot(pol(rho, a), -b);
+  const amps = (clamp((led.rho1 - Math.max(x, led.rho0)) / pp.ledPitch, 0, nLeds) * pp.ledMa) / 1000;
+  const L = Math.hypot(Math.max(0, led.rho0 - x), y) / 1000, d = pp.stripTraceSep / 1000;
+  return ((2e-7 * amps * d) / (L * L - (d * d) / 4)) * 1e6;
+}
 
 /** The other side's panel, mirrored across `axis`: the same part turned over. */
 function mirrorFeatures(wh: Wheel, f: Features, axis: number): Features {
@@ -671,7 +675,10 @@ function mirrorFeatures(wh: Wheel, f: Features, axis: number): Features {
     spokeTies: f.spokeTies.map((t) => ({
       ...t, blade: blade(t.blade), spoke: holeOf(wh.spokes[t.spoke].rimDeg), sg: -t.sg as 1 | -1, holes: t.holes.map(M) as [Pt, Pt],
     })),
-    sensors: f.sensors.map((b) => ({ ...b, blade: blade(b.blade), e: -b.e })).sort((p, q) => p.blade - q.blade),
+    sensors: f.sensors.map((b) => {
+      const a = A(b.a);
+      return { ...b, a, blade: order.findIndex(([o]) => adiff(o + 180 / f.arms.length, a) < 1e-6) };
+    }).sort((p, q) => p.blade - q.blade),
     discTies: f.discTies.map((t) => ({
       ...t, at: M(t.at), spokes: t.spokes.map((i) => holeOf(wh.spokes[i].rimDeg)) as [number, number], holes: t.holes.map(M) as [Pt, Pt],
     })),
@@ -686,24 +693,24 @@ function forkClearance(wh: Wheel, pp: Spec, g: Flat, sf: SurfaceFns) {
   const t = pp.thickness, stack = pp.stripT + pp.tieT;
   let face: [number, Record<string, number> | null] = [1e9, null];
   for (const p of densify(g.outline.pts, 3)) {
-    const r = sf.rOf(Math.hypot(...p)), cl = forkZ(r) - (sf.zAt(r) + t);
+    const r = Math.hypot(...p), cl = forkZ(r) - (sf.zAt(r) + t);
     if (cl < face[0]) face = [cl, { r: r1(r), panelOuterZ: r1(sf.zAt(r) + t), forkZ: r1(forkZ(r)) }];
   }
   let lane: [number, Record<string, number> | null] = [1e9, null];
   for (let rho = g.rhoLed0; rho <= g.rhoLed1; rho += 1) {
-    const r = sf.rOf(rho), zo = sf.zAt(r) + t + stack, cl = forkZ(r) - zo;
+    const r = rho, zo = sf.zAt(r) + t + stack, cl = forkZ(r) - zo;
     if (cl < lane[0]) lane = [cl, { r: r1(r), stripOuterZ: r1(zo), forkZ: r1(forkZ(r)) }];
   }
   let board: [number, Record<string, number> | null] = [1e9, null];
   for (const b of g.sensors) { // the sensor body and the tie band over it
-    for (const q of sensorAt(pp, g.arms[b.blade], b.rho, b.e)) {
-      const r = sf.rOf(Math.hypot(...q)), zo = sf.zAt(r) + t + pp.sensorBody[2] + pp.tieT, cl = forkZ(r) - zo;
+    for (const q of sensorAt(pp, b.a, b.rho)) {
+      const r = Math.hypot(...q), zo = sf.zAt(r) + t + pp.sensorBody[2] + pp.tieT, cl = forkZ(r) - zo;
       if (cl < board[0]) board = [cl, { r: r1(r), sensorOuterZ: r1(zo), forkZ: r1(forkZ(r)) }];
     }
   }
   // the hall sensors face the fork: the room there is for the magnet (on the fork leg's inner face)
   const magnetRoom = g.sensors.length ? Math.min(...g.sensors.map((b) => {
-    const r = sf.rOf(Math.hypot(b.rho, b.e));
+    const r = b.rho;
     return forkZ(r) - (sf.zAt(r) + t + pp.sensorBody[2]);
   })) : null;
   const worst = [[lane, 'LED strip + tie band'], [board, 'hall sensor + tie band'], [face, 'panel face']] as const;
@@ -715,10 +722,10 @@ function forkClearance(wh: Wheel, pp: Spec, g: Flat, sf: SurfaceFns) {
   };
 }
 
-/** Signed room from a plan point to the panel's edge (negative: over the panel). */
-function roomTo(g: Flat, sf: SurfaceFns, p: Pt): number {
-  const q = toFlat(sf, p), d = g.outline.pointDist(q);
-  return bodyContains(g, q) ? -d : d;
+/** Signed room from a point to the panel's edge (negative: over the panel). */
+function roomTo(g: Flat, p: Pt): number {
+  const d = g.outline.pointDist(p);
+  return bodyContains(g, p) ? -d : d;
 }
 
 /** Rotation (deg) that gives the part its smallest bounding box on the sheet, and the box (short side first). */
@@ -753,11 +760,11 @@ export interface SideResult {
   summary: {
     ledsPerStrip: number; ledStartR: number; ledEndR: number; stripTiesPerBlade: number[]; stripTiePitchMm: number;
     discD: number; discCross: number; discTies: number; discTiesUnderStrips: number; discTieR: number | null;
-    bladeW: number; tipR: number; flatTipRho: number; lengthOnSlopeMm: number;
+    bladeW: number; tipR: number;
     spokeTiesPerBlade: number[]; spokeTieR: number[][]; maxEarMm: number; longestSpanMm: number; tipOverhangMm: number; tieGaps: number;
     holes: Record<HoleKind, number>; holesTotal: number;
     partSizeIn: [number, number]; partSizeMm: [number, number]; areaCm2: number; massG: number;
-    dishMm: number; dropoutClearAtHub: number;
+    dropoutClearAtHub: number;
     forkClearance: ReturnType<typeof forkClearance>; forkOk: boolean;
     valveClearMm: number; nippleSlots: number; nippleHits: number[];
     sensorR: number[]; sensorsOnDisc: number; sensorFieldUT: number | null; closeTies: { r: number; gapMm: number }[];
@@ -814,14 +821,14 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   const sideCtx: Ctx['side'] = {};
   for (const side of [-1, 1]) {
     const surface = surfaceOf(wh, side, wh.p.rimWallR + 20), sf = surfaceFns(surface);
-    sideCtx[side] = { surface, sf, ties: discTiesOf(wh, pp, side, sf), rDisc: 0, rSupport: 0 };
+    sideCtx[side] = { surface, sf, ties: discTiesOf(wh, pp, side), rDisc: 0, rSupport: 0 };
   }
   const hole = holeSize(pp);
   const rhoDisc = Math.max(rBore + 2 * pp.gridEdge + hole, ...[-1, 1].flatMap((side) => sideCtx[side].ties.flatMap((t) =>
     t.holes.flatMap((q) => squareAt(q, discTieAngle(t), hole).map((k) => Math.hypot(...k) + pp.gridEdge)))));
   for (const side of [-1, 1]) {
     const s = sideCtx[side];
-    s.rDisc = s.sf.rOf(rhoDisc);
+    s.rDisc = rhoDisc;
     s.rSupport = s.ties.length ? Math.max(...s.ties.map((t) => t.r)) : rBore;
   }
   const c: Ctx = { wh, pp, bladeW, rEnd, xMax: Math.min(rEnd, wh.nippleTipR() - pp.tipSlotClear), side: sideCtx };
@@ -830,8 +837,7 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   const ledStart = rBore + pp.stripStartGap;
   const searchGaps: Record<number, number[]> = {};
   for (const side of [-1, 1]) {
-    const sf = sideCtx[side].sf, rho0 = sf.rhoOf(ledStart);
-    searchGaps[side] = freeGaps(pp, sf, rho0, Math.floor((sf.rhoOf(rEnd) - 2 - rho0) / pp.ledPitch));
+    searchGaps[side] = freeGaps(pp, ledStart, Math.floor((rEnd - 2 - ledStart) / pp.ledPitch));
   }
 
   // Turn all the blades together (they stay evenly spaced) for: every stretch tied, the valve clear,
@@ -878,8 +884,7 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   const axis = symmetric(best!.t0), mirrored = axis !== null;
 
   // the strips: all the same, from just outside the bore to the tip or a nipple slot
-  const sfR = sideCtx[1].sf;
-  let rho1 = sfR.rhoOf(rEnd) - 2;
+  let rho1 = rEnd - 2;
   let tipSlot: PanelDesign['tipSlot'] = null;
   if (pp.tipSlot === 'auto') {
     const sw = pp.nippleD + 1, bottomR = wh.nippleTipR() - pp.tipSlotClear;
@@ -887,12 +892,12 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
       for (const s of wh.spokes) {
         const e = wh.nippleTipR() * Math.sin(rad(s.rimDeg - a));
         if (Math.cos(rad(s.rimDeg - a)) < 0 || Math.abs(e) >= bladeW / 2 + pp.nippleD / 2 + 0.5) continue;
-        tipSlot = { widthMm: r2(sw), depthMm: r2(sfR.rhoOf(rEnd) - sfR.rhoOf(bottomR)), nippleInnerEndR: r1(wh.nippleTipR()), slotBottomROnWheel: r1(bottomR) };
-        if (Math.abs(e) < pp.stripW / 2 + sw / 2) rho1 = Math.min(rho1, sfR.rhoOf(bottomR) - 1); // the slot cuts into the strip's lane
+        tipSlot = { widthMm: r2(sw), depthMm: r2(rEnd - bottomR), nippleInnerEndR: r1(wh.nippleTipR()), slotBottomROnWheel: r1(bottomR) };
+        if (Math.abs(e) < pp.stripW / 2 + sw / 2) rho1 = Math.min(rho1, bottomR - 1); // the slot cuts into the strip's lane
       }
     }
   }
-  const led = { rho0: sfR.rhoOf(ledStart), rho1 };
+  const led = { rho0: ledStart, rho1 };
 
   const fL = sideFeatures(c, -1, arms, led, rhoDisc);
   const fR = axis !== null ? mirrorFeatures(wh, fL, axis) : sideFeatures(c, 1, arms, led, rhoDisc);
@@ -913,10 +918,10 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     // valve and nipples, in plan
     const vd = wh.valveDeg(), rw = wh.p.rimWallR;
     let valve = Infinity;
-    for (let r = rw - pp.valveLen; r <= rw; r += 1) valve = Math.min(valve, roomTo(g, sf, pol(r, vd)));
+    for (let r = rw - pp.valveLen; r <= rw; r += 1) valve = Math.min(valve, roomTo(g, pol(r, vd)));
     const nippleHits = wh.spokes.filter((s) => { // the nipple's end, then its sides
       for (let r = wh.nippleTipR(); r <= rw; r += 0.5) {
-        const room = roomTo(g, sf, pol(r, s.rimDeg));
+        const room = roomTo(g, pol(r, s.rimDeg));
         if (room < 0 || (r >= wh.nippleTipR() + pp.nippleD / 2 && room < pp.nippleD / 2)) return true;
       }
       return false;
@@ -928,28 +933,28 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
         const A = g.holes[i], B = g.holes[j];
         if (A.tie === B.tie && A.kind === B.kind) continue;
         const d = A.ring.boundaryDist(B.ring, pp.gridEdge);
-        if (d < pp.gridEdge - 0.05) closeTies.push({ r: r1(sf.rOf(Math.hypot(...A.c))), gapMm: r2(d) });
+        if (d < pp.gridEdge - 0.05) closeTies.push({ r: r1(Math.hypot(...A.c)), gapMm: r2(d) });
       }
     }
     const fc = forkClearance(wh, pp, g, sf);
     return {
       label, side, g, surface: sideCtx[side].surface, sf, cutRot, spokeTies: f.spokeTies, discTies: f.discTies,
       summary: {
-        ledsPerStrip: g.nLeds, ledStartR: r1(sf.rOf(g.rhoLed0)), ledEndR: r1(sf.rOf(g.rhoLed1)),
+        ledsPerStrip: g.nLeds, ledStartR: r1(g.rhoLed0), ledEndR: r1(g.rhoLed1),
         stripTiesPerBlade: g.stripTieRhos.map((r) => r.length), stripTiePitchMm: r2(pp.holesEvery * pp.ledPitch),
         discD: r1(2 * g.rhoDisc), discCross: pp.discCross > 0 ? Math.min(pp.discCross, wh.p.crosses) : wh.p.crosses, discTies: f.discTies.length, discTiesUnderStrips: f.discTiesUnder,
         discTieR: f.discTies.length ? r1(f.discTies[0].r) : null,
-        bladeW: g.bladeW, tipR: r1(rEnd), flatTipRho: r1(g.rhoEnd), lengthOnSlopeMm: r2(g.rhoEnd - rEnd),
+        bladeW: g.bladeW, tipR: r1(rEnd),
         spokeTiesPerBlade: perBlade.map((rs) => rs.length), spokeTieR: perBlade,
         maxEarMm: r1(Math.max(0, ...f.spokeTies.map((x) => x.earMm))), longestSpanMm: r1(Math.max(...spans)),
         tipOverhangMm: r1(Math.max(...edges.map((rs) => rEnd - (rs.at(-1) ?? rSupport)))), tieGaps: f.gaps,
         holes: { strip: count('strip'), spoke: count('spoke'), disc: count('disc'), sensor: count('sensor'), wire: count('wire') }, holesTotal: g.holes.length,
         partSizeIn: [r2(sz[0] / 25.4), r2(sz[1] / 25.4)], partSizeMm: [r1(sz[0]), r1(sz[1])],
         areaCm2: r1(area / 100), massG: r1((area * t * pp.density) / 1000),
-        dishMm: r1(sf.zAt(rBore) - sf.zAt(rEnd)), dropoutClearAtHub: r1(wh.p.old / 2 - (sf.zAt(rBore) + t)),
+        dropoutClearAtHub: r1(wh.p.old / 2 - (sf.zAt(rBore) + t)),
         forkClearance: fc, forkOk: fc.minMm >= pp.minForkClear,
         valveClearMm: r1(valve - pp.valveD / 2), nippleSlots: g.slots.length, nippleHits,
-        sensorR: g.sensors.map((b) => Math.round(sf.rOf(b.rho))), sensorsOnDisc: g.sensors.filter((b) => b.onDisc).length,
+        sensorR: g.sensors.map((b) => Math.round(b.rho)), sensorsOnDisc: g.sensors.filter((b) => b.onDisc).length,
         sensorFieldUT: g.sensors.length ? Math.max(...g.sensors.map((b) => b.fieldUT)) : null, closeTies,
       },
     };
@@ -966,9 +971,9 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     else if (sm.longestSpanMm > pp.tieSpan) out.push(`the longest stretch between ties is ${sm.longestSpanMm} mm, over the ${pp.tieSpan} mm asked.`);
     if (sm.valveClearMm < pp.valveClear) out.push(`the valve (${pp.valveD} mm with its nut, ${pp.valveLen} mm inside the rim) ${sm.valveClearMm < 0 ? 'hits the panel' : `clears the panel by only ${sm.valveClearMm} mm`}.`);
     if (sm.nippleHits.length) out.push(`${sm.nippleHits.length} nipple${sm.nippleHits.length > 1 ? 's' : ''} (rim hole ${sm.nippleHits.join(', ')}) under the panel. Slot the tips (Nipple slot) or shorten the blades.`);
-    if (sm.sensorFieldUT !== null && sm.sensorFieldUT > 100 * pp.sensorReleaseMT) out.push(`the strip's stray field at a hall sensor is up to ${sm.sensorFieldUT} µT at full white, within 10× of the switch's ${pp.sensorReleaseMT} mT release point: widen the gap to the strip.`);
+    if (sm.sensorFieldUT !== null && sm.sensorFieldUT > 100 * pp.sensorReleaseMT) out.push(`the strip's stray field at a hall sensor is up to ${sm.sensorFieldUT} µT at full white, within 10× of the switch's ${pp.sensorReleaseMT} mT release point.`);
     if (pp.wireHoleD > 0 && sm.holes.wire < s.g.arms.length) out.push(`no room for a wire hole by ${s.g.arms.length - sm.holes.wire} of the strips.`);
-    if (pp.sensor && s.g.sensors.length < s.g.arms.length) out.push(`no room for a hall sensor beside the strip on ${s.g.arms.length - s.g.sensors.length} blade${s.g.arms.length - s.g.sensors.length > 1 ? 's' : ''}.`);
+    if (pp.sensor && s.g.sensors.length < s.g.arms.length) out.push('no room for the hall sensors between the strips, clear of the disc ties.');
     if (sm.closeTies.length) out.push(`${sm.closeTies.length} pairs of ties are closer than ${pp.gridEdge} mm (tightest ${Math.min(...sm.closeTies.map((x) => x.gapMm))} mm at r ${sm.closeTies[0].r} mm).`);
     if (!sm.discTies) {
       out.push(sm.discTiesUnderStrips ? 'every tie for the disc is under a strip: the disc isn\'t tied. Try another spoke cross.'
@@ -1021,15 +1026,12 @@ export function designReport(d: PanelDesign) {
 
 function flatExtrasOf(pp: Spec, g: Flat) {
   const leds = g.arms.map((a) => [rot([g.rhoLed0, 0], a), rot([g.rhoLed1, 0], a)] as [Pt, Pt]);
-  const sensors = g.sensors.map((b) => sensorAt(pp, g.arms[b.blade], b.rho, b.e));
+  const sensors = g.sensors.map((b) => sensorAt(pp, b.a, b.rho));
   return { leds, sensors };
 }
 
-/** LED strip lines, hall sensors (with their leads) and the side's spokes on the flat part (for drawings). */
+/** LED strip lines, hall sensors (with their leads) and the side's spokes on the part (for drawings). */
 export function flatExtras(d: PanelDesign, s: SideResult) {
-  const spokes = d.wheel.sideSpokes(s.side).map((sp) => Array.from({ length: 41 }, (_, k) => {
-    const [x, y] = sp.at(k / 40);
-    return toFlat(s.sf, [x, y]);
-  }));
+  const spokes = d.wheel.sideSpokes(s.side).map((sp) => [sp.a, sp.b]);
   return { ...flatExtrasOf(d.spec, s.g), spokes };
 }

@@ -1,10 +1,9 @@
-// The panels' drafting view: the flat part as cut with its dimensions, the bent panel on the
-// wheel, and a side section through the hub. Pan by dragging, zoom with the wheel or a pinch,
-// double-click (or F) to fit, and M to measure between snapped points.
-import { flatExtras, type HoleKind, type PanelDesign, type SideResult, toPlan } from './design';
-import { densify, pmod, pol, type Pt, rot } from './geom';
+// The panels' drafting view: the part on the wheel over every spoke, as cut, with the dimensions
+// needed to check or rebuild it. Pan by dragging, zoom with the wheel or a pinch, double-click (or
+// F) to fit, and M to measure between snapped points.
+import { flatExtras, type HoleKind, type PanelDesign, type SideResult } from './design';
+import { pmod, pol, type Pt, rot } from './geom';
 
-type Mode = 'flat' | 'plan' | 'section';
 interface Style { stroke?: string; fill?: string; width?: number; dash?: number[]; alpha?: number }
 type Prim =
   | { k: 'path'; rings: Pt[][]; closed: boolean; s: Style }
@@ -12,14 +11,13 @@ type Prim =
   | { k: 'dim'; a: Pt; b: Pt; off: number; text: string; color: string }
   | { k: 'note'; at: Pt; textAt: Pt; text: string; color: string; align?: 'left' | 'right' }
   | { k: 'text'; at: Pt; text: string; color: string; size?: number; bold?: boolean; angle?: number };
-interface Scene { prims: Prim[]; snaps: Pt[]; bounds: [Pt, Pt]; xScale: number; title: string; hint: string }
+interface Scene { prims: Prim[]; snaps: Pt[]; bounds: [Pt, Pt]; title: string; hint: string }
 
 const C = {
   bg: '#0b0e15', grid: '#161b26', gridText: '#4b5466', part: '#1c2330', edge: '#c5cfdd', hole: '#8d98aa',
   dim: '#6fb3ff', led: '#ff9f1c', angle: '#c08cff', sensor: '#b07cd8', red: '#ff5a67', measure: '#ffd166',
   text: '#d8dde6', muted: '#8b93a3', spokeIn: '#8a949c', spokeOut: '#c08a2c', spokeOther: '#262c38', tie: '#4fd1a5', board: '#ff7ab6', wire: '#f2c94c',
 };
-const SECTION_X = 3; // lateral exaggeration of the side section
 
 export const mmIn = (v: number, d = 1) => `${v.toFixed(d)} mm (${(v / 25.4).toFixed(3)}")`;
 const circle = (r: number, n = 180, c: Pt = [0, 0]): Pt[] => Array.from({ length: n }, (_, i) => pol(r, (i * 360) / n).map((v, k) => v + c[k]) as Pt);
@@ -42,15 +40,34 @@ function partPath(rings: Pt[][]): Prim {
 const HOLE: Record<HoleKind, string> = { strip: C.hole, spoke: C.tie, disc: C.angle, sensor: C.board, wire: C.wire };
 const LEGEND = 'holes: grey strip ties, green spoke ties, purple disc ties round the spoke crossings, pink hall sensor ties, yellow wire holes';
 
-/** The flat part as cut, blade 1 pointing right, with the dimensions needed to check or rebuild it. */
-function flatScene(d: PanelDesign, s: SideResult): Scene {
-  const { g } = s, pp = d.spec, sm = s.summary;
-  const a0 = g.arms[0], R = (p: Pt) => rot(p, -a0);
-  const { sensors, spokes } = flatExtras(d, s);
-  const prims: Prim[] = [partPath([g.outline.pts.map(R), ...g.holes.map((h) => h.ring.pts.map(R)), circle(g.rBore)])];
-  for (const sp of spokes) prims.push({ k: 'path', rings: [sp.map(R)], closed: false, s: { stroke: C.spokeIn, width: 0.8, dash: [4, 4], alpha: 0.5 } });
+/**
+ * The panel on the wheel, seen from the right with blade 1 pointing right, over every spoke: the part as
+ * cut (it lies flat on the spokes' shallow dish), with the dimensions needed to check or rebuild it.
+ */
+function partScene(d: PanelDesign, s: SideResult): Scene {
+  const wh = d.wheel, { g } = s, pp = d.spec, sm = s.summary;
+  const a0 = g.arms[0], R = (p: Pt) => rot(p, -a0), Pol = (r: number, a: number) => pol(r, a - a0);
+  const prims: Prim[] = [];
+  // the spokes: the other side's faint, this side's by direction, then the part over them
+  const DIR: Record<number, string> = { 1: C.spokeIn, [-1]: C.spokeOut };
+  const spokes = [...wh.spokes].sort((a, b) => Number(a.side === s.side) - Number(b.side === s.side));
+  for (const sp of spokes) {
+    const own = sp.side === s.side;
+    prims.push({ k: 'path', rings: [[R(sp.a), R(sp.b)]], closed: false, s: { stroke: own ? DIR[sp.direction] : C.spokeOther, width: own ? 1.2 : 0.8 } });
+  }
+  prims.push({ k: 'path', rings: [circle(wh.p.rimWallR, 360)], closed: true, s: { stroke: '#4b5466', width: 1, dash: [6, 5] } });
+  prims.push(partPath([g.outline.pts.map(R), ...g.holes.map((h) => h.ring.pts.map(R)), circle(g.rBore)]));
+  const tied = new Set(s.spokeTies.map((t) => t.spoke));
+  for (const sp of wh.spokes) if (tied.has(sp.i)) prims.push({ k: 'path', rings: [[R(sp.a), R(sp.b)]], closed: false, s: { stroke: C.tie, width: 1.2, alpha: 0.6 } });
+  for (const sp of wh.spokes) if (sp.side === s.side) prims.push({ k: 'path', rings: [[R(sp.a), R(sp.b)]], closed: false, s: { stroke: DIR[sp.direction], width: 0.8, dash: [4, 4], alpha: 0.5 } });
   for (const h of g.holes) prims.push({ k: 'path', rings: [h.ring.pts.map(R)], closed: true, s: { stroke: HOLE[h.kind], width: 1.4 } });
-  for (const b of sensors) prims.push({ k: 'path', rings: [b.map(R)], closed: true, s: { fill: C.sensor, alpha: 0.35 } });
+  const { sensors } = flatExtras(d, s);
+  for (const b of sensors) prims.push({ k: 'path', rings: [b.map(R)], closed: true, s: { fill: C.sensor, alpha: 0.55 } });
+  for (const sp of wh.spokes) prims.push({ k: 'dot', c: Pol(wh.p.erd / 2, sp.rimDeg), r: 2.5, fill: sp.side === s.side ? C.edge : '#4b5466' });
+  const vd = wh.valveDeg(), rw = wh.p.rimWallR;
+  prims.push({ k: 'path', rings: [[Pol(rw + 6, vd), Pol(rw - pp.valveLen, vd)]], closed: false, s: { stroke: C.angle, width: 5 } });
+  prims.push({ k: 'text', at: Pol(rw + 22, vd), text: 'valve', color: C.angle });
+  g.arms.forEach((a, i) => prims.push({ k: 'text', at: Pol(rw + 24, a), text: `blade ${i + 1} · ${a.toFixed(2)}°`, color: C.text }));
   const rel = g.arms.map((a) => pmod(a - a0, 360));
   for (const r of rel) { // LED lanes
     for (const sg of [1, -1]) {
@@ -63,7 +80,7 @@ function flatScene(d: PanelDesign, s: SideResult): Scene {
   prims.push({ k: 'text', at: [(g.rhoLed0 + g.rhoLed1) / 2, 0], text: `LED strip ${mmIn(pp.stripW)} · ${sm.ledsPerStrip} LEDs`, color: C.led });
   dim([E, -w / 2], [E, w / 2], -12, `blade ${mmIn(w)}`);
   const below = -w / 2 - Math.max(0, ...s.spokeTies.filter((t) => t.blade === 0 && t.sg < 0).map((t) => t.earMm));
-  dim([0, below], [E, below], -18, `centre to tip ${mmIn(E)} flat (${sm.tipR} mm on the wheel)`);
+  dim([0, below], [E, below], -18, `centre to tip ${mmIn(E)}`);
   // the disc, measured between two blades
   const between = rel.length > 1 ? rel[1] / 2 : 90;
   dim(pol(g.rhoDisc, between), pol(g.rhoDisc, between + 180), 0, `disc Ø ${mmIn(2 * g.rhoDisc)}`);
@@ -87,9 +104,8 @@ function flatScene(d: PanelDesign, s: SideResult): Scene {
   }
   const sb = g.sensors.find((b) => b.blade === 0);
   if (sb) {
-    const at: Pt = [sb.rho, sb.e + Math.sign(sb.e) * (pp.sensorBody[0] / 2)];
-    note(at, [sb.rho + 50, at[1] + Math.sign(sb.e) * 40],
-      `hall sensor (US5881, marked face out), ${mmIn(pp.sensorGap)} from the strip: a tie across its body, one across its leads`, 'left');
+    const at = pol(sb.rho, sb.a - a0), out = pol(sb.rho + 60, sb.a - a0 + 12);
+    note(at, out, `hall sensor (US5881, marked face out, leads in) midway between strips, r ${sm.sensorR[0]} mm: a tie across its body, one across its leads`, 'left');
   }
   const dt = s.discTies[0];
   if (dt) { const p = R(dt.holes[0]); note(p, [p[0] - 60, p[1] - 70], `disc tie round the spoke crossing at r ${dt.r.toFixed(1)} mm`, 'right'); }
@@ -98,95 +114,13 @@ function flatScene(d: PanelDesign, s: SideResult): Scene {
     note(at, [out[0], out[1] + 40], `nipple slot ${d.tipSlot.widthMm.toFixed(1)} wide × ${d.tipSlot.depthMm.toFixed(1)} deep`);
   }
   const snaps: Pt[] = [[0, 0], ...[0, 90, 180, 270].map((a) => pol(g.rBore, a)), ...g.outlineBulge.map((p) => R([p[0], p[1]])),
-    ...g.holes.flatMap((h) => [R(h.c), ...h.bulge.map((p) => R([p[0], p[1]]))])];
+    ...g.holes.flatMap((h) => [R(h.c), ...h.bulge.map((p) => R([p[0], p[1]]))]), ...wh.spokes.map((sp) => Pol(wh.p.erd / 2, sp.rimDeg))];
   return {
-    prims, snaps, bounds: boundsOf(prims), xScale: 1,
-    title: `${d.identical ? 'LEFT = RIGHT turned over' : s.label} panel · flat, as cut · ${sm.partSizeIn[0]} × ${sm.partSizeIn[1]} in · `
-      + `${pp.label} · ${sm.holesTotal} holes · outline corners R${pp.cornerR}${d.identical ? ' · order 2' : ''}`,
-    hint: `Blade 1 points right. Dimensions in mm (inches). Dashed: the spokes it lies on · ${LEGEND}.`,
-  };
-}
-
-/** The panel on the wheel, seen from the right, with every spoke. */
-function planScene(d: PanelDesign, s: SideResult): Scene {
-  const wh = d.wheel, { g } = s, prims: Prim[] = [];
-  const P = (p: Pt) => toPlan(s.sf, p);
-  const DIR: Record<number, string> = { 1: C.spokeIn, [-1]: C.spokeOut };
-  const tied = new Set(s.spokeTies.map((t) => t.spoke));
-  const spokes = [...wh.spokes].sort((a, b) => Number(a.side === s.side) - Number(b.side === s.side));
-  for (const sp of spokes) {
-    const own = sp.side === s.side;
-    prims.push({ k: 'path', rings: [[sp.a, sp.b]], closed: false, s: { stroke: own ? DIR[sp.direction] : C.spokeOther, width: own ? 1.2 : 0.8 } });
-  }
-  prims.push({ k: 'path', rings: [circle(wh.p.rimWallR, 360)], closed: true, s: { stroke: '#4b5466', width: 1, dash: [6, 5] } });
-  prims.push(partPath([densify(g.outline.pts, 2).map(P), ...g.holes.map((h) => h.ring.pts.map(P)), circle(g.rBore)]));
-  for (const sp of wh.spokes) if (tied.has(sp.i)) prims.push({ k: 'path', rings: [[sp.a, sp.b]], closed: false, s: { stroke: C.tie, width: 1.2, alpha: 0.6 } });
-  for (const h of g.holes) prims.push({ k: 'path', rings: [h.ring.pts.map(P)], closed: true, s: { stroke: HOLE[h.kind], width: 1.4 } });
-  const { leds, sensors } = flatExtras(d, s);
-  for (const b of sensors) prims.push({ k: 'path', rings: [densify(b, 2).map(P)], closed: true, s: { fill: C.sensor, alpha: 0.55 } });
-  for (const [a, b] of leds) prims.push({ k: 'path', rings: [[P(a), P(b)]], closed: false, s: { stroke: C.led, width: 3, alpha: 0.8 } });
-  for (const sp of wh.spokes) prims.push({ k: 'dot', c: pol(wh.p.erd / 2, sp.rimDeg), r: 2.5, fill: sp.side === s.side ? C.edge : '#4b5466' });
-  const vd = wh.valveDeg(), rw = wh.p.rimWallR;
-  prims.push({ k: 'path', rings: [[pol(rw + 6, vd), pol(rw - d.spec.valveLen, vd)]], closed: false, s: { stroke: C.angle, width: 5 } });
-  prims.push({ k: 'text', at: pol(rw + 22, vd), text: 'valve', color: C.angle });
-  g.arms.forEach((a, i) => prims.push({ k: 'text', at: pol(rw + 24, a), text: `blade ${i + 1} · ${a.toFixed(2)}°`, color: C.text }));
-  const sm = s.summary;
-  return {
-    prims, snaps: [[0, 0], ...wh.spokes.map((sp) => pol(wh.p.erd / 2, sp.rimDeg)), ...g.holes.map((h) => P(h.c))],
-    bounds: boundsOf(prims), xScale: 1,
-    title: `${s.label} panel on the wheel (seen from the right) · ${sm.ledsPerStrip} LEDs per blade · ${sm.spokeTiesPerBlade.join('/')} spoke ties per blade · ${sm.massG} g`,
-    hint: `Own-side spokes: grey heads-in, amber heads-out; green: tied to a blade${sensors.length ? ' · purple: hall sensors and their leads (outer face)' : ''} · dashed: rim wall · ${LEGEND}`,
-  };
-}
-
-/** Section through the axle: every spoke, both panels on their spokes, flanges, fork and rim. */
-function sectionScene(d: PanelDesign): Scene {
-  const wh = d.wheel, pp = d.spec, X = SECTION_X, prims: Prim[] = [];
-  const t = pp.thickness, old = wh.p.old / 2, top = wh.p.rimWallR + 14;
-  for (let r = 50; r <= top; r += 50) {
-    prims.push({ k: 'path', rings: [[[-60 * X, r], [60 * X, r]]], closed: false, s: { stroke: C.grid, width: 1 } });
-    prims.push({ k: 'text', at: [-60 * X - 14, r], text: `r ${r}`, color: C.gridText, size: 11 });
-  }
-  for (let z = -40; z <= 40; z += 20) {
-    prims.push({ k: 'path', rings: [[[z * X, -12], [z * X, top]]], closed: false, s: { stroke: C.grid, width: 1 } });
-    prims.push({ k: 'text', at: [z * X, -24], text: `z ${z}`, color: C.gridText, size: 11 });
-  }
-  const forkZ = (r: number) => old - (old - pp.forkCrownHalf) * Math.min(1, r / pp.forkCrownR);
-  for (const sg of [-1, 1]) {
-    prims.push({ k: 'path', rings: [[[sg * old * X, 0], [sg * forkZ(top) * X, top]]], closed: false, s: { stroke: '#3a4152', width: 8 } });
-    const c2f = sg < 0 ? wh.p.c2fLeft : wh.p.c2fRight;
-    const x0 = (sg * c2f - wh.p.flangeT / 2) * X, x1 = (sg * c2f + wh.p.flangeT / 2) * X, fr = wh.flangeOuterR(sg);
-    prims.push({ k: 'path', rings: [[[x0, 0], [x1, 0], [x1, fr], [x0, fr]]], closed: true, s: { fill: '#3a4152', stroke: '#5b6475', width: 1 } });
-  }
-  prims.push({ k: 'path', rings: [[[-old * X, -8], [old * X, -8], [old * X, 8], [-old * X, 8]]], closed: true, s: { fill: '#1c2330', stroke: '#5b6475', width: 1 } });
-  for (const sp of wh.spokes) {
-    const pts = Array.from({ length: 61 }, (_, k) => { const [x, y, z] = sp.at(k / 60); return [z * X, Math.hypot(x, y)] as Pt; });
-    prims.push({ k: 'path', rings: [pts], closed: false, s: { stroke: sp.direction > 0 ? C.spokeIn : C.spokeOut, width: 1, alpha: 0.7 } });
-  }
-  const stack = pp.stripT + pp.tieT;
-  for (const s of [d.sides.LEFT, d.sides.RIGHT]) {
-    const { g, sf, side } = s, rEnd = sf.rOf(g.rhoEnd);
-    const rs = Array.from({ length: 301 }, (_, k) => g.rBore + (k * (rEnd - g.rBore)) / 300);
-    const inner = rs.map((r) => [side * sf.zAt(r) * X, r] as Pt);
-    const outer = rs.map((r) => [side * (sf.zAt(r) + t) * X, r] as Pt);
-    prims.push({ k: 'path', rings: [[...inner, ...outer.reverse()]], closed: true, s: { fill: '#aab4c3', stroke: '#aab4c3', width: 1 } });
-    const r0 = sf.rOf(g.rhoLed0), r1_ = sf.rOf(g.rhoLed1);
-    const lane = rs.filter((r) => r >= r0 && r <= r1_).map((r) => [side * (sf.zAt(r) + t + stack) * X, r] as Pt);
-    prims.push({ k: 'path', rings: [lane], closed: false, s: { stroke: C.led, width: 1.5 } });
-    for (const tie of s.spokeTies) prims.push({ k: 'dot', c: [side * (sf.zAt(tie.r) + t) * X, tie.r], r: 2.5, fill: C.tie });
-    const fc = s.summary.forkClearance;
-    if (fc.where && s.side > 0) {
-      const r = fc.where.r;
-      prims.push({ k: 'note', at: [forkZ(r) * X, r], textAt: [forkZ(r) * X - 25, r - 45], text: `${fc.minMm} mm to the fork (${fc.governedBy})`, color: fc.minMm >= pp.minForkClear ? C.dim : C.red });
-    }
-  }
-  prims.push({ k: 'path', rings: [[[0, wh.nippleTipR()], [0, wh.p.rimWallR]]], closed: false, s: { stroke: C.edge, width: 4 } });
-  prims.push({ k: 'path', rings: [[[-12 * X, wh.p.rimWallR], [12 * X, wh.p.rimWallR]]], closed: false, s: { stroke: C.edge, width: 2 } });
-  prims.push({ k: 'text', at: [16 * X + 30, wh.p.rimWallR], text: 'rim wall / nipple', color: C.muted, size: 11 });
-  return {
-    prims, snaps: [[0, 0]], bounds: boundsOf(prims), xScale: X,
-    title: `Side section through the axle · all ${wh.p.spokes} spokes · each panel lies on its own spokes · lateral scale ×${X}`,
-    hint: 'Grey: heads-in spokes, amber: heads-out · orange: LED strip + tie band on the outer face · green dots: spoke ties · fork, hub and flanges are typical values',
+    prims, snaps, bounds: boundsOf(prims),
+    title: `${s.label} panel on the wheel, from the right · ${sm.partSizeIn[0]} × ${sm.partSizeIn[1]} in · ${sm.holesTotal} holes · ${sm.massG} g`
+      + ` · ${d.identical ? 'cut 2 of one part' : `cut one ${s.label}`}`,
+    hint: `Blade 1 points right; mm (inches). Spokes: grey heads-in, amber heads-out, green tied, faint the other side's`
+      + `${sensors.length ? ' · purple: hall sensors' : ''} · ${LEGEND}.`,
   };
 }
 
@@ -198,12 +132,10 @@ export class PanelDrawing {
   private hintEl: HTMLElement;
   private readout: HTMLElement;
   private status: HTMLElement;
-  private modeBtns: HTMLButtonElement[] = [];
   private sideBtns: HTMLButtonElement[] = [];
   private measureBtn: HTMLButtonElement;
   private design?: PanelDesign;
   private scene?: Scene;
-  private mode: Mode = 'flat';
   private side: 'LEFT' | 'RIGHT' = 'LEFT';
   private view = { cx: 0, cy: 0, s: 1 };
   private fitted = false; // false once someone pans or zooms: a new design then keeps the view
@@ -219,11 +151,6 @@ export class PanelDrawing {
     host.innerHTML = `
       <div class="pv-bar">
         <button type="button" data-act="back" title="Back to the ride">← Ride</button>
-        <span class="pv-group" role="group" aria-label="View">
-          <button type="button" data-mode="flat" title="The part as cut, with dimensions">Flat part</button>
-          <button type="button" data-mode="plan" title="The bent panel on the wheel, with the spokes">On the wheel</button>
-          <button type="button" data-mode="section" title="Section through the axle: spokes, panels, flanges, fork">Side section</button>
-        </span>
         <span class="pv-group" role="group" aria-label="Side" data-sides>
           <button type="button" data-side="LEFT">Left</button>
           <button type="button" data-side="RIGHT">Right</button>
@@ -242,8 +169,6 @@ export class PanelDrawing {
     q<HTMLButtonElement>('[data-act="back"]').onclick = onBack;
     q<HTMLButtonElement>('[data-act="fit"]').onclick = () => this.fit();
     this.measureBtn.onclick = () => this.setMeasuring(!this.measuring);
-    this.modeBtns = [...host.querySelectorAll<HTMLButtonElement>('[data-mode]')];
-    for (const b of this.modeBtns) b.onclick = () => { this.mode = b.dataset.mode as Mode; this.rebuild(true); };
     this.sideBtns = [...host.querySelectorAll<HTMLButtonElement>('[data-side]')];
     for (const b of this.sideBtns) b.onclick = () => { this.side = b.dataset.side as 'LEFT' | 'RIGHT'; this.rebuild(false); };
     new ResizeObserver(() => this.resize()).observe(host);
@@ -266,8 +191,7 @@ export class PanelDrawing {
     const d = this.design;
     this.syncButtons();
     if (!d) return;
-    const s = this.mode !== 'flat' || !d.identical ? d.sides[this.side] : d.sides.LEFT;
-    this.scene = this.mode === 'flat' ? flatScene(d, s) : this.mode === 'plan' ? planScene(d, s) : sectionScene(d);
+    this.scene = partScene(d, d.sides[this.side]);
     this.titleEl.textContent = this.scene.title;
     this.hintEl.textContent = this.scene.hint;
     this.ma = this.mb = undefined;
@@ -275,10 +199,7 @@ export class PanelDrawing {
   }
 
   private syncButtons() {
-    for (const b of this.modeBtns) b.setAttribute('aria-pressed', String(b.dataset.mode === this.mode));
     for (const b of this.sideBtns) b.setAttribute('aria-pressed', String(b.dataset.side === this.side));
-    const sides = this.host.querySelector<HTMLElement>('[data-sides]')!;
-    sides.hidden = this.mode === 'section' || (this.mode === 'flat' && !!this.design?.identical);
     this.measureBtn.setAttribute('aria-pressed', String(this.measuring));
     this.canvas.style.cursor = this.measuring ? 'crosshair' : 'grab';
   }
@@ -425,13 +346,11 @@ export class PanelDrawing {
     for (const p of sc.prims) if (p.k === 'dim') this.drawDim(p);
     for (const p of sc.prims) if (p.k === 'note' || p.k === 'text') this.drawLabel(p);
     this.drawScaleBar();
-    this.drawMeasure(sc);
+    this.drawMeasure();
     // cursor position
     if (this.hover) {
       const [x, y] = this.W(this.hover);
-      this.readout.textContent = this.mode === 'section'
-        ? `z ${(x / sc.xScale).toFixed(1)} mm · r ${y.toFixed(1)} mm`
-        : `x ${x.toFixed(1)} · y ${y.toFixed(1)} mm · r ${Math.hypot(x, y).toFixed(1)} mm`;
+      this.readout.textContent = `x ${x.toFixed(1)} · y ${y.toFixed(1)} mm · r ${Math.hypot(x, y).toFixed(1)} mm`;
     } else this.readout.textContent = '';
   }
 
@@ -538,9 +457,8 @@ export class PanelDrawing {
   }
 
   private drawScaleBar() {
-    const sc = this.scene!;
     // a round length that's 60–150 px long
-    const per = sc.xScale / this.view.s; // mm per px, horizontally
+    const per = 1 / this.view.s; // mm per px
     const target = 100 * per;
     const p10 = 10 ** Math.floor(Math.log10(target));
     const len = [1, 2, 5, 10].map((k) => k * p10).find((v) => v >= target * 0.6) ?? p10 * 10;
@@ -554,10 +472,10 @@ export class PanelDrawing {
     ctx.moveTo(x, y - 4); ctx.lineTo(x, y); ctx.lineTo(x + px, y); ctx.lineTo(x + px, y - 4);
     ctx.stroke();
     ctx.restore();
-    this.textBox(`${len >= 1 ? len : len.toFixed(2)} mm${sc.xScale !== 1 ? ' (lateral)' : ''}`, [x + px / 2, y - 12], C.muted, { size: 11 });
+    this.textBox(`${len >= 1 ? len : len.toFixed(2)} mm`, [x + px / 2, y - 12], C.muted, { size: 11 });
   }
 
-  private drawMeasure(sc: Scene) {
+  private drawMeasure() {
     if (!this.measuring) return;
     const { ctx } = this;
     const hoverSnap = this.hover ? this.snap(this.hover) : undefined;
@@ -576,7 +494,7 @@ export class PanelDrawing {
       const A = this.S(a), B = this.S(b);
       ctx.setLineDash([5, 4]);
       ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
-      const dx = (b[0] - a[0]) / sc.xScale, dy = b[1] - a[1], L = Math.hypot(dx, dy);
+      const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
       const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
       this.textBox(`${mmIn(L, 2)} · Δx ${dx.toFixed(2)} · Δy ${dy.toFixed(2)} mm · ${ang.toFixed(1)}°`,
         [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2 - 16], C.measure, { size: 12, bold: true });

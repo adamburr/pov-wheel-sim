@@ -49,7 +49,6 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
   holes.add(p, 'panelEdgeMm', 1, 10, 0.1).name('Hole to edge (mm)');
   holes.add(p, 'panelCornerMm', 0.5, 10, 0.1).name('Corner radius (mm)');
   holes.add(p, 'panelBladeWidthMm', 0, 80, 1).name('Blade width (mm, 0 = narrowest)');
-  holes.add(p, 'panelSensorGapMm', 0, 40, 0.5).name('Hall sensor to strip (mm)');
   const hub = gui.addFolder('Hub and fork (typical values)').close();
   hub.add(p, 'spokeCrosses', 0, 4, 1).name('Spoke crosses');
   hub.add(p, 'hubFlangePcdMm', 30, 80, 0.5).name('Flange hole circle Ø (mm)');
@@ -88,14 +87,13 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
       ['LEDs', `${L.ledsPerStrip} per blade, r ${L.ledStartR}–${L.ledEndR} mm`],
       ['Disc', `Ø ${L.discD} mm${d.wheel.p.crosses ? ` to spoke cross ${L.discCross}` : ', tied to the spokes'}: ${both((s) => `${s.discTies}`)} ties at r ${L.discTieR ?? '–'} mm`
         + (L.discTiesUnderStrips || R.discTiesUnderStrips ? ` (${Math.max(L.discTiesUnderStrips, R.discTiesUnderStrips)} under a strip left out)` : '')],
-      ['Sensors', pp.sensor ? `a hall switch (US5881) beside each strip, ${pp.sensorGap} mm from it, marked face out, tied on`
+      ['Sensors', pp.sensor ? `a hall switch (US5881) midway between each pair of strips, marked face out, tied on`
         + ` (${both((s) => `${s.sensorsOnDisc} on the disc`)}), r ${both((s) => s.sensorR.join('/'))} mm · the strip's field there ≤ ${Math.max(L.sensorFieldUT ?? 0, R.sensorFieldUT ?? 0)} µT`
         + ` at full white; the switch releases at ${pp.sensorReleaseMT} mT or more · ${Math.min(L.forkClearance.sensorFaceToForkMm ?? 0, R.forkClearance.sensorFaceToForkMm ?? 0)} mm from its face to the fork for the magnet` : 'none'],
       ['Spoke ties', both((s) => `${s.spokeTiesPerBlade.join('/')} per blade`) + ` · tabs up to ${Math.max(L.maxEarMm, R.maxEarMm)} mm`],
       ['Spans', `≤ ${Math.max(L.longestSpanMm, R.longestSpanMm)} mm between ties · tips ${Math.max(L.tipOverhangMm, R.tipOverhangMm)} mm past the last`],
       ['Holes', both((s) => `${s.holesTotal} (${s.holes.strip} strip, ${s.holes.spoke} spoke, ${s.holes.disc} disc, ${s.holes.sensor} sensor, ${s.holes.wire} wire)`) + ` · □ ${(pp.tieW + pp.tieClear).toFixed(1)} mm`],
-      ['Wire holes', pp.wireHoleD > 0 ? `Ø${pp.wireHoleD} mm in the disc, one by each strip's inner end, for its wires and its sensor's to the inner side` : 'none'],
-      ['Dish', `${L.dishMm} mm from the bore to the tips (the panel follows the spokes)`],
+      ['Wire holes', pp.wireHoleD > 0 ? `Ø${pp.wireHoleD} mm in the disc, one just inside each hall sensor's leads, for the sensor's and its strip's wires to the inner side` : 'none'],
       ['Fork', `${fc.minMm} mm (${fc.governedBy}) · bare panel ${Math.min(L.forkClearance.panelFaceMm, R.forkClearance.panelFaceMm)} mm`],
       ['Valve', `${Math.min(L.valveClearMm, R.valveClearMm)} mm clear`],
     ];

@@ -150,7 +150,6 @@ export function defaultParams() {
     panelTieSpanMm: 80,       // longest stretch of blade between spoke ties
     panelTipTieMm: 30,        // a spoke tie within this of each tip
     panelTabMaxMm: 0,         // farthest a tab reaches beyond the blade's edge to a spoke; 0 = the gap between one side's spokes
-    panelSensorGapMm: 12,     // hall sensor's body to its strip's edge (clear of the strip ties, their heads and the strip's wiring)
     spokeCrosses: 3,          // lacing
     hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
     hubFlangeOffsetMm: 35,    // hub centre to each flange (typical)
@@ -189,7 +188,7 @@ export function defaultParams() {
     minLinesPerSec: fw.minLinesPerSec,
     hallPollMs: fw.hallPollMs,
     debounceMs: fw.debounceMs,
-    hallPerStrip: true,       // a hall sensor beside each strip: a magnet pass every 1/strips turn
+    hallPerStrip: true,       // a hall sensor per strip: a magnet pass every 1/strips turn
     hallSensor: 'switch' as 'switch' | 'magnetometer', // switch: trips at a threshold; magnetometer: the field's peak is found
     magOdrHz: 1000,           // magnetometer output data rate
     overflow: 'wrap' as 'wrap' | 'blank',
@@ -300,7 +299,7 @@ export const DEVICE_KEYS = [
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
   'panelMaterial', 'panelBoreMm', 'panelTipRadiusMm', 'panelTipSlot', 'panelStripWidthMm', 'panelStripThickMm',
   'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelCornerMm',
-  'panelBladeWidthMm', 'panelDiscCross', 'panelTieSpanMm', 'panelTipTieMm', 'panelTabMaxMm', 'panelSensorGapMm', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
+  'panelBladeWidthMm', 'panelDiscCross', 'panelTieSpanMm', 'panelTipTieMm', 'panelTabMaxMm', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
   'hubOldMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];

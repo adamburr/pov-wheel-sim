@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams } from '../src/params';
 import { derive } from '../src/sim/timing';
-import { designPanels, designReport, holeSize, mirrorAxes, type PanelDesign, type SideResult, toPlan } from '../src/panels/design';
+import { designPanels, designReport, holeSize, mirrorAxes, type PanelDesign, type SideResult } from '../src/panels/design';
 import { cutDxf, cutFiles, referenceDxf } from '../src/panels/dxf';
 import { applyToSim, panelInputs } from '../src/panels/fromParams';
-import { arcMerge, circlePts, cleanRing, filletRing, mirrorPt, outlineOf, pmod, pointSegDist, type Pt, rot } from '../src/panels/geom';
+import { adiff, arcMerge, circlePts, cleanRing, dist, filletRing, mirrorPt, outlineOf, pmod, pointSegDist, pol, type Pt, rot } from '../src/panels/geom';
 import { packDesign, unpackDesign } from '../src/panels/transport';
 import { Wheel } from '../src/panels/wheel';
 
@@ -24,10 +24,10 @@ const sideOf = (d: PanelDesign, spoke: number, p: Pt) => {
   const s = d.wheel.spokes[spoke];
   return Math.sign((s.b[0] - s.a[0]) * (p[1] - s.a[1]) - (s.b[1] - s.a[1]) * (p[0] - s.a[0]));
 };
-/** Distance from a hole's edge (in plan) to a spoke's surface. */
+/** Distance from a hole's edge to a spoke's surface. */
 const holeToSpoke = (d: PanelDesign, s: SideResult, c: Pt, spoke: number) => {
   const sp = d.wheel.spokes[spoke], h = s.g.holes.find((x) => Math.hypot(x.c[0] - c[0], x.c[1] - c[1]) < 1e-9)!;
-  return Math.min(...h.ring.pts.map((q) => pointSegDist(toPlan(s.sf, q), sp.a, sp.b))) - d.wheel.p.spokeD / 2;
+  return Math.min(...h.ring.pts.map((q) => pointSegDist(q, sp.a, sp.b))) - d.wheel.p.spokeD / 2;
 };
 
 describe('wheel model', () => {
@@ -72,17 +72,12 @@ describe('outline geometry', () => {
 });
 
 describe('the surface the panel lies on', () => {
-  it('dishes from the spoke heads at the hub to the rim, so the flat part is a little longer than its plan', () => {
+  it('dishes from the spoke heads at the hub to the rim (for the clearances; the part is laid out as on the wheel)', () => {
     const s = design(2).sides.LEFT;
     expect(s.sf.zAt(20)).toBeCloseTo(35 + 1.4 + 2, 6); // the spoke heads on the flange's outer face
     expect(s.sf.zAt(150)).toBeLessThan(s.sf.zAt(60));
     expect(s.sf.zAt(290)).toBeLessThan(5);
-    for (const r of [30, 100, 250]) {
-      expect(s.sf.rhoOf(r)).toBeGreaterThan(r);
-      expect(s.sf.rOf(s.sf.rhoOf(r))).toBeCloseTo(r, 6);
-    }
-    expect(s.summary.lengthOnSlopeMm).toBeGreaterThan(2);
-    expect(s.summary.lengthOnSlopeMm).toBeLessThan(3);
+    expect(s.g.rhoEnd).toBeCloseTo(298.45, 6); // the tip radius on the wheel
   });
 });
 
@@ -126,7 +121,7 @@ describe('spoke-tied panels', () => {
         expect(sm.discTies).toBeGreaterThanOrEqual(4);
         expect(sm.discTieR).toBeCloseTo(79.7, 1);
         for (const t of s.discTies) {
-          const [a, b] = t.holes.map((q) => toPlan(s.sf, q));
+          const [a, b] = t.holes.map((q) => q);
           for (const sp of t.spokes) {
             expect(sideOf(d, sp, a)).toBe(-sideOf(d, sp, b));
             for (const q of t.holes) expect(holeToSpoke(d, s, q, sp)).toBeGreaterThanOrEqual(pp.spokeGap - 0.05);
@@ -135,7 +130,7 @@ describe('spoke-tied panels', () => {
         // spoke ties: a hole each side of the spoke, clear of it, and every hole clear of the strip's ties (so
         // the strips go on first); a tie over the strip has a hole on each edge
         for (const t of s.spokeTies) {
-          const [a, b] = t.holes.map((q) => toPlan(s.sf, q));
+          const [a, b] = t.holes.map((q) => q);
           expect(sideOf(d, t.spoke, a)).toBe(-sideOf(d, t.spoke, b));
           for (const q of t.holes) expect(holeToSpoke(d, s, q, t.spoke)).toBeGreaterThanOrEqual(pp.spokeGap - 0.05);
           const e = t.holes.map((q) => rot(q, -s.g.arms[t.blade])[1]);
@@ -151,23 +146,31 @@ describe('spoke-tied panels', () => {
         // the strip runs from just outside the bore to the tip
         expect(sm.ledStartR).toBeCloseTo(pp.boreD / 2 + pp.stripStartGap, 0);
         expect(sm.ledEndR).toBeGreaterThan(290);
-        // a hall switch on the disc beside each strip, sensorGap clear of it, on two ties of its own
+        // a hall switch per strip on the disc, midway between strips, all at one radius, on two ties of its own
         expect(s.g.sensors.map((b) => b.blade)).toEqual(s.g.arms.map((_, i) => i));
         expect(sm.sensorsOnDisc).toBe(n);
+        expect(new Set(s.g.sensors.map((b) => b.rho)).size).toBe(1);
         for (const b of s.g.sensors) {
-          expect(Math.abs(b.e) - pp.sensorBody[0] / 2).toBeCloseTo(pp.stripW / 2 + pp.sensorGap, 6);
-          const ties = s.g.holes.filter((x) => x.kind === 'sensor' && Math.hypot(...rot(x.c, -s.g.arms[b.blade]).map((v, k) => v - [b.rho, b.e][k])) < 15);
+          expect(adiff(b.a, s.g.arms[b.blade] + 180 / n)).toBeLessThan(1e-6);
+          const ties = s.g.holes.filter((x) => x.kind === 'sensor' && dist(x.c, pol(b.rho, b.a)) < 15);
           expect(ties).toHaveLength(4);
           expect(new Set(ties.map((x) => x.tie)).size).toBe(2);
+          // near the disc's edge: nothing but disc ties between it and the edge
+          expect(b.rho).toBeGreaterThan(s.g.rhoDisc - 30);
         }
         expect(sm.sensorFieldUT!).toBeLessThan(pp.sensorReleaseMT * 10); // under 1% of the switch's release point
-        // a round wire hole in the disc by each strip's inner end, beside the strip
+        // a round wire hole in the disc just inside each hall sensor's leads, on its centre line
         const wires = s.g.holes.filter((x) => x.kind === 'wire');
         expect(wires).toHaveLength(n);
-        for (const w of wires) {
+        expect(pp.wireHoleD).toBe(10);
+        for (const b of s.g.sensors) {
+          const w = wires.find((x) => dist(x.c, pol(b.rho, b.a)) < 35)!;
           expect(w.d).toBe(pp.wireHoleD);
           expect(Math.hypot(...w.c) + pp.wireHoleD / 2 + pp.gridEdge).toBeLessThanOrEqual(s.g.rhoDisc + 1e-6);
-          expect(Math.hypot(...w.c)).toBeLessThan(s.g.rhoLed0 + 20);
+          const [x, e] = rot(w.c, -b.a);
+          expect(Math.abs(e)).toBeLessThan(1e-6);
+          expect(x + pp.wireHoleD / 2).toBeLessThan(b.rho - pp.sensorBody[1] / 2 - pp.sensorLeads);
+          expect(x + pp.wireHoleD / 2).toBeGreaterThan(b.rho - pp.sensorBody[1] / 2 - pp.sensorLeads - 5);
         }
         expect(sm.forkClearance.sensorFaceToForkMm).toBeGreaterThan(5);
         expect(sm.massG).toBeLessThan(12 * n + 15); // the disc is about 10 g
@@ -194,7 +197,7 @@ describe('spoke-tied panels', () => {
     const over = s.spokeTies.filter((t) => t.over);
     expect(over).toHaveLength(1);
     // it sits at a pixel gap between strip ties, and the strip tie next to it stays
-    const near = s.g.stripTieRhos[over[0].blade].map((r) => Math.abs(s.sf.rOf(r) - over[0].r));
+    const near = s.g.stripTieRhos[over[0].blade].map((r) => Math.abs(r - over[0].r));
     expect(Math.min(...near)).toBeCloseTo(d.spec.ledPitch, 0);
   });
 
@@ -212,7 +215,7 @@ describe('spoke-tied panels', () => {
     expect(s.discTies.length).toBeGreaterThan(0);
     for (const t of s.discTies) {
       expect(t.spokes[0]).toBe(t.spokes[1]);
-      const [a, b] = t.holes.map((q) => toPlan(s.sf, q));
+      const [a, b] = t.holes.map((q) => q);
       expect(sideOf(design(2, { spokeCrosses: 0 }), t.spokes[0], a)).toBe(-sideOf(design(2, { spokeCrosses: 0 }), t.spokes[0], b));
     }
   });
@@ -284,8 +287,6 @@ describe('worker transport', () => {
     const [a, b] = [d.sides.LEFT, back.sides.LEFT];
     for (const r of [10, 100, 250, 301, 320]) {
       expect(b.sf.zAt(r)).toBe(a.sf.zAt(r));
-      expect(b.sf.rhoOf(r)).toBe(a.sf.rhoOf(r));
-      expect(b.sf.rOf(r)).toBe(a.sf.rOf(r));
     }
     expect(b.g.outline.contains([100, 0])).toBe(a.g.outline.contains([100, 0]));
     expect(back.wheel.spokes[5].at(0.5)).toEqual(d.wheel.spokes[5].at(0.5));
@@ -298,7 +299,7 @@ describe('shared settings', () => {
     const p = { ...defaultParams(), stripCount: 2 };
     const { wheel, panel } = panelInputs(p);
     expect(wheel).toMatchObject({ size: '700c', spokes: 32, crosses: 3, rimWallR: 289, erd: 586 });
-    expect(panel).toMatchObject({ strips: 2, material: 'pp_08', tipEndR: 298.45, discCross: 0, sensorGap: 12 });
+    expect(panel).toMatchObject({ strips: 2, material: 'pp_08', tipEndR: 298.45, discCross: 0 });
     const d = designPanels(wheel, panel);
     expect(d.rimNote).toMatch(/Rim wall assumed/); // the default rim is deeper than the measured tips allow
     applyToSim(p, d);
