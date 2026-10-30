@@ -57,7 +57,7 @@ These are all renders from the simulator, starting from the Water preset and the
 Two views show the same moment and the same animation. The main view follows the bike, and a narrow **roadside strip** above it watches the bike ride past like a basic phone camera at night, without flash (a 1/8 s exposure by default). The main view mimics the human eye. You can move the strip below the main view, give it its own exposure, or hide it under *Simulator → Camera*. The panel at the bottom is for riding: the current **preset**, then the wheel's two buttons, then the speed, its slider and **Auto**:
 
 - **Next ▶** is the wheel's preset button. Click for the next preset (or press **N**); double-click to toggle **Auto**.
-- **☀** is the wheel's brightness button. Click to step 100, 50, 25 and 12 % (or press **B**). Double-click to put the wheel to sleep; a click on either button wakes it.
+- **☀** is the wheel's brightness button. Click to step 100, 50, 25 and 12 % (or press **B**). Double-click to switch the wheel off, and again to switch it on.
 
 **⚙️ Settings** opens a panel: on the right on a computer, or from the bottom on a phone. Every section starts with just a few choices, and its **Details** folders hold the rest.
 
@@ -96,14 +96,14 @@ One platform: an Adafruit Feather RP2350 (8 MB PSRAM) in a module on the hub she
 - **Level shifting:** three 74AHCT125s shift the 3.3 V signals to 5 V.
 - **Sensors:** a hall sensor per strip sits on the left panel.
 - **Power:** two 18650 cells feed a 5 V boost converter, which the firmware turns off when the wheel stops.
-- **Controls:** a magnet held to a reed switch turns the wheel on and off. Two sealed buttons in the electronics box's lid choose the preset and the brightness, as the ride bar's **Next ▶** and **☀** do in the simulator.
+- **Controls:** two sealed buttons in the electronics box's lid choose the preset and the brightness, as the ride bar's **Next ▶** and **☀** do in the simulator. A double click on the brightness button, which is wired into the power latch, switches the wheel off or on.
 - **Connections:** the left panel is wired straight to the module. The right panel plugs in through a 9-pin IP68 connector (Weipu SP13), which also takes a USB-C charging lead when the right panel is off.
 
 The **Electronics** tab works all of this out from the build (strips per side, LEDs per strip, spokes, hub). It lists the power budget and a **shopping list** (on screen and as CSV), and draws four sheets. [docs/electronics.md](docs/electronics.md) has the design notes.
 
 The **Circuit** sheet shows the power path, the on/off latch, the controller's pins, the level shifters, the buttons and both panels' connections:
 
-![Circuit sheet: battery, protection, fuse, boost and charger; the reed-switch latch; the Feather's pin map with eight data lanes on GPIO0–7; hall and button inputs; three 74AHCT125 level shifters; the left harness and the right connector's pins](docs/images/electronics-circuit.png)
+![Circuit sheet: battery, protection, fuse, boost and charger; the on/off latch; the Feather's pin map with eight data lanes on GPIO0–7; hall and button inputs; three 74AHCT125 level shifters; the left harness and the right connector's pins](docs/images/electronics-circuit.png)
 
 The **Wiring** sheet shows the left panel's harness, the hub module's layers, the right panel's plug-in connector and the charging lead, with every wire's colour and gauge:
 

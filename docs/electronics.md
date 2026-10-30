@@ -20,7 +20,7 @@ The tab also lists the power budget, warns about anything that doesn't fit, and 
 | Power | Two 18650 high-drain cells in parallel, a 1S protection board, a 10 A fuse, a Pololu U3V70F5 5 V boost (2891) | Simple USB charging, and the boost has a true shutdown |
 | Mounting | A 3D-printed bracket tied to the hub shell, a hook-and-loop strap, an XT30 between the pack and the box, a stick-on rim weight | Easy on and off; balanced |
 | Charger | bq24074 breakout (4755), 1 A (1.5 A by jumper) | Its CE pin stops charging while the wheel runs |
-| On/off | Sealed reed switch (375) and a soft latch | A magnet held to the mark: nothing to seal round a button |
+| On/off | The brightness button, wired into a soft latch: double-click | No extra switch or magnet |
 | Buttons | Two sealed 12 mm IP67 momentary pushbuttons in the electronics box's lid: preset and brightness | The wheel's controls, on the hub package |
 | Right connector | Weipu SP13 9-pin, IP68: an inline socket on the module's pigtail, a plug on the right panel | Screw-lock, 3 A a contact, and cheap |
 
@@ -56,20 +56,22 @@ The rest of the pins:
 | A0 | Battery voltage, through a 100k/100k divider |
 | A1 | Preset button |
 | A2 | `LED_EN`: turns on the boost and the right side's 5 V |
-| A3 | Brightness button |
 | D24 | `HOLD`: keeps the latch on |
-| D25 | `SW`: reads the reed switch |
+| D25 | `SW`: reads the brightness button (also the on/off switch) |
 
 GPIO8 is the PSRAM's chip select and stays free.
 
 ## Buttons
 
-The wheel has two buttons, on the hub package. With the reed switch, they sit in the electronics box's lid, on its outer face. The panels' discs cover the box from the sides, so you reach them through the spokes beyond the discs' edge; raised caps help.
+The wheel has two buttons, on the hub package, in the electronics box's lid on its outer face. The panels' discs cover the box from the sides, so you reach them through the spokes beyond the discs' edge; raised caps help.
 
 - **Preset:** a click goes to the next preset; a double click turns Auto on or off (Auto: the next preset each time the lights go out).
-- **Brightness:** each press steps the LEDs to the next of four levels: 100, 50, 25, 12 %, then back to 100. A double click puts the wheel to sleep: the LEDs and the boost go off and the Feather goes dormant, waking on a press of either button (the first press only wakes it). The hall sensors stay powered, about 16 mA, so for storage switch off with the magnet. The firmware scales its LED current limit with it and keeps the level when the wheel is switched off.
+- **Brightness:** each press steps the LEDs to the next of four levels: 100, 50, 25, 12 %, then back to 100. The firmware scales its LED current limit with it and keeps the level when the wheel is switched off. A **double click turns the wheel off or on**:
+  - The button is wired into the power latch in place of a separate switch. Off, it pulls Q1's gate low through D1, so a press powers the Feather.
+  - The Feather boots in a few milliseconds and reads the button through D2 (`SW`). If a second press follows, it sets `HOLD` and stays on; if not, it lets go and switches off again.
+  - On, a double press makes the firmware drop `HOLD`, and the wheel switches off when the button is released. Off, nothing draws current but leakage (a few tens of µA).
 
-Each input has a 10k pull-up to 3.3 V, 1 kΩ in series and 100 nF at the pin, against noise and static in the wet. In the simulator, **Next ▶** and **☀** on the ride bar are these two buttons (keys N and B). Double-click **Next ▶** to toggle **Auto**, and **☀** to sleep.
+The preset button has a 10k pull-up to 3.3 V, 1 kΩ in series and 100 nF at the pin, against noise and static in the wet; the brightness button sits on the latch's 100k pull-up. In the simulator, **Next ▶** and **☀** on the ride bar are these two buttons (keys N and B). Double-click **Next ▶** to toggle **Auto**, and **☀** to switch the wheel off or on.
 
 Each lane and clock goes through a 74AHCT125 powered at 5 V, with a 33 Ω series resistor at each output for the 20–30 cm runs and the connector.
 
@@ -79,7 +81,7 @@ Each lane and clock goes through a 74AHCT125 powered at 5 V, with a 33 Ω series
 - **Runtime:** two 3000 mAh cells last about 0.9 h even pinned at the limit. Most pictures draw far less; see the Stats tab, whose battery figure follows the cells.
 - **Boost:** the boost runs straight off the protected, fused cells. `LED_EN` enables it. A 4.7 kΩ pull-down holds it off while the logic is off: the boost's own 100 kΩ pull-up to its input would otherwise turn it on.
 - **Off drain:** a few tens of µA through that divider.
-- **Logic:** the reed switch and `HOLD` latch only the Feather's supply, through Q1, a small P-MOSFET. Cut the Feather's CHG jumper so only the bq24074 charges.
+- **Logic:** the brightness button and `HOLD` latch only the Feather's supply, through Q1, a small P-MOSFET. Cut the Feather's CHG jumper so only the bq24074 charges.
 - **Hall sensors:** the US5881 needs at least 3.5 V, so the sensors run from the battery through a 100 Ω/10 µF filter. Their 10k pull-ups go to 3.3 V. The sensors' ground has its own wire, kept off the strips' return current.
 - **Strips idle:** about 1 mA per LED even when dark, so the firmware turns the boost off when the wheel stops.
 
@@ -122,7 +124,7 @@ The module is one stack on one side of the hub shell, between the flanges, built
 
 1. **Bracket:** 3D-printed in PETG or ASA. It is a saddle curved to the hub shell, with rails up the sides of the battery pack. It stays on the hub, held by three zip ties round the shell. On a track hub with cut-out flanges, the ties can also go through the flange windows so the bracket can't slide or turn.
 2. **Battery pack:** the cells and their protection board in a printed shell. The cells lie across the axle, two side by side along it. A 65 mm cell along the axle wouldn't clear the spoke cones on a typical road hub.
-3. **Electronics box:** a printed shell with the power board (boost, charger, fuse, reed switch) and the Feather on its carrier above it. An XT30 joins it to the pack.
+3. **Electronics box:** a printed shell with the power board (boost, charger, fuse) and the Feather on its carrier above it. An XT30 joins it to the pack.
 
 A hook-and-loop strap through the bracket's rails holds the pack and the box. To take the electronics off, undo the strap and unplug J1; the left panel comes with them, since it's wired straight on.
 
@@ -162,7 +164,7 @@ The bracket has to fit between the flanges; the tab warns when it doesn't.
 
 The carrier board is 62 × 22.9 mm, the Feather's outline with a strip of wire pads at each end. The Feather plugs in 8.5 mm above it on female headers, and every signal comes through them: there is no ribbon cable. Under the Feather sit the three SOIC shifters with their 33 Ω resistors, Q1–Q4, D1–D2, and the pull-ups and filters for the hall sensors and buttons.
 
-The harnesses solder straight to the numbered pads: J2 at one end; at the other, the J1 pigtail, the power board's wires, and the lid's reed switch and buttons. The Board sheet is a placement for routing in KiCad, not a routed board. Check the header positions against the Feather.
+The harnesses solder straight to the numbered pads: J2 at one end; at the other, the J1 pigtail, the power board's wires, and the lid's two buttons. The Board sheet is a placement for routing in KiCad, not a routed board. Check the header positions against the Feather.
 
 ## Waterproofing
 

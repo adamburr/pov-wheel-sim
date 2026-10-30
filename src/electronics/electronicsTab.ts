@@ -36,7 +36,7 @@ export function buildElectronicsTab(p: Params, pane: HTMLElement, onChange: (key
     const w = e.power;
     const rows: [string, string][] = [
       ['Controller', 'Feather RP2350 (8 MB PSRAM): one PIO program sends every strip its own data on GP0–7, a clock per side; all wired from the headers'],
-      ['Controls', 'in the electronics box\'s lid: preset and brightness buttons (A1, A3) and the on/off reed switch'],
+      ['Controls', 'in the electronics box\'s lid: preset button (A1) and brightness button (D25, on the power latch)'],
       ['Strips', `${e.n} per side × ${e.sides} side${e.sides > 1 ? 's' : ''}, ${e.leds} LEDs each (${e.totalLeds} in all)`],
       ['Lanes', e.lanes.map((l) => `${l.net} GP${l.gpio}`).join(' · ') + ` · clocks GP10${e.sides > 1 ? '/11' : ''}`],
       ['Level shifters', `${e.shifters.length} × 74AHCT125 at 5 V, 33 Ω in series with each output`],
@@ -45,7 +45,7 @@ export function buildElectronicsTab(p: Params, pane: HTMLElement, onChange: (key
       ['Battery', `${p.cells} × 18650 (1S${p.cells}P), ${w.ah} Ah · ${w.battA} A at the limit (${w.perCellA} A a cell) · ≥ ${w.runtimeAtCapH} h even at the limit`],
       ['Charging', `~${w.chargeA} A through J1 with the right panel off: ~${w.chargeH} h from empty`],
       ...(e.sides > 1 ? [['Right connector', `Weipu SP13 9-pin, IP68: ${w.perSideA} A on two 5 V contacts (${w.perPinA} A each, rated 3 A)`] as [string, string]] : []),
-      ['On/off', 'magnet on the reed switch toggles it; the firmware turns off after a while stopped'],
+      ['On/off', 'double-click the brightness button; the firmware also turns off after a while stopped'],
       ['Hub module', `one stack in a printed bracket on a Ø${2 * e.hub.shellR} mm shell: ${e.hub.moduleG} g, centre ${e.hub.moduleR} mm out`],
       ['Balance', `${e.hub.counterweight.massG} g on the rim's inner face ${e.hub.counterweight.angleDeg === 180 ? 'opposite the module' : 'on the module\'s side'} (module opposite the ${e.n === 1 ? 'blades, valve' : 'valve'} and J1)`],
       ['Strips idle', `${w.idleMa} mA with the LEDs dark: the firmware turns the boost off when stopped`],

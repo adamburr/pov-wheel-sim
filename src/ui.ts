@@ -395,31 +395,31 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
       clearTimeout(clickTimer);
       clickTimer = 0;
       const auto = $<HTMLInputElement>('auto-next');
+      if (p.switchedOff) return; // off, the preset button does nothing
       auto.checked = !auto.checked;
       auto.dispatchEvent(new Event('change'));
       return;
     }
     clickTimer = window.setTimeout(() => {
       clickTimer = 0;
-      if (p.sleeping) { wake(); return; }
+      if (p.switchedOff) return;
       store.next();
       hooks.onPresetSelected();
     }, 300);
   };
   presetName.onclick = () => openTab('presets');
   // The wheel's second button: a click steps the brightness (remembered with the hardware), a double
-  // click puts the wheel to sleep (LEDs and boost off). Asleep, a click on either button wakes it.
+  // click switches the wheel off or on (it is wired into the power latch). Off, a single click does nothing.
   const bright = $('bright');
-  const wake = () => { p.sleeping = false; refresh(); };
   const stepBrightness = () => {
-    if (p.sleeping) { wake(); return; }
+    if (p.switchedOff) return;
     p.brightnessLevel = (p.brightnessLevel + 1) % BRIGHTNESS_STEPS.length;
     hooks.onDeviceEdit('brightnessLevel');
     refresh();
   };
   let brightTimer = 0;
   bright.onclick = () => {
-    if (brightTimer) { clearTimeout(brightTimer); brightTimer = 0; p.sleeping = !p.sleeping; refresh(); return; }
+    if (brightTimer) { clearTimeout(brightTimer); brightTimer = 0; p.switchedOff = !p.switchedOff; refresh(); return; }
     brightTimer = window.setTimeout(() => { brightTimer = 0; stepBrightness(); }, 300);
   };
   window.addEventListener('keydown', (e) => {
@@ -485,7 +485,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     }
     syncVisibility();
     renderPresets();
-    bright.textContent = p.sleeping ? '☾ Sleep' : `☀ ${Math.floor(BRIGHTNESS_STEPS[p.brightnessLevel] * 100)}%`;
+    bright.textContent = p.switchedOff ? '⏻ Off' : `☀ ${Math.floor(BRIGHTNESS_STEPS[p.brightnessLevel] * 100)}%`;
     panels.refresh();
   }
   refresh();

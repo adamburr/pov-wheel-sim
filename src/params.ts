@@ -78,7 +78,7 @@ export const MPH = 0.44704; // m/s
 
 /** The brightness button's steps: each press scales every LED (and the firmware's current limit) by the next. */
 export const BRIGHTNESS_STEPS = [1, 0.5, 0.25, 0.125];
-export const brightnessScale = (p: { brightnessLevel: number; sleeping: boolean }) => (p.sleeping ? 0 : BRIGHTNESS_STEPS[p.brightnessLevel] ?? 1);
+export const brightnessScale = (p: { brightnessLevel: number; switchedOff: boolean }) => (p.switchedOff ? 0 : BRIGHTNESS_STEPS[p.brightnessLevel] ?? 1);
 
 export function defaultParams() {
   const wheel = WHEELS['700c (622)'];
@@ -166,7 +166,7 @@ export function defaultParams() {
     predictMotion: true,      // banner mode: compute each update for mid-display time, not send time
     nextOnDark: true,         // switch to the next preset each time the lights go out (stopping)
     brightnessLevel: 0,       // the wheel's brightness button: a step of BRIGHTNESS_STEPS, kept when switched off
-    sleeping: false,          // its double click: LEDs and boost off until a button is pressed (not saved)
+    switchedOff: false,       // its double click switches the wheel off, and on again (not saved)
     freeRunColsPerSec: 540,
 
     // Image

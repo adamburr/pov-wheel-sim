@@ -111,15 +111,14 @@ export function designElectronics(p: Params): Electronics {
     { pin: 'A0', gpio: 26, net: 'VBAT/2', use: 'battery voltage through a 100k/100k divider' },
     { pin: 'A2', gpio: 28, net: 'LED_EN', use: 'turns the 5 V boost and the right side\'s 5 V on' },
     { pin: 'D24', gpio: 24, net: 'HOLD', use: 'keeps the power on once running (soft latch)' },
-    { pin: 'D25', gpio: 25, net: 'SW', use: 'reads the reed switch (magnet held to the mark)' },
+    { pin: 'D25', gpio: 25, net: 'SW', use: 'reads the brightness button, which is also the on/off switch' },
     { pin: 'A1', gpio: 27, net: 'BTN_PRESET', use: 'preset button: next preset; double-click: Auto on or off' },
-    { pin: 'A3', gpio: 29, net: 'BTN_BRIGHT', use: 'brightness button: steps 100, 50, 25, 12 %; double-click: sleep' },
     { pin: 'BAT', net: 'VSYS', use: 'switched battery in (powers the Feather\'s 3.3 V regulator); cut the Feather\'s CHG jumper' },
     { pin: '3V', net: '3V3', use: 'pull-ups for the hall sensors' },
     { pin: 'GND', net: 'GND', use: '' },
   ];
-  notes.push('Controls on the hub package: two sealed buttons and the reed switch (on/off) sit in the electronics box\'s lid, its outer face. The panels\' discs cover the box from the sides, so reach them through the spokes beyond the discs\' edge (raised caps help). Preset: a click for the next preset, a double click to turn Auto on or off (the next preset each time the lights go out). Brightness: cycles 100, 50, 25, 12 % (the firmware scales its LED current limit), and keeps the level when switched off; a double click puts the wheel to sleep (LEDs and boost off, the Feather dormant) until either button is pressed. Each button has a 10k pull-up, 1k in series and 100 nF, against wet-weather noise and static.');
-  notes.push('Power: the boost runs straight off the cells (through the protection board and fuse) and LED_EN turns it on; a 4.7 kΩ pull-down holds it off while the logic is off. The reed switch and HOLD latch only the logic\'s supply, so the off drain is a few tens of µA.');
+  notes.push('Controls on the hub package: two sealed buttons in the electronics box\'s lid, its outer face. The panels\' discs cover the box from the sides, so reach them through the spokes beyond the discs\' edge (raised caps help). Preset: a click for the next preset, a double click to turn Auto on or off (the next preset each time the lights go out). Brightness: cycles 100, 50, 25, 12 % (the firmware scales its LED current limit), and keeps the level when switched off; a double click turns the wheel on or off. It is wired into the power latch: off, a press powers the Feather, which stays on only if a second press follows. The preset button has a 10k pull-up, 1k in series and 100 nF; the brightness button sits on the latch\'s 100k pull-up.');
+  notes.push('Power: the boost runs straight off the cells (through the protection board and fuse) and LED_EN turns it on; a 4.7 kΩ pull-down holds it off while the logic is off. The brightness button and HOLD latch only the logic\'s supply, so the off drain is a few tens of µA.');
   notes.push('Charging: with the right panel unplugged, a lead from a USB-C charger into J1 feeds 5 V back up +5V_R to the charger. Q3 keeps it off the left strips, and the charger only runs while the logic is off.');
   notes.push('Data on GPIO0–7, all on the headers: the UART (TX/RX) and I2C (SDA/SCL, the STEMMA QT socket) go to the strips, so debug over USB. GPIO7 is also the red LED: it flickers with right strip 4\'s data. GPIO8 is the PSRAM\'s chip select: leave it alone. A1 and A3 are spare.');
 
@@ -203,7 +202,7 @@ export function designElectronics(p: Params): Electronics {
     massG: p.cells * CELL.g + 6 + 8,
   };
   const pwrL: Layer = {
-    id: 'power', name: 'Power board', contents: '5 V boost, charger, fuse; the buttons and reed switch in the lid', r0: pack.r0 + pack.radial,
+    id: 'power', name: 'Power board', contents: '5 V boost, charger, fuse; the two buttons in the lid', r0: pack.r0 + pack.radial,
     radial: 15, tangential: CARRIER.w + 2 * WALL + 2, axial: CARRIER.h + 2 * WALL + 2, massG: 19 + 6,
   };
   const logic: Layer = {
@@ -274,7 +273,6 @@ export function designElectronics(p: Params): Electronics {
     { group: 'Wheel', qty: halls, item: 'Hall effect sensor US5881LUA (unipolar switch)', part: '158', source: 'Adafruit', url: 'https://www.adafruit.com/product/158', each: 2, note: 'left panel, one per strip' },
     { group: 'Wheel', qty: 1, item: 'Rare-earth magnet, 12 mm (fork magnet for the hall sensors)', part: '9', source: 'Adafruit', url: 'https://www.adafruit.com/product/9', each: 2.5, note: 'south pole toward the sensors\' marked faces' },
     { group: 'Wheel', qty: 2, item: 'Momentary pushbutton, 12 mm, IP67, normally open, raised cap (preset, brightness)', part: 'e.g. 12 mm IP67 metal pushbutton', source: 'any', note: 'in the electronics box\'s lid' },
-    { group: 'Wheel', qty: 1, item: 'Magnetic contact switch (sealed reed switch): on/off', part: '375', source: 'Adafruit', url: 'https://www.adafruit.com/product/375', each: 3.95, note: 'in the box\'s lid; its magnet is the on/off key' },
     { group: 'Wheel', qty: 1, item: '5 V step-up regulator U3V70F5 (true shutdown on EN)', part: '2891', source: 'Pololu', url: 'https://www.pololu.com/product/2891', each: 25.95 },
     { group: 'Wheel', qty: 1, item: 'bq24074 Li-ion charger breakout (1 A, 1.5 A by jumper)', part: '4755', source: 'Adafruit', url: 'https://www.adafruit.com/product/4755', each: 14.95, note: 'its CE pin turns charging off while running' },
     { group: 'Wheel', qty: p.cells, item: `18650 Li-ion cell, high-drain (≥ 10 A), ${p.cellMah} mAh, tabbed`, part: 'e.g. Samsung 30Q, Molicel P28A', source: 'battery supplier', note: 'tabbed, so nothing is soldered to the cell' },
@@ -294,14 +292,14 @@ export function designElectronics(p: Params): Electronics {
     { group: 'Carrier board', qty: 1, item: 'P-MOSFET, logic level, SO-8 (right-side 5 V switch)', part: 'AO4407A', source: 'Digi-Key, Mouser' },
     { group: 'Carrier board', qty: 1, item: 'P-MOSFET, logic level, SOT-23 (logic power latch)', part: 'AO3401A', source: 'Digi-Key, Mouser' },
     { group: 'Carrier board', qty: 2, item: 'N-MOSFET, SOT-23 (latch hold, right-side switch)', part: '2N7002', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 2, item: 'Schottky diode, SOT-23 (reed switch, switch sense)', part: 'BAT54', source: 'Digi-Key, Mouser' },
+    { group: 'Carrier board', qty: 2, item: 'Schottky diode, SOT-23 (on/off button to the latch, its sense)', part: 'BAT54', source: 'Digi-Key, Mouser' },
     { group: 'Carrier board', qty: chans.length, item: '33 Ω resistor, 0603 (series, one per lane and clock)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: halls + 3, item: '10 kΩ resistor, 0603 (hall and button pull-ups, charger CE)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 6, item: '100 kΩ resistor, 0603 (gate pulls, reed pull-up, battery divider, CE pull-down)', part: '—', source: 'Digi-Key, Mouser' },
+    { group: 'Carrier board', qty: halls + 2, item: '10 kΩ resistor, 0603 (hall and preset-button pull-ups, charger CE)', part: '—', source: 'Digi-Key, Mouser' },
+    { group: 'Carrier board', qty: 6, item: '100 kΩ resistor, 0603 (gate pulls, on/off button pull-up, battery divider, CE pull-down)', part: '—', source: 'Digi-Key, Mouser' },
     { group: 'Carrier board', qty: 1, item: '100 Ω resistor, 0603 (hall supply filter)', part: '—', source: 'Digi-Key, Mouser' },
     { group: 'Carrier board', qty: 1, item: '4.7 kΩ resistor, 0603 (holds the boost off while the logic is off)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 2, item: '1 kΩ resistor, 0603 (button inputs, in series)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: shifterN + 3, item: '100 nF capacitor, 0603 (one per shifter, divider, buttons)', part: '—', source: 'Digi-Key, Mouser' },
+    { group: 'Carrier board', qty: 1, item: '1 kΩ resistor, 0603 (preset button, in series)', part: '—', source: 'Digi-Key, Mouser' },
+    { group: 'Carrier board', qty: shifterN + 2, item: '100 nF capacitor, 0603 (one per shifter, divider, preset button)', part: '—', source: 'Digi-Key, Mouser' },
     { group: 'Carrier board', qty: 2, item: '10 µF capacitor, 0805 (5 V, hall supply)', part: '—', source: 'Digi-Key, Mouser' },
     { group: 'Carrier board', qty: 1, item: 'Feather female headers, 16 + 12 pin', part: '—', source: 'Adafruit' },
     { group: 'Sealing and wiring', qty: halls, item: '100 nF capacitor across each hall sensor\'s leads', part: '—', source: 'any' },

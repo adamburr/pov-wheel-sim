@@ -29,7 +29,8 @@ describe('electronics', () => {
 
   it('puts the preset and brightness buttons on the hub package, on spare header pins', () => {
     expect(e.pins.find((q) => q.net === 'BTN_PRESET')!.pin).toBe('A1');
-    expect(e.pins.find((q) => q.net === 'BTN_BRIGHT')!.pin).toBe('A3');
+    expect(e.pins.find((q) => q.net === 'SW')!.use).toMatch(/brightness/); // the brightness button is the on/off switch
+    expect(e.bom.some((b) => /reed/i.test(b.item))).toBe(false);
     expect(e.leftHarness.some((w) => w.net.startsWith('BTN'))).toBe(false); // in the box's lid, not on a panel
     expect(e.bom.find((b) => /pushbutton/.test(b.item))!.qty).toBe(2);
   });

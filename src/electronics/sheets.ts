@@ -113,16 +113,6 @@ class Pen {
     this.line([[x + 6, y + 17], [x + 14, y + 17]], { stroke: C.ink, w: 2 });
     this.text(x - 8, y + 21, label, { size: 11, fill: C.muted, anchor: 'end' });
   }
-  /** Reed switch from (x, y) down to (x, y + 34). */
-  reed(x: number, y: number, label: string) {
-    this.line([[x, y], [x, y + 10]], { stroke: C.ink });
-    this.line([[x, y + 10], [x + 8, y + 22]], { stroke: C.ink, w: 2 });
-    this.line([[x, y + 24], [x, y + 34]], { stroke: C.ink });
-    this.circle(x, y + 10, 2, { fill: C.ink });
-    this.circle(x, y + 24, 2, { fill: C.ink });
-    this.rect(x - 12, y + 4, 24, 26, { stroke: C.muted, r: 10, dash: '3 3' });
-    this.text(x + 16, y + 21, label, { size: 11, fill: C.muted });
-  }
   /** A labelled box with pins on its left and right edges: [name, net] pairs, one per row. */
   block(x: number, y: number, w: number, title: string, sub: string, left: [string, string][], right: [string, string][], o: { pitch?: number; stub?: number } = {}) {
     const pitch = o.pitch ?? 22, stub = o.stub ?? 26;
@@ -200,7 +190,7 @@ function circuit(e: Electronics): Sheet {
 
   // soft latch
   const ly = 430;
-  g.heading(20, ly - 22, 'ON/OFF LATCH (reed switch + HOLD)');
+  g.heading(20, ly - 22, 'ON/OFF LATCH (brightness button + HOLD)');
   const gn = 120, qx = 200, qy = ly + 90;
   g.line([[qx, qy - 24], [qx, ly + 10]], { stroke: C.power });
   g.net(qx, ly + 6, 'VBAT', 'start');
@@ -220,14 +210,15 @@ function circuit(e: Electronics): Sheet {
   g.gnd(gn, qy + 96);
   g.line([[gn - 24, qy + 64], [gn - 40, qy + 64]], { stroke: C.ctl });
   g.net(gn - 40, qy + 64, 'HOLD', 'end');
-  // reed: gate → D1 → reed node → reed → ground; node pulled up to VBAT; SW reads it through D2
+  // on/off: gate → D1 → button node → brightness button → ground; node pulled up to VBAT; SW reads it through D2
   const sx = 310, ry0 = qy + 130;
   g.dot(gn, qy + 40, C.ctl);
   g.line([[gn, qy + 40], [gn + 66, qy + 40], [gn + 66, ry0], [250, ry0]], { stroke: C.ctl });
   g.diode(250, ry0, 'D1');
   g.line([[280, ry0], [sx, ry0]], { stroke: C.ctl });
   g.dot(sx, ry0, C.ctl);
-  g.reed(sx, ry0, 'S1 reed, in the box\'s lid');
+  g.button(sx, ry0, '');
+  g.text(sx + 18, ry0 + 21, 'S1 brightness button (lid)', { size: 11, fill: C.muted });
   g.gnd(sx, ry0 + 34);
   g.line([[sx, ry0], [sx, ry0 - 20]], { stroke: C.ctl });
   g.res(sx, ry0 - 60, '100k', true);
@@ -237,8 +228,8 @@ function circuit(e: Electronics): Sheet {
   g.diode(sx + 40, ry0, 'D2', true);
   g.line([[sx + 70, ry0], [sx + 90, ry0]], { stroke: C.ctl });
   g.net(sx + 90, ry0, 'SW', 'start');
-  g.text(20, ry0 + 76, 'Magnet on the mark: S1 closes, Q1 turns on, the Feather boots and sets HOLD.', { size: 11, fill: C.muted });
-  g.text(20, ry0 + 92, 'Again: the firmware sees SW low, waits for release, then drops HOLD.', { size: 11, fill: C.muted });
+  g.text(20, ry0 + 76, 'Off: a press powers the Feather (Q1); it sets HOLD only if a second press follows.', { size: 11, fill: C.muted });
+  g.text(20, ry0 + 92, 'On: one press steps brightness; a double press, and the firmware drops HOLD.', { size: 11, fill: C.muted });
 
   // right-side 5 V switch
   const ry = ry0 + 150;
@@ -310,8 +301,8 @@ function circuit(e: Electronics): Sheet {
   }
   // buttons: pull-up, 1k in series, 100 nF at the pin; the button to the pod's ground
   const by = hy + 130;
-  g.heading(fx - 60, by - 14, 'BUTTONS (in the electronics box\'s lid)');
-  [['BTN_PRESET', 'preset'], ['BTN_BRIGHT', 'brightness']].forEach(([net, label], i) => {
+  g.heading(fx - 60, by - 14, 'PRESET BUTTON (lid; brightness is S1 on the latch)');
+  [['BTN_PRESET', 'preset']].forEach(([net, label], i) => {
     const x = fx - 40 + i * 170;
     g.net(x, by + 4, '3V3', 'start');
     g.line([[x, by + 10], [x, by + 16]], { stroke: C.power });
@@ -402,11 +393,10 @@ function wiring(e: Electronics): Sheet {
   g.rect(580, 80, 160, 170, { fill: C.box, stroke: C.data, r: 6 });
   g.text(660, 102, 'Logic (top of the box)', { anchor: 'middle', weight: 700 });
   for (const [i, s] of ['Feather RP2350', 'on the carrier board:', `${e.shifters.length} × 74AHCT125`, 'latch, Q3, pull-ups', 'all from the headers'].entries()) g.text(660, 124 + i * 18, s, { anchor: 'middle', size: 11, fill: C.muted });
-  // the box's lid, its outer face: the two buttons and the reed switch
+  // the box's lid, its outer face: the two buttons
   g.circle(752, 92, 7, { stroke: C.ink, w: 1.5 }); g.circle(752, 114, 7, { stroke: C.ink, w: 1.5 });
-  g.rect(746, 128, 12, 18, { stroke: C.ctl, r: 3 });
   g.text(764, 96, 'preset', { size: 10, fill: C.muted }); g.text(764, 118, 'brightness', { size: 10, fill: C.muted });
-  g.text(764, 141, 'on/off reed', { size: 10, fill: C.muted }); g.text(746, 162, 'in the lid', { size: 10, fill: C.ctl });
+  g.text(746, 140, 'in the lid', { size: 10, fill: C.ctl });
   g.rect(580, 300, 160, 110, { fill: C.box, stroke: C.power, r: 6 });
   g.text(660, 322, 'Power board', { anchor: 'middle', weight: 700 });
   for (const [i, s] of ['5 V boost (U3V70F5)', 'charger (bq24074)', 'fuse 10 A'].entries()) g.text(660, 344 + i * 18, s, { anchor: 'middle', size: 11, fill: C.muted });
@@ -540,13 +530,12 @@ function hub(e: Electronics, spokes: number): Sheet {
   // the strap over the stack, through the bracket's rails
   g.line([P(-bh, br.railTo - 3), P(-top.tangential / 2 - 1, outerR + 1.5), P(top.tangential / 2 + 1, outerR + 1.5), P(bh, br.railTo - 3)], { stroke: C.hall, w: 3 });
   g.text(ox, oy - (outerR + 5) * S, 'hook-and-loop strap', { size: 11, fill: C.hall, anchor: 'middle' });
-  // the lid's controls, on the outer face: the two buttons and the reed switch, clear of the strap
+  // the lid's controls, on the outer face: the two buttons, clear of the strap
   for (const dx of [-22, -12]) {
     const [bx0, by0] = P(dx, outerR);
     g.rect(bx0 - 3.5 * S / 2, by0 - 2 * S, 3.5 * S, 2 * S, { fill: C.ink, r: 2 });
   }
-  { const [rx, ry] = P(14, outerR); g.rect(rx - 6 * S / 2, ry - 1.6 * S, 6 * S, 1.6 * S, { fill: C.ctl, r: 2 }); }
-  g.text(ox + (top.tangential / 2 + 6) * S, oy - (outerR + 1) * S, 'lid: preset and brightness buttons, reed', { size: 11, fill: C.ink });
+  g.text(ox + (top.tangential / 2 + 6) * S, oy - (outerR + 1) * S, 'lid: preset and brightness (on/off) buttons', { size: 11, fill: C.ink });
   // XT30 between pack and box
   const [xx, xy] = P(pack.tangential / 2 - 2, pack.r0 + pack.radial);
   g.rect(xx, xy - 7, 26, 14, { fill: '#2a2f3b', stroke: C.ink, r: 3 });
@@ -677,7 +666,7 @@ function board(e: Electronics): Sheet {
   // wire pads at each end
   const leftPads = e.leftHarness.map((w) => w.net);
   const rightPads = ['+5V_R', 'GND', 'CLK_R5', ...Array.from({ length: e.sides === 2 ? e.n : 0 }, (_, i) => `R${i + 1}_5`)];
-  const powerPads = ['+5V_L', 'GND', 'VBAT', 'LED_EN', 'CE', 'REED', 'BTN_P', 'BTN_B', 'GND'];
+  const powerPads = ['+5V_L', 'GND', 'VBAT', 'LED_EN', 'CE', 'BTN_P', 'S1', 'GND'];
   // Numbered pads in two columns at each end; the legend beside the board names each one.
   const padCol = (pads: string[], x: number, title: string, legendX: number, anchor: 'start' | 'end') => {
     const rows = Math.ceil(pads.length / 2);
@@ -694,7 +683,7 @@ function board(e: Electronics): Sheet {
   };
   padCol(leftPads, 1.2, `J2 left harness (${leftPads.length})`, ox - 24, 'end');
   padCol([...rightPads, ...powerPads], Wmm - 3.8, `J1 pigtail, power board (${rightPads.length + powerPads.length})`, ox + Wmm * S + 24, 'start');
-  g.text(B(Wmm / 2, 0)[0], oy + Hmm * S + 18, 'Box pads: power board (GND, +5V_L in 18 AWG), the lid\'s reed and buttons; the charger\'s IN shares +5V_R.', { size: 11, fill: C.muted, anchor: 'middle' });
+  g.text(B(Wmm / 2, 0)[0], oy + Hmm * S + 18, 'Box pads: power board (GND, +5V_L in 18 AWG), the lid\'s two buttons; the charger\'s IN shares +5V_R.', { size: 11, fill: C.muted, anchor: 'middle' });
   const y0 = Math.max(oy + Hmm * S + 50, oy + 30 + 16 * Math.max(leftPads.length, rightPads.length + powerPads.length));
   const notes = [
     'Placement only, for routing in KiCad: the Feather sits 8.5 mm above on female headers, so parts under it stay below ~3 mm.',
