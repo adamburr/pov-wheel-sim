@@ -78,16 +78,16 @@ describe('preset store', () => {
 
   it('captures and applies only preset values', () => {
     const s = store();
-    const p = { ...defaultParams(), pattern: 'Smiley' as const, text: 'HI', speed: 25, chip: 'ESP32' };
+    const p = { ...defaultParams(), pattern: 'Smiley' as const, text: 'HI', speed: 25, cells: 3 };
     s.capture(p);
     expect(s.active.settings).not.toHaveProperty('speed');
-    expect(s.active.settings).not.toHaveProperty('chip');
+    expect(s.active.settings).not.toHaveProperty('cells');
     const q = { ...defaultParams(), speed: 3 };
     s.apply(q);
     expect(q.pattern).toBe('Smiley');
     expect(q.text).toBe('HI');
     expect(q.speed).toBe(3);
-    expect(q.chip).toBe('RP2350');
+    expect(q.cells).toBe(2);
   });
 
   it('keeps image mode on a preset with no file yet (it shows dark until one is chosen)', () => {
@@ -167,11 +167,11 @@ describe('setup file', () => {
     s.select(1);
     s.active.media = { id: 'm1', name: 'cat.gif', type: 'image/gif' };
     s.capture({ ...defaultParams(), useMedia: true });
-    const p = { ...defaultParams(), chip: 'ESP32-S3', stripCount: 4, setupName: 'Test rig' };
+    const p = { ...defaultParams(), cells: 3, stripCount: 4, setupName: 'Test rig' };
     const bytes = new Uint8Array([0, 1, 2, 250, 255]);
     const text = serializeSetup(p, s, { m1: { name: 'cat.gif', type: 'image/gif', bytes }, unused: { name: 'x', type: 'image/png', bytes } });
     const back = parseSetup(text);
-    expect(back.device.chip).toBe('ESP32-S3');
+    expect(back.device.cells).toBe(3);
     expect(back.device.stripCount).toBe(4);
     expect(back.device.setupName).toBe('Test rig');
     expect(back.device).not.toHaveProperty('speed');

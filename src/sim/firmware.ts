@@ -144,8 +144,7 @@ export interface Segment {
   // Dead reckoning (hall mode): the firmware believes the wheel is at angle
   // 2π(k + (t - ref)/T), i.e. k turns at the pass it synced to, advancing at the last measured
   // rate. k is whole with one sensor; with one per strip it counts in steps of 1/strips. ref is
-  // when it believes that pass happened: when it saw it (a switch), or earlier for a magnetometer,
-  // which finds the field's peak only after it has gone by.
+  // when it believes that pass happened: when its hall switch saw it.
   T?: number;
   k?: number;
   ref?: number;
@@ -153,26 +152,6 @@ export interface Segment {
 
 /** A magnet pass as the firmware registers it: when it knew (at), and when it puts the pass (ref). */
 export interface Detection { at: number; ref: number }
-
-// Where the fork magnet meets the sensors: 40 mm from the axle, by the strips' inner ends, 5 mm gap.
-const SENSOR_R_M = 0.04;
-const MAG_GAP_M = 0.005;
-
-/**
- * A magnetometer pass: the firmware samples the field at the output data rate, and once it
- * falls again fits a parabola through the three samples around the maximum to put the pass
- * between samples. The field is the magnet's near-dipole falloff, (gap² + x²)^-1.5.
- */
-function magnetometerPass(p: Params, motion: WheelMotion, tc: number): Detection {
-  const dt = 1 / Math.max(1, p.magOdrHz);
-  const v = (motion.speed(tc) / motion.radius) * SENSOR_R_M;
-  const field = (t: number) => (MAG_GAP_M ** 2 + (v * (t - tc)) ** 2) ** -1.5;
-  const j = Math.round(tc / dt);
-  const b0 = field((j - 1) * dt), b1 = field(j * dt), b2 = field((j + 1) * dt);
-  const den = b0 - 2 * b1 + b2;
-  const off = den < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (b0 - b2)) / den)) : 0;
-  return { at: (j + 1) * dt, ref: (j + off) * dt };
-}
 
 /** Magnet passes per turn: one hall sensor, or one beside each strip (evenly spaced). */
 export function hallSensors(p: Params): number {
@@ -209,8 +188,7 @@ export function hallSegments(p: Params, d: Derived, motion: WheelMotion, tA: num
 
 /**
  * Magnet passes as the firmware registers them, debounced per sensor. A hall switch is seen at
- * the next poll (or at once, on an interrupt) and taken as the pass; a magnetometer's pass is
- * placed at the field's peak, known a sample later.
+ * the next poll (or at once, on an interrupt) and taken as the pass.
  */
 export function hallDetections(p: Params, motion: WheelMotion, t0: number, t1: number): Detection[] {
   const poll = p.hallPollMs / 1000;
@@ -219,9 +197,8 @@ export function hallDetections(p: Params, motion: WheelMotion, t0: number, t1: n
   const valid: Detection[] = [];
   const last: number[] = [];
   for (const m of motion.passes(t0, t1, N)) {
-    let det: Detection;
-    if (p.hallSensor === 'magnetometer') det = magnetometerPass(p, motion, m);
-    else { const at = poll > 0 ? Math.ceil(m / poll) * poll : m; det = { at, ref: at }; }
+    const at = poll > 0 ? Math.ceil(m / poll) * poll : m;
+    const det: Detection = { at, ref: at };
     if (det.at > t1) break;
     const sensor = ((Math.round((motion.phi(m) * N) / TAU) % N) + N) % N;
     if (last[sensor] === undefined || det.at - last[sensor] >= debounce) { valid.push(det); last[sensor] = det.at; }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { bannerLowerOf, defaultParams, type Params, showPicture, speedMps } from './params';
+import { bannerLowerOf, CHIP, defaultParams, LED, type Params, showPicture, speedMps } from './params';
 import { buildUi, type Ui } from './ui';
 import { newId, PresetStore } from './presets';
 import { loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, setupFileName } from './setupFile';
@@ -20,6 +20,8 @@ import { WheelModel } from './render/wheelGeometry';
 import { createPost } from './render/post';
 import { createCamera, createStripCamera, placeCamera, placeStripCamera, setFreeArea } from './render/camera';
 import { PanelDrawing } from './panels/drawing';
+import { designElectronics } from './electronics/design';
+import { ElecView } from './electronics/view';
 import { type PackedDesign, unpackDesign } from './panels/transport';
 import { PANEL_STRIPS, panelInputs, panelKey } from './panels/fromParams';
 
@@ -219,6 +221,7 @@ const hooks = {
   onDeviceEdit: (key?: string) => {
     saveDevice(storage, p);
     if (ui?.panelsShown()) updatePanels();
+    if (ui?.electronicsShown()) updateElectronics();
     // The import limits decide how an uploaded clip is decoded, so decode it again.
     if ((key === 'maxFrames' || key === 'videoFps') && p.useMedia) {
       clearTimeout(reloadTimer);
@@ -280,6 +283,10 @@ const hooks = {
   onShowPanels: (shown: boolean) => {
     history.replaceState(null, '', shown ? '#panels' : location.pathname + location.search);
     if (shown) updatePanels(); else hooks.onLayout();
+  },
+  onShowElectronics: (shown: boolean) => {
+    history.replaceState(null, '', shown ? '#electronics' : location.pathname + location.search);
+    if (shown) updateElectronics(); else hooks.onLayout();
   },
 };
 
@@ -354,7 +361,7 @@ function updatePanels() {
   if (key === designKey) return;
   designKey = key;
   if (!PANEL_STRIPS.includes(p.stripCount)) {
-    const msg = `The panels come with 2 to 4 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
+    const msg = `The panels come with 1 to 4 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
     designQueued = false;
     designing = 0; // a design still running is for other settings
     ui!.panels.show({ error: msg });
@@ -365,8 +372,16 @@ function updatePanels() {
   drawing.setDesign(undefined, 'Designing…');
   if (designing) designQueued = true; else sendDesign();
 }
+// ---- Electronics: worked out at once from the settings while their tab is open ----
+const elecView = new ElecView(document.getElementById('elec-view')!, () => ui!.openTab('presets', false));
+function updateElectronics() {
+  const e = designElectronics(p);
+  ui!.electronics.show(e);
+  elecView.show(e, p.spokes);
+}
+
 // Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
-Object.assign(window, { povSim: { p, ui, store, hooks, camera, controls } });
+Object.assign(window, { povSim: { p, ui, store, hooks, camera, controls, drawing, elecView } });
 
 // Drag-and-drop and paste: images and clips go into the active preset; a .json opens as a setup.
 const drop = document.getElementById('drop')!;
@@ -409,7 +424,7 @@ function updateStats(d: Derived, now: number) {
     } : undefined);
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const v = motion.speed(simTime);
-  const lines = [{ label: 'Build', value: `${p.chip} · ${p.ledType}` }, ...s.lines];
+  const lines = [{ label: 'Build', value: `${CHIP.name} · ${LED.name}` }, ...s.lines];
   lines.splice(2, 0, { label: 'Rider power', value: `≈ ${Math.round(riderPower(v, motion.rampAccel(simTime)))} W` });
   statsEl.innerHTML = `<table>${
     lines.map((l) => `<tr><td>${esc(l.label)}</td><td>${esc(l.value)}</td></tr>`).join('')
@@ -462,6 +477,7 @@ window.addEventListener('load', resize); // fonts can change the speed panel's h
 resize();
 placeCamera(camera, controls, p, derive(p));
 if (location.hash === '#panels') ui.openTab('panels'); // a link straight to the panels
+if (location.hash === '#electronics') ui.openTab('electronics');
 
 const night = new THREE.Color(0x05070d), dusk = new THREE.Color(0x34405c), day = new THREE.Color(0x9db8d8);
 const bg = new THREE.Color();
@@ -476,6 +492,7 @@ function frame(now: number) {
   last = now;
   // The panels' drawing covers the ride: keep the sim still and skip rendering it meanwhile.
   if (ui!.panelsShown()) { updatePanels(); return; }
+  if (ui!.electronicsShown()) return;
   if (!p.paused) simTime += dt * p.timeScale;
 
   const d = derive(p);

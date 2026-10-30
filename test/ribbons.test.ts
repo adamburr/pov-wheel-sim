@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHIPS } from '../src/params';
+import { CHIP } from '../src/params';
 import { RibbonDryer } from '../src/sim/ribbons';
 
 const G = 9.81, R = 0.28, HZ = 30;
@@ -75,6 +75,6 @@ describe('tumble dryer ribbons', () => {
 
   it('are cheap: under 3% of one RP2350 core at 30 Hz', () => {
     const mflops = (new RibbonDryer(R).flopsPerStep() * HZ) / 1e6;
-    expect((100 * mflops) / CHIPS.RP2350.mflops).toBeLessThan(3);
+    expect((100 * mflops) / CHIP.mflops).toBeLessThan(3);
   });
 });

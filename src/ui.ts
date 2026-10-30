@@ -1,13 +1,14 @@
 import GUI, { type Controller } from 'lil-gui';
 import {
-  CHIPS, defaultParams, DEVICE_KEYS, FIRMWARE, FLUIDS, LEDS, PACKAGES, type Params, PATTERN_LABELS, type PatternName,
+  BRIGHTNESS_STEPS, defaultParams, DEVICE_KEYS, FLUIDS, LED, PACKAGES, type Params, PATTERN_LABELS, type PatternName,
   PATTERNS, PRESET_KEYS, SHUTTERS, showPicture, WHEELS,
 } from './params';
 import type { PresetStore } from './presets';
 import { defaultDevice } from './defaults';
 import { buildPanelsTab, type PanelsTab } from './panels/panelsTab';
+import { buildElectronicsTab, type ElectronicsTab } from './electronics/electronicsTab';
 
-export type Tab = 'presets' | 'hardware' | 'simulator' | 'stats' | 'panels';
+export type Tab = 'presets' | 'hardware' | 'simulator' | 'stats' | 'panels' | 'electronics';
 
 export interface UiHooks {
   store: PresetStore;
@@ -20,6 +21,8 @@ export interface UiHooks {
   onViewChange: () => void;
   /** The main area switched between the ride and the panels' drawing. */
   onShowPanels: (shown: boolean) => void;
+  /** The main area switched between the ride and the electronics drawings. */
+  onShowElectronics: (shown: boolean) => void;
   onUpload: (file: File) => void;
   onResetSetup: () => void;
   onOpenSetup: (file: File) => void;
@@ -41,6 +44,9 @@ export interface Ui {
   /** The Panels tab is selected: the main area shows the panels' drawing instead of the ride. */
   panelsShown: () => boolean;
   panels: PanelsTab;
+  /** The Electronics tab is selected: the main area shows its drawings. */
+  electronicsShown: () => boolean;
+  electronics: ElectronicsTab;
   pickMedia: () => void;
   /** Show a short message on the page (instead of alert(), which some browsers never show). */
   notify: (message: string) => void;
@@ -51,17 +57,6 @@ const MEDIA = '__media__';
 // Simulator values the reset button leaves alone: the ride in progress and the units.
 const KEEP_ON_SIM_RESET = new Set(['speed', 'braking', 'resumeSpeed', 'cityMode', 'citySpeed', 'animFps', 'speedUnit']);
 
-/** Seed electronics values from the selected chip, LED and firmware presets. */
-function applyElectronics(p: Params) {
-  const chip = CHIPS[p.chip];
-  const led = LEDS[p.ledType];
-  const fw = FIRMWARE[p.firmware];
-  p.clockMHz = led.protocol === 'clocked' ? Math.min(chip.maxClockMHz, led.maxClockMHz, fw.clockMHz ?? Infinity) : led.maxClockMHz;
-  p.lanes = Math.min(chip.maxLanes, p.stripCount);
-  p.overheadUs = p.python && chip.overheadUsPy ? chip.overheadUsPy : chip.overheadUsC;
-  p.pwmHz = led.pwmHz;
-  p.gbPwmHz = led.gbPwmHz;
-}
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -208,13 +203,10 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   wheelMore.add(p, 'spokes', 12, 48, 2).name('Spokes');
 
   const leds = hg.addFolder('LEDs');
-  leds.add(p, 'ledType', Object.keys(LEDS)).name('Type').onChange(() => applyElectronics(p));
-  leds.add(p, 'stripCount', 2, 4, 1).name('Strips').onChange(() => applyElectronics(p));
-  const density = { get v() { return String(p.ledDensity); }, set v(s: string) { p.ledDensity = Number(s); } };
-  leds.add(density, 'v', ['30', '60', '96', '144', '200']).name('LEDs / m');
+  leds.add(p, 'stripCount', 1, 4, 1).name('Strips per side');
   leds.add(p, 'doubleSided').name('Both sides');
   const ledMore = leds.addFolder('Details').close();
-  ledMore.add(p, 'ledDensity', 10, 250, 1).name('LEDs / m (custom)');
+  ledMore.add(p, 'ledDensity', 10, 250, 1).name('LEDs / m');
   ledMore.add(p, 'ledPackage', Object.keys(PACKAGES)).name('Package').onChange((k: string) => { p.dieMm = PACKAGES[k]; });
   ledMore.add(p, 'dieMm', 0.5, 6, 0.1).name('Emitter size (mm)');
   ledMore.add(p, 'diffusionMm', 0, 6, 0.1).name('Diffuser spread (mm)');
@@ -228,33 +220,19 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   ledMore.add(p, 'radialCompensation').name('Dim inner LEDs');
 
   const ctl = hg.addFolder('Controller');
-  ctl.add(p, 'chip', Object.keys(CHIPS)).name('Chip').onChange(() => applyElectronics(p));
-  ctl.add(p, 'firmware', Object.keys(FIRMWARE)).name('Firmware').onChange((k: string) => {
-    const f = FIRMWARE[k];
-    Object.assign(p, {
-      python: f.python, syncMode: f.syncMode, hallPollMs: f.hallPollMs, debounceMs: f.debounceMs,
-      minLinesPerSec: f.minLinesPerSec, columnsPerRev: f.columnsPerRev,
-    });
-    applyElectronics(p);
-  });
   const perStripCtl = ctl.add(p, 'hallPerStrip').name('Sensor per strip');
   ctl.add(p, 'nextOnDark').name('Next preset when lights go out');
-  ctl.add(p, 'batteryMah', 500, 20000, 100).name('Battery (mAh)');
   const elecMore = ctl.addFolder('Electronics details').close();
   const clockCtl = elecMore.add(p, 'clockMHz', 0.1, 40, 0.1).name('LED clock (MHz)');
-  elecMore.add(p, 'lanes', 1, 8, 1).name('Parallel lanes');
   elecMore.add(p, 'overheadUs', 0, 2000, 1).name('Overhead / column (µs)');
   elecMore.add(p, 'pwmHz', 100, 40000, 10).name('LED PWM (Hz)');
   const gbCtl = elecMore.add(p, 'gbPwmHz', 0, 5000, 10).name('Brightness PWM (Hz)');
   const fwMore = ctl.addFolder('Firmware details').close();
-  fwMore.add(p, 'python').name('CircuitPython').onChange(() => applyElectronics(p));
   fwMore.add(p, 'syncMode', { 'Hall sensor': 'hall', 'Ideal (encoder)': 'ideal', 'Free-running': 'free' }).name('Sync');
   fwMore.add(p, 'columnsPerRev', 16, 1024, 1).name('Columns / turn');
   fwMore.add(p, 'minLinesPerSec', 0, 1000, 10).name('Min lines/s (0 = off)');
   const pollCtl = fwMore.add(p, 'hallPollMs', 0, 20, 0.5).name('Hall poll (ms)');
   const debounceCtl = fwMore.add(p, 'debounceMs', 0, 300, 5).name('Hall debounce (ms)');
-  const sensorCtl = fwMore.add(p, 'hallSensor', { 'Hall switch (threshold)': 'switch', 'Magnetometer (peak)': 'magnetometer' }).name('Magnet sensor');
-  const odrCtl = fwMore.add(p, 'magOdrHz', 50, 5000, 10).name('Magnetometer rate (Hz)');
   fwMore.add(p, 'overflow', { 'Wrap around': 'wrap', 'Blank': 'blank' }).name('After last column');
   fwMore.add(p, 'predictMotion').name('Banner: predict motion');
   const freeCtl = fwMore.add(p, 'freeRunColsPerSec', 50, 20000, 10).name('Free-run cols/s');
@@ -325,12 +303,17 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
 
   // ---------- Panels tab: the flat-cut LED supports, drawn in the main area while this tab is open ----------
   const panels = buildPanelsTab(p, document.querySelector<HTMLElement>('[data-pane="panels"]')!, (key) => {
-    if (key === 'stripCount') applyElectronics(p);
     hooks.onDeviceEdit(key);
     refresh();
   });
 
-  const guis = [pg, hg, sg, panels.gui];
+  // ---------- Electronics tab: circuit, wiring, hub module and shopping list ----------
+  const electronics = buildElectronicsTab(p, document.querySelector<HTMLElement>('[data-pane="electronics"]')!, (key) => {
+    hooks.onDeviceEdit(key);
+    refresh();
+  });
+
+  const guis = [pg, hg, sg, panels.gui, electronics.gui];
 
   /** Show only the controls that matter for the current choices. */
   function syncVisibility() {
@@ -354,13 +337,11 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     backSideCtl.show(p.doubleSided && p.backData === 'independent');
     lengthCtl.show(!p.autoLength);
     backCtl.show(p.doubleSided);
-    clockCtl.show(LEDS[p.ledType].protocol === 'clocked');
-    gbCtl.show(LEDS[p.ledType].gbMode === 'pwm');
-    pollCtl.show(p.syncMode === 'hall' && p.hallSensor === 'switch');
+    clockCtl.show(LED.protocol === 'clocked');
+    gbCtl.show(LED.gbMode === 'pwm');
+    pollCtl.show(p.syncMode === 'hall');
     debounceCtl.show(p.syncMode === 'hall');
     perStripCtl.show(p.syncMode === 'hall');
-    sensorCtl.show(p.syncMode === 'hall');
-    odrCtl.show(p.syncMode === 'hall' && p.hallSensor === 'magnetometer');
     freeCtl.show(p.syncMode === 'free');
     shutterCtl.show(p.exposureModel === 'camera');
     stripShutterCtl.show(p.strip !== 'off');
@@ -406,11 +387,46 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   confirmButton($('preset-delete'), 'Click again to delete', () => {
     if (store.remove()) hooks.onPresetSelected();
   });
-  $('preset-next').onclick = () => { store.next(); hooks.onPresetSelected(); };
+  // The wheel's preset button: a click goes to the next preset, a double click toggles Auto (on the
+  // wheel: the next preset each time the lights go out). A click waits to see if a second follows.
+  let clickTimer = 0;
+  $('preset-next').onclick = () => {
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = 0;
+      const auto = $<HTMLInputElement>('auto-next');
+      auto.checked = !auto.checked;
+      auto.dispatchEvent(new Event('change'));
+      return;
+    }
+    clickTimer = window.setTimeout(() => {
+      clickTimer = 0;
+      if (p.sleeping) { wake(); return; }
+      store.next();
+      hooks.onPresetSelected();
+    }, 300);
+  };
   presetName.onclick = () => openTab('presets');
+  // The wheel's second button: a click steps the brightness (remembered with the hardware), a double
+  // click puts the wheel to sleep (LEDs and boost off). Asleep, a click on either button wakes it.
+  const bright = $('bright');
+  const wake = () => { p.sleeping = false; refresh(); };
+  const stepBrightness = () => {
+    if (p.sleeping) { wake(); return; }
+    p.brightnessLevel = (p.brightnessLevel + 1) % BRIGHTNESS_STEPS.length;
+    hooks.onDeviceEdit('brightnessLevel');
+    refresh();
+  };
+  let brightTimer = 0;
+  bright.onclick = () => {
+    if (brightTimer) { clearTimeout(brightTimer); brightTimer = 0; p.sleeping = !p.sleeping; refresh(); return; }
+    brightTimer = window.setTimeout(() => { brightTimer = 0; stepBrightness(); }, 300);
+  };
   window.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
-    if (e.key.toLowerCase() !== 'n' || e.metaKey || e.ctrlKey || e.altKey || t.matches('input, textarea, select')) return;
+    const k = e.key.toLowerCase();
+    if ((k !== 'n' && k !== 'b') || e.metaKey || e.ctrlKey || e.altKey || t.matches('input, textarea, select')) return;
+    if (k === 'b') { stepBrightness(); return; }
     store.next();
     hooks.onPresetSelected();
   });
@@ -426,13 +442,17 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     hooks.onLayout();
   }
   function openTab(t: Tab, open = true) {
-    const wasPanels = tab === 'panels';
+    const wasPanels = tab === 'panels', wasElec = tab === 'electronics';
     tab = t;
     for (const b of document.querySelectorAll<HTMLElement>('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === t));
     for (const pane of document.querySelectorAll<HTMLElement>('[data-pane]')) pane.hidden = pane.dataset.pane !== t;
     if ((t === 'panels') !== wasPanels) {
       document.body.classList.toggle('view-panels', t === 'panels');
       hooks.onShowPanels(t === 'panels');
+    }
+    if ((t === 'electronics') !== wasElec) {
+      document.body.classList.toggle('view-elec', t === 'electronics');
+      hooks.onShowElectronics(t === 'electronics');
     }
     if (open && !isOpen()) setOpen(true);
   }
@@ -465,6 +485,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     }
     syncVisibility();
     renderPresets();
+    bright.textContent = p.sleeping ? '☾ Sleep' : `☀ ${Math.floor(BRIGHTNESS_STEPS[p.brightnessLevel] * 100)}%`;
     panels.refresh();
   }
   refresh();
@@ -478,6 +499,8 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     openTab,
     panelsShown: () => tab === 'panels',
     panels,
+    electronicsShown: () => tab === 'electronics',
+    electronics,
     pickMedia: () => mediaInput.click(),
     notify,
     guis,

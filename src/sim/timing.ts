@@ -1,4 +1,4 @@
-import { CHIPS, LEDS, type Params, speedMps } from '../params';
+import { CHIP, LED, type Params, speedMps } from '../params';
 
 // Geometry and LED-bus timing derived from the parameters. All lengths in metres, times in seconds.
 export interface Derived {
@@ -24,16 +24,19 @@ export interface Derived {
   clocked: boolean;
 }
 
+/** The simulator keeps the LEDs this far inside the rim wall: the panels' tip clearance and strip end. */
+export const LED_RIM_CLEAR_MM = 5;
+
 export function clockedFrameBits(nLeds: number): number {
   // 32-bit start frame, 32 bits per LED, end frame of at least n/2 clocks rounded up to a byte.
   return 32 + 32 * nLeds + Math.max(32, Math.ceil(nLeds / 16) * 8);
 }
 
 export function derive(p: Params): Derived {
-  const led = LEDS[p.ledType];
+  const led = LED;
   const rimRadius = p.bsdMm / 2000;
   const tireRadius = rimRadius + p.tireMm / 1000;
-  const maxLedRadius = rimRadius - p.rimDepthMm / 1000 - 0.008;
+  const maxLedRadius = rimRadius - p.rimDepthMm / 1000 - LED_RIM_CLEAR_MM / 1000;
   const rStart = p.stripStartMm / 1000;
   const pitch = 1 / p.ledDensity;
   const maxLength = Math.max(0, maxLedRadius - rStart);
@@ -43,7 +46,7 @@ export function derive(p: Params): Derived {
   const revPerSec = speedMps(p) / circumference;
 
   const stripUnits = p.stripCount * (p.doubleSided && p.backData === 'independent' ? 2 : 1);
-  const lanes = Math.max(1, Math.min(p.lanes, stripUnits));
+  const lanes = lanesFor(stripUnits);
   const ledsPerLane = Math.ceil(stripUnits / lanes) * ledsPerStrip;
   const clocked = led.protocol === 'clocked';
   const clockHz = (clocked ? p.clockMHz : led.maxClockMHz) * 1e6;
@@ -76,6 +79,7 @@ export function squareIntegral(a: number, b: number, duty: number, period: numbe
   return F(b) - F(a);
 }
 
-export function chipFor(p: Params) {
-  return CHIPS[p.chip];
+/** Parallel data lanes: PIO gives every strip its own (up to the chip's limit); more strips chain. */
+export function lanesFor(stripUnits: number): number {
+  return Math.max(1, Math.min(CHIP.maxLanes, stripUnits));
 }

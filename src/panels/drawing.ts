@@ -38,7 +38,7 @@ function partPath(rings: Pt[][]): Prim {
   return { k: 'path', rings, closed: true, s: { fill: C.part, stroke: C.edge, width: 1.2 } };
 }
 const HOLE: Record<HoleKind, string> = { strip: C.hole, spoke: C.tie, disc: C.angle, sensor: C.board, wire: C.wire };
-const LEGEND = 'holes: grey strip ties, green spoke ties, purple disc ties round the spoke crossings, pink hall sensor ties, yellow wire holes';
+const LEGEND = 'holes: grey strip ties, green spoke ties, purple disc ties round the spoke crossings, pink hall sensor ties, yellow wire slots';
 
 /**
  * The panel on the wheel, seen from the right with blade 1 pointing right, over every spoke: the part as
@@ -56,11 +56,12 @@ function partScene(d: PanelDesign, s: SideResult): Scene {
     prims.push({ k: 'path', rings: [[R(sp.a), R(sp.b)]], closed: false, s: { stroke: own ? DIR[sp.direction] : C.spokeOther, width: own ? 1.2 : 0.8 } });
   }
   prims.push({ k: 'path', rings: [circle(wh.p.rimWallR, 360)], closed: true, s: { stroke: '#4b5466', width: 1, dash: [6, 5] } });
-  prims.push(partPath([g.outline.pts.map(R), ...g.holes.map((h) => h.ring.pts.map(R)), circle(g.rBore)]));
+  prims.push(partPath([g.outline.pts.map(R), ...g.holes.filter((h) => !h.slot).map((h) => h.ring.pts.map(R)), g.bore.ring.pts.map(R)]));
   const tied = new Set(s.spokeTies.map((t) => t.spoke));
   for (const sp of wh.spokes) if (tied.has(sp.i)) prims.push({ k: 'path', rings: [[R(sp.a), R(sp.b)]], closed: false, s: { stroke: C.tie, width: 1.2, alpha: 0.6 } });
   for (const sp of wh.spokes) if (sp.side === s.side) prims.push({ k: 'path', rings: [[R(sp.a), R(sp.b)]], closed: false, s: { stroke: DIR[sp.direction], width: 0.8, dash: [4, 4], alpha: 0.5 } });
-  for (const h of g.holes) prims.push({ k: 'path', rings: [h.ring.pts.map(R)], closed: true, s: { stroke: HOLE[h.kind], width: 1.4 } });
+  // a slot is open into the bore: drawn as its U, not closed across the mouth
+  for (const h of g.holes) prims.push({ k: 'path', rings: [h.ring.pts.map(R)], closed: !h.slot, s: { stroke: HOLE[h.kind], width: 1.4 } });
   const { sensors } = flatExtras(d, s);
   for (const b of sensors) prims.push({ k: 'path', rings: [b.map(R)], closed: true, s: { fill: C.sensor, alpha: 0.55 } });
   for (const sp of wh.spokes) prims.push({ k: 'dot', c: Pol(wh.p.erd / 2, sp.rimDeg), r: 2.5, fill: sp.side === s.side ? C.edge : '#4b5466' });
@@ -105,7 +106,7 @@ function partScene(d: PanelDesign, s: SideResult): Scene {
   const sb = g.sensors.find((b) => b.blade === 0);
   if (sb) {
     const at = pol(sb.rho, sb.a - a0), out = pol(sb.rho + 60, sb.a - a0 + 12);
-    note(at, out, `hall sensor (US5881, marked face out, leads in) midway between strips, r ${sm.sensorR[0]} mm: a tie across its body, one across its leads`, 'left');
+    note(at, out, `hall sensor (US5881, marked face out, leads in) ${g.arms.length > 1 ? 'midway between strips' : 'opposite the blade'}, r ${sm.sensorR[0]} mm: a tie across its body, one across its leads`, 'left');
   }
   const dt = s.discTies[0];
   if (dt) { const p = R(dt.holes[0]); note(p, [p[0] - 60, p[1] - 70], `disc tie round the spoke crossing at r ${dt.r.toFixed(1)} mm`, 'right'); }
@@ -149,6 +150,7 @@ export class PanelDrawing {
 
   constructor(private host: HTMLElement, onBack: () => void) {
     host.innerHTML = `
+      <div class="pv-head">
       <div class="pv-bar">
         <button type="button" data-act="back" title="Back to the ride">← Ride</button>
         <span class="pv-group" role="group" aria-label="Side" data-sides>
@@ -160,6 +162,7 @@ export class PanelDrawing {
       </div>
       <div class="pv-title"></div>
       <div class="pv-hint"></div>
+      </div>
       <div class="pv-status" hidden></div>
       <div class="pv-readout"></div>`;
     host.appendChild(this.canvas);
@@ -214,9 +217,9 @@ export class PanelDrawing {
   fit() {
     if (!this.scene) return;
     const [[x0, y0], [x1, y1]] = this.scene.bounds;
-    // room for the toolbar and title (they wrap on narrow screens), and for labels past the drawing
-    const bar = this.host.querySelector<HTMLElement>('.pv-bar')!;
-    const top = Math.max(70, bar.offsetTop + bar.offsetHeight + (this.hintEl.offsetParent ? 44 : 8)), pad = this.w < 500 ? 24 : 60;
+    // room for the toolbar, title and hint (they wrap on narrow screens), and for labels past the drawing
+    const head = this.host.querySelector<HTMLElement>('.pv-head')!;
+    const top = Math.max(70, head.offsetTop + head.offsetHeight + 8), pad = this.w < 500 ? 24 : 60;
     const s = Math.min((this.w - 2 * pad) / Math.max(1, x1 - x0), (this.h - top - 2 * pad) / Math.max(1, y1 - y0));
     this.view = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 + top / 2 / s, s };
     this.fitted = true;

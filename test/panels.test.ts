@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams } from '../src/params';
 import { derive } from '../src/sim/timing';
-import { designPanels, designReport, holeSize, mirrorAxes, type PanelDesign, type SideResult } from '../src/panels/design';
+import { designPanels, designReport, holeSize, mirrorAxes, type PanelDesign, shapeContains, type SideResult } from '../src/panels/design';
 import { cutDxf, cutFiles, referenceDxf } from '../src/panels/dxf';
 import { applyToSim, panelInputs } from '../src/panels/fromParams';
-import { adiff, arcMerge, circlePts, cleanRing, dist, filletRing, mirrorPt, outlineOf, pmod, pointSegDist, pol, type Pt, rot } from '../src/panels/geom';
+import { adiff, arcMerge, boreContour, circlePts, cleanRing, dist, filletRing, mirrorPt, outlineOf, pmod, pointSegDist, pol, type Pt, rot, sampleBulge } from '../src/panels/geom';
 import { packDesign, unpackDesign } from '../src/panels/transport';
 import { Wheel } from '../src/panels/wheel';
 
@@ -82,7 +82,7 @@ describe('the surface the panel lies on', () => {
 });
 
 describe('spoke-tied panels', () => {
-  for (const n of [2, 3, 4]) {
+  for (const n of [1, 2, 3, 4]) {
     it(`${n} strips: evenly spaced blades, both edges tied, ties straddle their spokes, the strip ties apart`, () => {
       const d = design(n), pp = d.spec, h = holeSize(pp);
       expect(d.warnings).toEqual([]);
@@ -143,8 +143,12 @@ describe('spoke-tied panels', () => {
           const lane = s.g.arms.some((a) => { const [x, y] = rot(hole.c, -a); return x > s.g.rhoLed0 && x < s.g.rhoLed1 && Math.abs(y) < pp.stripW / 2 - 1e-6; });
           expect(lane).toBe(false);
         }
-        // the strip runs from just outside the bore to the tip
-        expect(sm.ledStartR).toBeCloseTo(pp.boreD / 2 + pp.stripStartGap, 0);
+        // the strip is laid from the tip in, whole pixels, stopping outside the panels' limit (30 mm),
+        // one half metre at most: its outermost LED is as far out as it goes
+        expect(sm.ledEndR - sm.ledStartR).toBeCloseTo(sm.ledsPerStrip * pp.ledPitch, 0);
+        expect(sm.ledStartR).toBeGreaterThanOrEqual(30);
+        expect(sm.ledStartR).toBeLessThan(30 + pp.ledPitch);
+        expect(sm.ledsPerStrip).toBeLessThanOrEqual(72);
         expect(sm.ledEndR).toBeGreaterThan(290);
         // a hall switch per strip on the disc, midway between strips, all at one radius, on two ties of its own
         expect(s.g.sensors.map((b) => b.blade)).toEqual(s.g.arms.map((_, i) => i));
@@ -159,13 +163,16 @@ describe('spoke-tied panels', () => {
           expect(b.rho).toBeGreaterThan(s.g.rhoDisc - 30);
         }
         expect(sm.sensorFieldUT!).toBeLessThan(pp.sensorReleaseMT * 10); // under 1% of the switch's release point
-        // a round wire hole in the disc just inside each hall sensor's leads, on its centre line
+        // a wire slot in the disc from just inside each hall sensor's leads, on its centre line, in to the bore
         const wires = s.g.holes.filter((x) => x.kind === 'wire');
         expect(wires).toHaveLength(n);
         expect(pp.wireHoleD).toBe(10);
         for (const b of s.g.sensors) {
           const w = wires.find((x) => dist(x.c, pol(b.rho, b.a)) < 35)!;
           expect(w.d).toBe(pp.wireHoleD);
+          expect(w.slot).toBe(true);
+          expect(s.g.bore.ring.contains(pol(pp.boreD / 2 + 1, Math.atan2(w.c[1], w.c[0]) * 180 / Math.PI))).toBe(true); // open into the bore
+          expect(shapeContains(s.g, pol(Math.hypot(...w.c) - 5, Math.atan2(w.c[1], w.c[0]) * 180 / Math.PI))).toBe(false);
           expect(Math.hypot(...w.c) + pp.wireHoleD / 2 + pp.gridEdge).toBeLessThanOrEqual(s.g.rhoDisc + 1e-6);
           const [x, e] = rot(w.c, -b.a);
           expect(Math.abs(e)).toBeLessThan(1e-6);
@@ -221,7 +228,7 @@ describe('spoke-tied panels', () => {
   });
 
   it('designs every strip count the simulator has, and names the ones that suit the wheel when a blade can\'t be tied', () => {
-    for (const n of [2, 3, 4]) expect(design(n).arms).toHaveLength(n);
+    for (const n of [1, 2, 3, 4]) expect(design(n).arms).toHaveLength(n);
     const d = design(3, { panelTabMaxMm: 20 });
     expect(d.warnings.some((w) => /can't be tied to a spoke within 20 mm.*2, 4 strips on 32 spokes/.test(w))).toBe(true);
   });
@@ -237,20 +244,58 @@ describe('spoke-tied panels', () => {
   it('reports plain data', () => {
     const r = JSON.parse(JSON.stringify(designReport(design(2))));
     expect(r.sides.LEFT.spokeTies[0]).toHaveProperty('bladeDeg');
-    expect(r.simSettings).toMatchObject({ stripCount: 2, ledDensity: 144, stripStartMm: 22, stripLengthMm: 274 });
+    expect(r.simSettings).toMatchObject({ stripCount: 2, ledDensity: 144, stripStartMm: 33, stripLengthMm: 264 });
+  });
+});
+
+describe('bore', () => {
+  it('reaches out to just inside the strips\' inner ends, never smaller than the hub needs', () => {
+    const d = design(4);
+    const sm = d.sides.LEFT.summary;
+    expect(d.spec.boreD / 2).toBeCloseTo(sm.ledStartR - d.spec.boreToStrip, 0);
+    expect(d.spec.boreD).toBeGreaterThan(d.spec.boreMinD);
+    expect(d.sides.LEFT.g.rBore).toBeCloseTo(d.spec.boreD / 2, 6);
+    // a bigger hub: the strips start outside it, and the bore again reaches to just inside them
+    const big = design(4, { panelBoreMm: 80 });
+    expect(big.sides.LEFT.summary.ledStartR).toBeGreaterThanOrEqual(40 + big.spec.stripStartGap);
+    expect(big.spec.boreD).toBeGreaterThanOrEqual(80);
+    expect(big.spec.boreD / 2).toBeCloseTo(big.sides.LEFT.summary.ledStartR - big.spec.boreToStrip, 0);
+  });
+});
+
+describe('bore with slots', () => {
+  it('is one closed outline: the bore, each slot round at its outer end, filleted where it meets the bore', () => {
+    const R = 19.05, w = 10, f = 2;
+    const slots = [45, 135, 225, 315].map((a) => ({ c: pol(54, a), d: w }));
+    const pts = sampleBulge(boreContour(R, slots, f), 2);
+    const area = Math.abs(pts.reduce((s, p, i) => s + p[0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * p[1], 0) / 2);
+    // the bore plus four slots (rectangle out to the end's centre plus a half disc), less the bore's
+    // part of each slot, plus the fillets' small corners
+    const inBore = R * R * Math.asin(w / 2 / R) + (w / 2) * Math.sqrt(R * R - (w / 2) ** 2);
+    const slot = w * (54 - Math.sqrt(R * R - (w / 2) ** 2)) + (Math.PI * (w / 2) ** 2) / 2;
+    expect(area).toBeGreaterThan(Math.PI * R * R + 4 * slot - 4 * (inBore - w * Math.sqrt(R * R - (w / 2) ** 2)) - 1);
+    expect(area).toBeLessThan(Math.PI * R * R + 4 * slot + 4 * 2 * f * f);
+    // the outer ends reach r 59 (54 + half the width), every point at least the bore's radius out
+    expect(Math.max(...pts.map((p) => Math.hypot(...p)))).toBeCloseTo(59, 1);
+    expect(Math.min(...pts.map((p) => Math.hypot(...p)))).toBeGreaterThan(R - 1e-6);
+    // no slots: the plain circle
+    expect(boreContour(R, [], f)).toEqual([[R, 0, 1], [-R, 0, 1]]);
   });
 });
 
 describe('cut files', () => {
-  it('writes one R12 DXF in inches for mirror-image panels: the outline (the disc as true arcs), one closed polyline per hole, and the bore', () => {
+  it('writes one R12 DXF in inches for mirror-image panels: the outline (the disc as true arcs), one closed polyline per hole, and the bore with its wire slots', () => {
     const d = design(3, { spokes: 36 });
     const files = cutFiles(d);
     expect(files.map((f) => f.name)).toEqual(['700c_36h3x_3strips_pp_08_panel_QTY2_cut_in.dxf']);
     const text = files[0].text;
     expect(text).toMatch(/\$ACADVER\n {2}1\nAC1009/);
     expect(text).toMatch(/\$INSUNITS\n 70\n1\n/);
-    expect(text.match(/\nPOLYLINE\n/g)).toHaveLength(1 + d.sides.LEFT.g.holes.length);
-    expect(text.match(/\nCIRCLE\n/g)).toHaveLength(1);
+    const g = d.sides.LEFT.g, slots = g.holes.filter((h) => h.slot).length;
+    expect(slots).toBe(3);
+    // the slots are cut with the bore, as one outline: no circle for it
+    expect(text.match(/\nPOLYLINE\n/g)).toHaveLength(1 + g.holes.length - slots + 1);
+    expect(text.match(/\nCIRCLE\n/g)).toBeNull();
     expect(d.sides.LEFT.g.outlineBulge.length).toBeLessThan(400); // not hundreds of chords round the disc
     expect(text.trimEnd().endsWith('EOF')).toBe(true);
     // every coordinate on the sheet is positive, and the part is the reported size
@@ -298,12 +343,19 @@ describe('shared settings', () => {
   it('designs from the simulator\'s settings, and points its strips at the panels', () => {
     const p = { ...defaultParams(), stripCount: 2 };
     const { wheel, panel } = panelInputs(p);
-    expect(wheel).toMatchObject({ size: '700c', spokes: 32, crosses: 3, rimWallR: 289, erd: 586 });
-    expect(panel).toMatchObject({ strips: 2, material: 'pp_08', tipEndR: 298.45, discCross: 0 });
+    expect(wheel).toMatchObject({ size: '700c', spokes: 32, crosses: 3, rimWallR: 302, erd: 612 });
+    expect(panel).toMatchObject({ strips: 2, material: 'pp_08', tipEndR: 298.45, discCross: 0, stripStartR: 30 });
     const d = designPanels(wheel, panel);
-    expect(d.rimNote).toMatch(/Rim wall assumed/); // the default rim is deeper than the measured tips allow
-    applyToSim(p, d);
-    expect(p).toMatchObject({ stripStartMm: 22, stripLengthMm: 274, autoLength: false, rimDepthMm: 7 });
+    expect(d.rimNote).toBe(''); // the default rim is the one the measured tips imply
+    // the simulator's defaults already hold the panels' strips
     expect(derive(p).ledsPerStrip).toBe(d.sides.LEFT.summary.ledsPerStrip);
+    expect(p).toMatchObject({ stripStartMm: d.sim.stripStartMm, stripLengthMm: d.sim.stripLengthMm, autoLength: false });
+    // a deeper rim: the panels assume one just outside the tips, and Use in simulator brings the rim depth down
+    const q = { ...p, rimDepthMm: 22 };
+    const e = designPanels(panelInputs(q).wheel, panelInputs(q).panel);
+    expect(e.rimNote).toMatch(/Rim wall assumed/);
+    applyToSim(q, e);
+    expect(q.rimDepthMm).toBeLessThan(22);
+    expect(derive(q).ledsPerStrip).toBe(e.sides.LEFT.summary.ledsPerStrip);
   });
 });

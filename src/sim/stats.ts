@@ -1,5 +1,5 @@
-import { CHIPS, LEDS, type Params, playbackFps, SHUTTERS } from '../params';
-import type { Derived } from './timing';
+import { brightnessScale, CHIP, LED, type Params, playbackFps, SHUTTERS } from '../params';
+import { type Derived, lanesFor } from './timing';
 
 export interface StatLine { label: string; value: string }
 export interface Stats { lines: StatLine[]; warnings: string[] }
@@ -29,8 +29,8 @@ export interface PhysicsInfo { label: string; detail: string; flopsPerStep: numb
 
 export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: BannerInfo, frames = 1, water?: WaterInfo,
   physics?: PhysicsInfo): Stats {
-  const chip = CHIPS[p.chip];
-  const led = LEDS[p.ledType];
+  const chip = CHIP;
+  const led = LED;
   const C = p.columnsPerRev;
   const rps = d.revPerSec;
   const warnings: string[] = [];
@@ -43,16 +43,16 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   const coverage = Math.min(1, rps * T * p.stripCount);
 
   const totalLeds = d.ledsPerStrip * p.stripCount * (p.doubleSided ? 2 : 1);
-  const gbScale = led.gbMode === 'none' ? 1 : p.globalBrightness / 31;
+  const gbScale = (led.gbMode === 'none' ? 1 : p.globalBrightness / 31) * brightnessScale(p);
   const avgmA = totalLeds * (1 + 60 * meanDuty * gbScale);
   const peakmA = totalLeds * 61;
-  const lanes = Math.max(1, Math.min(p.lanes, d.stripUnits));
+  const lanes = lanesFor(d.stripUnits);
   const frameBytes = banner ? banner.width * banner.height * 3 : C * lanes * (d.ledsPerLane + 2) * 4;
   // Water mode renders each column on the fly from the simulation, so it stores no frames.
   const imageBytes = water ? water.ramBytes : physics ? physics.ramBytes : frameBytes * frames;
   const targetFps = playbackFps(p);
   const playFps = p.frameAdvance === 'timed' ? targetFps : (rps * p.playbackRate) / Math.max(0.01, p.revsPerFrame);
-  const usableRam = chip.ramKB * 1024 * (p.python ? 0.45 : 0.8);
+  const usableRam = chip.ramKB * 1024 * 0.8;
 
   const lines: StatLine[] = [
     { label: 'Wheel', value: `${fmt(rps * 60, 0)} rpm · ${fmt(rps, 2)} rev/s` },
@@ -71,12 +71,12 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
     ...(water ? [
       { label: 'Water', value: `${p.fluid} · ${water.grid}² grid · ${water.particles} particles · ${p.waterHz} Hz` },
       { label: 'Rim drag', value: `${fmt(water.wallSpeed, 1)} m/s rim · friction ${fmt(p.rimFriction, 2)}` },
-      { label: 'Water CPU', value: `${fmt(physicsMflops(p, water.flopsPerStep), 1)} MFLOP/s ≈ ${fmt(corePct(p, water.flopsPerStep), 0)}% of one ${p.chip} core` },
+      { label: 'Water CPU', value: `${fmt(physicsMflops(p, water.flopsPerStep), 1)} MFLOP/s ≈ ${fmt(corePct(p, water.flopsPerStep), 0)}% of one ${chip.name} core` },
       { label: 'Acceleration', value: `${gees(water.aEstimate)} firmware${p.waterGain !== 1 ? ` (×${p.waterGain} slosh)` : ''} · ${gees(water.aTrue)} true (− = braking)` },
     ] : []),
     ...(physics ? [
       { label: physics.label, value: `${physics.detail} · ${p.waterHz} Hz` },
-      { label: `${physics.label} CPU`, value: `${fmt(physicsMflops(p, physics.flopsPerStep), 2)} MFLOP/s ≈ ${fmt(corePct(p, physics.flopsPerStep), 1)}% of one ${p.chip} core` },
+      { label: `${physics.label} CPU`, value: `${fmt(physicsMflops(p, physics.flopsPerStep), 2)} MFLOP/s ≈ ${fmt(corePct(p, physics.flopsPerStep), 1)}% of one ${chip.name} core` },
     ] : []),
     { label: water || physics ? 'Firmware RAM' : 'Image buffer', value: `${fmt(imageBytes / 1024, 1)} KB of ${chip.ramKB} KB RAM` },
     { label: 'Current', value: `${fmt(avgmA, 0)} mA avg · ${fmt(peakmA / 1000, 1)} A peak` },
@@ -114,17 +114,15 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   if (imageBytes > usableRam) {
     const fit = Math.floor(usableRam / frameBytes);
     warnings.push(frames > 1
-      ? `${frames} frames need ${fmt(imageBytes / 1024, 0)} KB, but only ${fit} fit in ${p.chip} RAM${p.python ? ' under CircuitPython' : ''}. Stream frames from flash/PSRAM, use fewer frames, or lower columns/rev.`
-      : `The prepacked image (${fmt(imageBytes / 1024, 1)} KB) won't fit in ${p.chip} RAM${p.python ? ' under CircuitPython' : ''}.`);
+      ? `${frames} frames need ${fmt(imageBytes / 1024, 0)} KB, but only ${fit} fit in ${chip.name} RAM. Stream frames from flash/PSRAM, use fewer frames, or lower columns/rev.`
+      : `The prepacked image (${fmt(imageBytes / 1024, 1)} KB) won't fit in ${chip.name} RAM.`);
   }
   if (water) {
     const pct = corePct(p, water.flopsPerStep);
-    if (p.python) warnings.push('A fluid simulation needs compiled C/C++: CircuitPython is roughly 100× too slow for it.');
-    else if (pct > 60) warnings.push(`The water simulation needs about ${fmt(pct, 0)}% of one ${p.chip} core. Lower the grid, sim rate or pressure iterations.`);
+    if (pct > 60) warnings.push(`The water simulation needs about ${fmt(pct, 0)}% of one ${chip.name} core. Lower the grid, sim rate or pressure iterations.`);
     if (p.syncMode === 'free') warnings.push('Free-running firmware has no speed sensor, so the water can\'t react to braking.');
     if (p.displayMode === 'banner') warnings.push('Water always uses the wheel-locked display.');
   }
-  if (physics && p.python) warnings.push(`CircuitPython runs the ${physics.label.toLowerCase()} roughly 100× slower: about ${fmt(corePct(p, physics.flopsPerStep), 0)}% of one core.`);
   if (frames > 1 && rps > 0) {
     if (p.frameAdvance === 'timed' && targetFps > rps) {
       warnings.push(`Frames change ${fmt(targetFps / rps, 1)}× per revolution, so each strip paints different frames in different sectors (seams). Sync frames to revolutions to avoid it.`);
@@ -132,12 +130,11 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
       warnings.push(`Synced to the wheel, the animation plays at ${fmt(playFps, 1)} fps instead of ${fmt(targetFps, 1)} fps. It speeds up and slows down with the bike.`);
     }
   }
-  if (p.python && chip.overheadUsPy === 0) warnings.push(`CircuitPython doesn't run on ${p.chip}.`);
   if (led.gbMode === 'pwm' && p.globalBrightness < 31) {
-    warnings.push(`APA102 global brightness < 31 adds a slow ~${p.gbPwmHz} Hz PWM, which shows as dashed arcs. Dim through the color values instead, or use SK9822/HD107S.`);
+    warnings.push(`APA102 global brightness < 31 adds a slow ~${p.gbPwmHz} Hz PWM, which shows as dashed arcs. Dim through the color values instead.`);
   }
   if (led.protocol === 'single-wire' && p.pwmHz < 2000) {
-    warnings.push(`${p.ledType} PWM ≈ ${p.pwmHz} Hz breaks each arc into dashes at POV speeds.`);
+    warnings.push(`${led.name} PWM ≈ ${p.pwmHz} Hz breaks each arc into dashes at POV speeds.`);
   }
   if (p.doubleSided && p.backData === 'same') {
     warnings.push('Back strips share the front data, so the image is mirrored on the non-drive side.');
@@ -156,8 +153,8 @@ function physicsMflops(p: Params, flopsPerStep: number): number {
   return (flopsPerStep * p.waterHz) / 1e6;
 }
 
-/** Share of one core the simulation needs (CircuitPython runs it ~100× slower). */
+/** Share of one core the simulation needs. */
 function corePct(p: Params, flopsPerStep: number): number {
-  const mflops = CHIPS[p.chip].mflops / (p.python ? 100 : 1);
+  const mflops = CHIP.mflops;
   return (100 * physicsMflops(p, flopsPerStep)) / Math.max(mflops, 1e-6);
 }

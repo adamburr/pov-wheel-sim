@@ -15,30 +15,22 @@ export const WHEELS: Record<string, WheelPreset> = {
 };
 
 export interface ChipPreset {
+  name: string;
   cpuMHz: number;
-  maxClockMHz: number;   // practical LED clock the peripheral (SPI/PIO/I2S) can drive
-  maxLanes: number;      // parallel data lines on a shared clock (PIO/I2S/FlexIO)
+  maxClockMHz: number;   // practical LED clock the PIO can drive through the level shifters and wiring
+  maxLanes: number;      // parallel data lines on a shared clock (PIO)
   ramKB: number;
-  overheadUsC: number;   // per-column firmware overhead, compiled C/Arduino
-  overheadUsPy: number;  // per-column overhead under CircuitPython (0 = unsupported)
-  mflops: number;        // sustained single-precision MFLOP/s on one core (rough; soft float where there is no FPU)
+  overheadUs: number;    // per-column firmware overhead, compiled C
+  mflops: number;        // sustained single-precision MFLOP/s on one core (rough)
 }
-// Approximate figures; overheads are order-of-magnitude estimates for a tight column loop.
-// mflops assumes ~0.4 flop/cycle with an FPU (M4/M33, Xtensa), ~1 on the M7, software float otherwise.
-export const CHIPS: Record<string, ChipPreset> = {
-  'ATmega328P (Uno/Nano)': { cpuMHz: 16,  maxClockMHz: 8,  maxLanes: 1, ramKB: 2,    overheadUsC: 40, overheadUsPy: 0, mflops: 0.1 },
-  'SAMD21 (M0)':           { cpuMHz: 48,  maxClockMHz: 12, maxLanes: 1, ramKB: 32,   overheadUsC: 15, overheadUsPy: 1200, mflops: 1 },
-  'SAMD51 (M4)':           { cpuMHz: 120, maxClockMHz: 24, maxLanes: 1, ramKB: 192,  overheadUsC: 6,  overheadUsPy: 350, mflops: 48 },
-  'nRF52840':              { cpuMHz: 64,  maxClockMHz: 8,  maxLanes: 1, ramKB: 256,  overheadUsC: 10, overheadUsPy: 500, mflops: 26 },
-  'RP2040':                { cpuMHz: 133, maxClockMHz: 20, maxLanes: 4, ramKB: 264,  overheadUsC: 4,  overheadUsPy: 300, mflops: 3 },
-  'RP2350':                { cpuMHz: 150, maxClockMHz: 24, maxLanes: 4, ramKB: 520,  overheadUsC: 3,  overheadUsPy: 220, mflops: 60 },
-  'ESP32':                 { cpuMHz: 240, maxClockMHz: 20, maxLanes: 8, ramKB: 320,  overheadUsC: 8,  overheadUsPy: 300, mflops: 60 },
-  'ESP32-S3':              { cpuMHz: 240, maxClockMHz: 20, maxLanes: 8, ramKB: 512,  overheadUsC: 6,  overheadUsPy: 250, mflops: 70 },
-  'Teensy 4.x':            { cpuMHz: 600, maxClockMHz: 30, maxLanes: 4, ramKB: 1024, overheadUsC: 1,  overheadUsPy: 120, mflops: 500 },
-};
+// The one electronics platform: an Adafruit Feather RP2350 (with HSTX port and PSRAM) driving Adafruit
+// DotStar strips. PIO on the HSTX port's eight pins sends every strip its own data on a shared clock per
+// side (see src/electronics). Figures are approximate; mflops assumes ~0.4 flop/cycle on the M33's FPU.
+export const CHIP: ChipPreset = { name: 'RP2350', cpuMHz: 150, maxClockMHz: 24, maxLanes: 8, ramKB: 520, overheadUs: 3, mflops: 60 };
 
 export type Protocol = 'clocked' | 'single-wire';
 export interface LedPreset {
+  name: string;
   protocol: Protocol;
   maxClockMHz: number;  // clocked: max SCK; single-wire: fixed bit rate
   bitsPerLed: number;
@@ -47,34 +39,14 @@ export interface LedPreset {
   gbPwmHz: number;       // APA102 superimposes a slower PWM when global brightness < 31
   resetUs: number;       // single-wire latch/reset gap
 }
-// PWM rates disagree between datasheets and clone parts; treat these as editable starting points.
-export const LEDS: Record<string, LedPreset> = {
-  'APA102 / DotStar':  { protocol: 'clocked',     maxClockMHz: 20,  bitsPerLed: 32, pwmHz: 19200, gbMode: 'pwm',     gbPwmHz: 580, resetUs: 0 },
-  'SK9822':            { protocol: 'clocked',     maxClockMHz: 15,  bitsPerLed: 32, pwmHz: 4700,  gbMode: 'current', gbPwmHz: 0,   resetUs: 0 },
-  'HD107S':            { protocol: 'clocked',     maxClockMHz: 40,  bitsPerLed: 32, pwmHz: 27000, gbMode: 'current', gbPwmHz: 0,   resetUs: 0 },
-  'WS2812B / NeoPixel': { protocol: 'single-wire', maxClockMHz: 0.8, bitsPerLed: 24, pwmHz: 1000,  gbMode: 'none',    gbPwmHz: 0,   resetUs: 280 },
-  'SK6812':            { protocol: 'single-wire', maxClockMHz: 0.8, bitsPerLed: 24, pwmHz: 1100,  gbMode: 'none',    gbPwmHz: 0,   resetUs: 80 },
-};
+// Adafruit DotStar 144/m (products 2241, 2328) use SK9822 LEDs. The PWM rate disagrees between
+// datasheets; treat it as an editable starting point.
+export const LED: LedPreset = { name: 'DotStar (SK9822)', protocol: 'clocked', maxClockMHz: 15, bitsPerLed: 32, pwmHz: 4700, gbMode: 'current', gbPwmHz: 0, resetUs: 0 };
 
 // Emitter footprint (mm) for common LED packages.
 export const PACKAGES: Record<string, number> = { '5050': 5.0, '3535': 3.5, '2020': 2.0 };
 
 export type SyncMode = 'hall' | 'ideal' | 'free';
-export interface FirmwarePreset {
-  label: string;
-  python: boolean;
-  syncMode: SyncMode;
-  hallPollMs: number;
-  debounceMs: number;
-  minLinesPerSec: number;
-  columnsPerRev: number;
-  clockMHz?: number;
-}
-export const FIRMWARE: Record<string, FirmwarePreset> = {
-  'C / Arduino (hall interrupt)':  { label: 'C', python: false, syncMode: 'hall', hallPollMs: 0, debounceMs: 20,  minLinesPerSec: 0,   columnsPerRev: 256 },
-  'Adafruit guide (CircuitPython)': { label: 'CircuitPython', python: true, syncMode: 'hall', hallPollMs: 4, debounceMs: 120, minLinesPerSec: 400, columnsPerRev: 144, clockMHz: 4 },
-  'Ideal (encoder-locked)':        { label: 'ideal', python: false, syncMode: 'ideal', hallPollMs: 0, debounceMs: 0, minLinesPerSec: 0, columnsPerRev: 256 },
-};
 
 export interface FluidPreset { flip: number; viscosity: number; separation: number }
 // How the simulated liquid behaves. FLIP near 1 keeps motion lively; viscosity damps it.
@@ -104,11 +76,12 @@ export type BannerLower = (typeof BANNER_LOWER)[number];
 
 export const MPH = 0.44704; // m/s
 
+/** The brightness button's steps: each press scales every LED (and the firmware's current limit) by the next. */
+export const BRIGHTNESS_STEPS = [1, 0.5, 0.25, 0.125];
+export const brightnessScale = (p: { brightnessLevel: number; sleeping: boolean }) => (p.sleeping ? 0 : BRIGHTNESS_STEPS[p.brightnessLevel] ?? 1);
+
 export function defaultParams() {
   const wheel = WHEELS['700c (622)'];
-  const chip = CHIPS['RP2350'];
-  const led = LEDS['APA102 / DotStar'];
-  const fw = FIRMWARE['C / Arduino (hall interrupt)'];
   return {
     setupName: 'My wheel',    // names the setup file
 
@@ -116,18 +89,18 @@ export function defaultParams() {
     wheelPreset: '700c (622)',
     bsdMm: wheel.bsdMm,
     tireMm: wheel.tireMm,
-    rimDepthMm: 22,
+    rimDepthMm: 9,            // bead seat to the rim's inner wall: the prototype's, from the panels' measured tip radius
     spokes: wheel.spokes,
 
     // Strips & LEDs
-    stripCount: 3,
+    stripCount: 4,            // strips per side
     ledDensity: 144,          // LED/m
     ledPackage: '5050',
     dieMm: PACKAGES['5050'],
     diffusionMm: 1.5,         // silicone sleeve / diffuser spread
-    stripStartMm: 30,         // radius where the first LED sits (clears the hub flange)
-    autoLength: true,
-    stripLengthMm: 250,
+    stripStartMm: 33,         // radius where the first LED sits: the panels' strips, laid from the tip in
+    autoLength: false,
+    stripLengthMm: 264,       // to the panels' tips: 38 LEDs, from one half-metre strip each
     doubleSided: true,
     backData: 'independent' as 'same' | 'independent', // independent: each side has its own strips and data
     radialStagger: false,
@@ -135,7 +108,7 @@ export function defaultParams() {
     // Panels: the flat-cut LED supports, tied to the spokes (see src/panels). Strips, LED density,
     // spokes and the rim come from the settings above.
     panelMaterial: 'pp_08',   // polypropylene sheet, 0.8 mm
-    panelBoreMm: 38.1,        // centre hole round the hub (measured 1.5")
+    panelBoreMm: 38.1,        // smallest centre hole: round the hub (measured 1.5"); the bore grows to just inside the strips' inner ends
     panelTipRadiusMm: 298.45, // radius of the blade tips on the wheel (measured 11.75"); 0 = just inside the rim
     panelTipSlot: 'auto' as 'auto' | 'none', // a nipple under a tip: slot the tip round it, or stop the blades short of the nipples
     panelStripWidthMm: 14,    // LED strip in its sleeve (Adafruit 2241)
@@ -149,6 +122,7 @@ export function defaultParams() {
     panelDiscCross: 0,        // the disc reaches this spoke cross (1 = nearest the hub; 0 = the outermost, interlaced one) and is tied at each crossing there
     panelTieSpanMm: 80,       // longest stretch of blade between spoke ties
     panelTipTieMm: 30,        // a spoke tie within this of each tip
+    panelStripMinMm: 30,      // the strips, laid from the tips in, stop at least this far from the axle (the fork is close by the hub)
     panelTabMaxMm: 0,         // farthest a tab reaches beyond the blade's edge to a spoke; 0 = the gap between one side's spokes
     spokeCrosses: 3,          // lacing
     hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
@@ -170,30 +144,29 @@ export function defaultParams() {
     citySpeed: 12,            // cruise speed between lights (same units as speed)
 
     // Electronics
-    chip: 'RP2350',
-    ledType: 'APA102 / DotStar',
-    clockMHz: Math.min(chip.maxClockMHz, led.maxClockMHz),
-    lanes: 3,
-    overheadUs: chip.overheadUsC,
-    pwmHz: led.pwmHz,
+    clockMHz: 12,             // LED clock: 12 MHz is comfortable through the level shifters, wiring and the connector
+    overheadUs: CHIP.overheadUs,
+    pwmHz: LED.pwmHz,
     globalBrightness: 31,     // 0..31
-    gbPwmHz: led.gbPwmHz,
-    batteryMah: 5000,
+    gbPwmHz: LED.gbPwmHz,
+    batteryMah: 6000,         // set from the cells in the Electronics tab
+    cells: 2,                 // 18650 cells in parallel (1S)
+    cellMah: 3000,
+    ledCapA: 3.5,             // firmware limit on the strips' total current (the boost gives about 4 A)
+    hubShellMm: 30,           // hub shell diameter between the flanges (typical; measure)
 
     // Firmware
-    firmware: 'C / Arduino (hall interrupt)',
-    python: fw.python,
-    syncMode: fw.syncMode as SyncMode,
-    columnsPerRev: fw.columnsPerRev,
-    minLinesPerSec: fw.minLinesPerSec,
-    hallPollMs: fw.hallPollMs,
-    debounceMs: fw.debounceMs,
+    syncMode: 'hall' as SyncMode,
+    columnsPerRev: 256,
+    minLinesPerSec: 0,
+    hallPollMs: 0,            // 0: an interrupt on each sensor's pin
+    debounceMs: 20,
     hallPerStrip: true,       // a hall sensor per strip: a magnet pass every 1/strips turn
-    hallSensor: 'switch' as 'switch' | 'magnetometer', // switch: trips at a threshold; magnetometer: the field's peak is found
-    magOdrHz: 1000,           // magnetometer output data rate
     overflow: 'wrap' as 'wrap' | 'blank',
     predictMotion: true,      // banner mode: compute each update for mid-display time, not send time
     nextOnDark: true,         // switch to the next preset each time the lights go out (stopping)
+    brightnessLevel: 0,       // the wheel's brightness button: a step of BRIGHTNESS_STEPS, kept when switched off
+    sleeping: false,          // its double click: LEDs and boost off until a button is pressed (not saved)
     freeRunColsPerSec: 540,
 
     // Image
@@ -293,12 +266,12 @@ export const DEVICE_KEYS = [
   'wheelPreset', 'bsdMm', 'tireMm', 'rimDepthMm', 'spokes',
   'stripCount', 'ledDensity', 'ledPackage', 'dieMm', 'diffusionMm', 'stripStartMm', 'autoLength',
   'stripLengthMm', 'doubleSided', 'backData', 'radialStagger',
-  'chip', 'ledType', 'clockMHz', 'lanes', 'overheadUs', 'pwmHz', 'gbPwmHz', 'batteryMah',
-  'firmware', 'python', 'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs', 'hallPerStrip', 'hallSensor', 'magOdrHz',
-  'overflow', 'predictMotion', 'nextOnDark', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
+  'clockMHz', 'overheadUs', 'pwmHz', 'gbPwmHz', 'batteryMah', 'cells', 'cellMah', 'ledCapA', 'hubShellMm',
+  'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs', 'hallPerStrip',
+  'overflow', 'predictMotion', 'nextOnDark', 'brightnessLevel', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
   'panelMaterial', 'panelBoreMm', 'panelTipRadiusMm', 'panelTipSlot', 'panelStripWidthMm', 'panelStripThickMm',
-  'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelCornerMm',
+  'panelTieWidthMm', 'panelTieClearMm', 'panelStripMinMm', 'panelHolesEvery', 'panelEdgeMm', 'panelCornerMm',
   'panelBladeWidthMm', 'panelDiscCross', 'panelTieSpanMm', 'panelTipTieMm', 'panelTabMaxMm', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
   'hubOldMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
 ] as const satisfies readonly (keyof Params)[];
@@ -317,14 +290,13 @@ export const PATTERN_LABELS: Record<PatternName, string> = {
 const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
   pattern: PATTERNS, bannerLower: BANNER_LOWER, bannerUpper: ['road', 'bike'], fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'], mapping: ['polar', 'columns'],
   fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], pictureEdges: ['dark', 'mirror'], backSide: ['reads', 'mirror'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
-  ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], chip: Object.keys(CHIPS),
-  ledType: Object.keys(LEDS), firmware: Object.keys(FIRMWARE), syncMode: ['hall', 'ideal', 'free'],
-  overflow: ['wrap', 'blank'], hallSensor: ['switch', 'magnetometer'],
+  ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], syncMode: ['hall', 'ideal', 'free'],
+  overflow: ['wrap', 'blank'],
   panelMaterial: Object.keys(MATERIALS), panelTipSlot: ['auto', 'none'],
 };
 
 // Limits for the number settings that have them: a value from storage or a setup file is brought inside.
-const LIMITS: Partial<Record<keyof Params, [number, number]>> = { stripCount: [2, 4] };
+const LIMITS: Partial<Record<keyof Params, [number, number]>> = { stripCount: [1, 4], cells: [1, 4], brightnessLevel: [0, 3] };
 
 export function pick<K extends keyof Params>(p: Params, keys: readonly K[]): Pick<Params, K> {
   const out = {} as Pick<Params, K>;

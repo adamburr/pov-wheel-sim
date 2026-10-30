@@ -9,7 +9,7 @@ Default wheel: **700c front, 32 spokes, 3-cross, rim brake (no rotor)**. The mod
 20 to 36 spokes, radial to 4-cross (*Spokes* in the Hardware tab, *Spoke crosses* under Panels).
 Material: **polypropylene sheet, 0.8 mm**, laser or knife cut (a CNC drag knife or a vinyl cutter takes it).
 
-> **Status: not yet verified on the bike.** Only the bore (1.5") and the tip radius (11.75") are measured.
+> **Status: not yet verified on the bike.** Only the hub (1.5", the bore's minimum) and the tip radius (11.75") are measured.
 > Every other wheel and fork dimension is a *typical value*. Read [Before you order](#before-you-order).
 
 ## Using the Panels tab
@@ -20,7 +20,7 @@ Open **⚙️ Settings → Panels**. The main area switches to a drawing of the 
   (it lies flat on the spokes), with the dimensions needed to check or rebuild it. This side's spokes are grey
   (heads in) or amber (heads out), dashed where they run under the part, and green where a blade is tied to
   them; the other side's are faint. Holes are coloured by what they're for: grey strip ties, green spoke
-  ties, purple disc ties, pink hall sensor ties, yellow wire holes. The hall sensors and their leads are
+  ties, purple disc ties, pink hall sensor ties, yellow wire slots. The hall sensors and their leads are
   purple. The rim wall is dashed, with the valve and the nipples. *Left* / *Right* picks the panel.
 
 Drag to pan, scroll or pinch to zoom, and double-click (or press **F**) to fit. **📏 Measure** (or **M**)
@@ -36,7 +36,7 @@ fork and valve clearance, with a warning for any check that fails) and the downl
 | **Report (JSON)** | Every computed number: geometry, ties, clearances, and settings for the simulator |
 
 **Use in simulator** points the simulator's strips at where the panels hold the LEDs: their start radius and
-length, and a shallower rim when the outer LEDs need one.
+length, and a shallower rim when the outer LEDs need one. The default setup already matches.
 
 ### Shared settings
 
@@ -44,7 +44,7 @@ The panels use the same build as the simulator. From the **Hardware** tab:
 
 | Setting | Used for |
 |---|---|
-| *Strips* | Blades per side, 2 to 4. Also under Panels |
+| *Strips* | Blades per side, 1 to 4. Also under Panels. With one, its hall sensor sits opposite the blade, and the wheel needs a rim weight (see the Electronics tab's balance) |
 | *LEDs / m* | Pixel pitch: the strip ties sit every *Strip ties every N pixels* LEDs, between pixels |
 | *Spokes* | The laced wheel model |
 | *Wheel size*, *Rim BSD*, *Rim depth* | The rim's inner wall (BSD/2 − depth) and the spoke ends (ERD = 2 × (wall radius + 4 mm)). When the measured tips don't fit inside that wall, the rim is assumed just outside them |
@@ -54,13 +54,14 @@ The panels' own settings are part of the setup file:
 | Setting | Default | Meaning |
 |---|---|---|
 | Tip radius | 298.45 mm | Radius of the blade tips on the wheel (measured 11.75"); 0 = just inside the rim wall |
-| Bore Ø | 38.1 mm | Centre hole round the hub (measured 1.5") |
+| Bore Ø, at least | 38.1 mm | The hub (measured 1.5"). The bore is worked out: it reaches out to 4 mm inside the strips' inner ends (Ø 57.1 mm on the default wheel), and is never smaller than this |
 | Nipple slot | where a nipple is under a tip | Slot the tip round a nipple under it, or stop every blade short of the nipples |
 | Disc to spoke cross | 0 (the outermost) | The disc reaches this spoke cross, counted from the hub, and is tied at every crossing there. 0 is the outermost, interlaced cross: cross 3 on a 3-cross wheel (r ≈ 80 mm). Radial lacing has no crosses: the disc is tied straight to its spokes |
 | Ties at most every | 80 mm | Longest stretch of each blade edge between spoke ties (the disc's ties count) |
 | Tie within this of each tip | 30 mm | Each blade edge's outermost spoke tie is at most this far in from the tip |
 | Tab reach beyond blade | 0 (auto) | Farthest a tab reaches past the blade's edge to a spoke. Auto: a whole gap between one side's spokes at the rim (118 mm on 32 spokes), so every edge can reach a spoke of its own |
-| Strip width, thickness | 14, 4 mm | Strip in its sleeve (Adafruit 2241) |
+| Strip width, thickness | 14, 4 mm | Strip in its sleeve (Adafruit 2328, one half metre per blade) |
+| Strips no closer than r | 30 mm | The strips are laid from the tips in, in whole pixels; their inner ends stop at least this far from the axle, where the fork is close |
 | Tie width, hole clearance | 3.6, 1.0 mm | Tie strap and hole clearance: the holes are square, 4.6 mm |
 | Strip ties every N pixels | 2 | Strip ties along the blade |
 | Hole to edge | 4.0 mm | Minimum material from a hole to the edge, and between ties |
@@ -75,13 +76,16 @@ Each panel is a **disc round the hub with N straight radial blades**, one blade 
 on the outboard side of its own side's spokes and is zip-tied to them. Nothing bends it on purpose; it just
 follows the spokes.
 
-- **The disc** goes round the hub (the 1.5" bore) and reaches the outermost spoke cross (3 on a 3-cross
+- **The disc** goes round the hub, its bore reaching out to 4 mm inside the strips' inner ends (Ø 57.1 mm), and reaches the outermost spoke cross (3 on a 3-cross
   wheel), so it is 174 mm across. It is tied round each of the 8 crossings there, at r ≈ 80 mm: a hole either
   side of the crossing, in the wide angles between the two spokes, so the tie wraps both. A crossing that falls
   under a strip isn't tied (its holes or band would sit under the strip); the blade's strip ties hold the
   panel there. On a radially laced wheel, each tie straddles a spoke 30 mm out from the flange.
 - **The blades** run from the disc to the rim, **evenly spaced whatever the spoke pattern**. Each carries one
-  LED strip along its centre line, from r 22 mm to the tip.
+  LED strip along its centre line, laid from the tip in so the outermost LED sits as far out as it can and the
+  image is as large as it can be. Each strip is one half-metre strip (72 LEDs) at most, in whole pixels, and
+  stops short of the hub, where the fork is close: no nearer than *Strips no closer than r* (Strip, holes and
+  blade; 30 mm).
 - **Strip ties** hold the strip: hole pairs centred on the strip's edges, every 2 pixels, between LEDs. These
   holes are for the strip only.
 - **Each edge of every blade has its own spoke tabs** (against flutter). Each tab carries a tie with its own
@@ -99,12 +103,16 @@ follows the spokes.
   at one radius, so they repeat with the strips and match on both panels. Where the disc has no room for
   them (a radially laced disc with 4 strips), each goes on a small lobe off the disc. See
   [Hall sensors](#hall-sensors).
-- **A wire hole by each hall sensor**: Ø10 mm, in the disc on the sensor's centre line just inside the end of
-  its leads (r 53.5 mm on the default wheel, 48 mm with 3 strips), all at the same spot beside their sensors.
-  The sensor's three wires go straight in; the strip's four run across the disc from the inner end of the
-  strip next to it. Both go through to the inner side, toward the
-  electronics on the hub. Where the disc has no room inside the sensors (radially laced wheels with 2 or 3
-  strips), the hole goes beside the strip's inner end instead.
+- **A wire slot by each hall sensor**: 10 mm wide, from a round end in the disc on the sensor's centre line,
+  just inside the end of its leads (r 54 mm on the default wheel, 48 mm with 3 strips), straight in to the
+  bore, all at the same spot beside their sensors. The slots open the disc's ring, so it bends more easily to
+  the spokes' cone, and the wires can be slipped in from the bore instead of threaded. The sensor's three
+  wires go straight in; the strip's four run across the disc from the inner end of the strip next to it.
+  Both go through to the inner side, toward the electronics on the hub. The bore and its slots are cut as
+  one outline, with 2 mm fillets where each slot meets the bore. Where a disc tie sits in a slot's way, its
+  round end moves in until the slot clears it. Where the disc has no room inside the sensors (radially laced
+  wheels with 2 or 3 strips), the slot goes beside the strip's inner end; where no slot fits there, a round
+  hole does.
 
 Near the rim, 3-cross spokes run almost parallel to the blades (4–12° off radial), so a spoke can run beside
 a blade for a long way. The tab goes where its spoke is closest to the blade's edge.
@@ -152,8 +160,8 @@ the rim) must clear the panel by 3 mm.
    counter-clockwise seen from the right from rim hole 0, the first hole past the valve.
 4. Tie the disc round its crossings, then each blade's tabs to their spokes, tips first, both edges, then any
    tie over a strip.
-5. Pass each strip's and sensor's wires through the wire hole inside that sensor, and connect them to the
-   electronics.
+5. Slip each strip's and sensor's wires into the wire slot inside that sensor, from the bore, and connect
+   them to the electronics.
 
 ## Hall sensors
 
@@ -176,7 +184,7 @@ sensor is optional and fits the same ties if it is no wider than about 5 mm, or 
 
 - *Magnetic.* The strip's supply and ground carry the current of every LED beyond a point: up to 60 mA per LED
   at full white ([SK9822/APA102](https://www.adafruit.com/product/2574): 20 mA per colour), about 2.3 A for
-  39 LEDs at the strip's inner end. Taken as two opposite line currents 10 mm apart, the field midway between
+  38 LEDs at the strip's inner end. Taken as two opposite line currents 10 mm apart, the field midway between
   the strips, summed over every strip, is at most about **4 µT** at full white (1.5 µT with 2 strips), which is
   more than 2,000 times below the switch's 9.5 mT release point. Even directly beside the strip it stays under 0.5 mT, so for this switch the field is no concern.
   (A linear magnetometer is different: the TMAG5273 considered first has 68 µT of noise per reading and 11 µT
@@ -197,14 +205,14 @@ On the default 700c 32-hole 3-cross wheel:
 
 | Strips | Blades at | Parts | Part size (in) | Mass | Spoke ties per blade | Over a strip | Tabs up to | Disc ties |
 |---|---|---|---|---|---|---|---|---|
-| 2 | 84.375° + 180° | 2 × one part (mirror images) | 6.8 × 23.35 | 33 g | 6 (3 per edge) | 0 | 81 mm | 8 |
-| 3 | 54.375° + 120° steps | 2 × one part (mirror images) | 20.11 × 21.13 | 46 g | 6 (3 per edge) | 0 | 110 mm | 7 |
-| 4 | 39.375° + 90° steps | 2 × one part (mirror images) | 19.64 × 19.64 | 50 g | 6 (3 per edge) | 0 | 81 mm | 8 |
+| 2 | 84.375° + 180° | 2 × one part (mirror images) | 6.8 × 23.35 | 32 g | 6 (3 per edge) | 0 | 81 mm | 8 |
+| 3 | 54.375° + 120° steps | 2 × one part (mirror images) | 20.11 × 21.13 | 45 g | 6 (3 per edge) | 0 | 110 mm | 7 |
+| 4 | 39.375° + 90° steps | 2 × one part (mirror images) | 19.64 × 19.64 | 49 g | 6 (3 per edge) | 0 | 81 mm | 8 |
 
-Every layout has the same disc (Ø 172.6 mm, ties at r 79.7 mm) and the same strips (39 LEDs from r 22.1 mm to
-296.5 mm). Spans between ties are at most 80 mm on each edge, and every edge is tied within 30 mm of the tip (45 mm on one 3-strip blade).
+Every layout has the same disc (Ø 172.7 mm, ties at r 79.7 mm) and the same strips (38 LEDs from r 32.6 mm out to
+the tip end at 296.5 mm, one half-metre strip each). Spans between ties are at most 80 mm on each edge, and every edge is tied within 30 mm of the tip (45 mm on one 3-strip blade).
 The hall sensors sit midway between the strips at r 77 mm (71 mm with 3 strips, clear of a disc tie), all on the disc. The LED strip and a tie band over it clear the typical
-fork by 3.5 mm, at the start of the strip (r 25 mm).
+fork by 3.9 mm, at the strip's inner end (r 32.6 mm).
 
 **Both sides alike.** The left and right sides' spokes are offset by half a spoke gap (360/32 = 11.25°), so a
 blade over one side's spokes is midway between the other side's. With 2 and 4 strips the blades sit a quarter
@@ -233,7 +241,7 @@ hardboard) won't follow the dish over the disc, so the other materials were remo
 | **Room for the magnet** | About 10 mm from each hall sensor's face to the fork leg at r 71–77 mm, on the typical fork. The magnet and the gap to it must give the switch 15 mT or more (south pole). |
 | **Lacing and hub** | Spoke count, crosses, the flange spoke-hole circle (44 mm) and flange spacing (35 mm) set where the crossings are and how the spokes dish, so where every tie goes. |
 | **LED pixel pitch** | Adafruit says "144 LEDs per meter" and "7 mm" (rounded). The model uses 1000/144 = 6.944 mm. Measure from the centre of pixel 1 to the centre of pixel 37: 250.0 mm means 6.944, 252.0 mm means 7.0. At the wrong pitch the outer ties drift about 2 mm onto the LEDs. |
-| **What the 1.5" bore sits on** | The hub body outboard of the flange. It centres the disc. |
+| **The hub at the panel** | The bore (Ø 57.1 mm) clears the 1.5" hub body with room to spare, so it no longer centres the disc: the disc ties do. Check nothing on the hub outboard of the flange is larger than the bore's minimum. |
 | **Tip position** | Confirm that 11.75" is where the blade tip should end. |
 | **Rim wall and nipple length inside the rim (M20/M23), nipple diameter** | These set the nipple slots and how close to the rim the tabs can go. |
 | **Valve** | Its stem and nut inside the rim must clear the panels. |
@@ -265,14 +273,14 @@ A cheap check before cutting: print the reference DXF at 1:1 and lay it on the w
   blades from the disc to the rim, evenly spaced whatever the spoke pattern. Strip ties and spoke ties have
   separate holes. The blades turn together for the smallest tabs, and the panels come out as mirror images
   when that costs nothing.
-- The disc reaches the outermost (interlaced) spoke cross, so the strips start at r 22 mm; a crossing under a
-  strip isn't tied.
+- The disc reaches the outermost (interlaced) spoke cross; a crossing under a strip isn't tied. The strips are laid
+  from the tips in and stop at r 32.6 mm, outside the 30 mm limit.
 - Both edges of every blade tied (against flutter).
 - A hall switch (US5881) per strip, on the disc midway between strips, just inside the disc ties, all at one
   radius, tied on, marked face toward the fork; the strips' stray field estimated at the sensor.
-- A wire hole per strip in the disc. Polypropylene is the only material.
+- A wire slot per strip, from the disc in to the bore. Polypropylene is the only material.
 - The blades turn for matching sides first: with 2 and 4 strips on 32 spokes they sit a quarter of a spoke
-  gap off the spokes, and the two panels are mirror images (one part). 2 to 4 strips.
+  gap off the spokes, and the two panels are mirror images (one part). 1 to 4 strips.
 - Every blade edge on its own spoke tabs, as long as they need to be (auto reach: a whole spoke gap). Spoke
   ties never use the strip's holes, so the strips go on before the panels go on the wheel; where a spoke
   runs under a strip and nothing else is in reach, one tie goes over the strip through its own holes.
@@ -280,4 +288,5 @@ A cheap check before cutting: print the reference DXF at 1:1 and lay it on the w
   strip: every 32-spoke layout is tabs only.
 - The part is laid out as it sits on the wheel (polypropylene flexes to follow the dish), and the drawing is
   one view: the part on the wheel over every spoke, with its dimensions. The side section is gone.
-- The wire holes are Ø10 mm and sit just inside the hall sensors' leads, on their centre lines.
+- The wire holes are slots, 10 mm wide, from just inside the hall sensors' leads in to the bore: the disc
+  bends to the cone more easily, and the wires slip in from the bore.

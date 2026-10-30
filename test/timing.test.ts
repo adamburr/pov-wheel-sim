@@ -8,23 +8,18 @@ describe('LED bus timing', () => {
   it('matches the Adafruit guide: 36 LEDs per lane at ~4 MHz is ~300 µs per column', () => {
     expect(clockedFrameBits(36)).toBe(1216);
     // The guide wires each back strip in parallel with its front strip (shared data).
-    const p = { ...defaultParams(), backData: 'same' as const, autoLength: false, stripLengthMm: 250, clockMHz: 4, lanes: 3, overheadUs: 0 };
+    const p = { ...defaultParams(), backData: 'same' as const, autoLength: false, stripLengthMm: 250, clockMHz: 4, stripCount: 3, overheadUs: 0 };
     const d = derive(p);
     expect(d.ledsPerStrip).toBe(36);
     expect(d.ledsPerLane).toBe(36);
     expect(d.transferS * 1e6).toBeCloseTo(304, 0);
   });
 
-  it('chains strips when there are fewer lanes than strips', () => {
-    const p = { ...defaultParams(), backData: 'same' as const, autoLength: false, stripLengthMm: 250, lanes: 1 };
-    expect(derive(p).ledsPerLane).toBe(3 * 36);
-  });
-
-  it('sends each side its own data by default, doubling the chain', () => {
-    const p = { ...defaultParams(), autoLength: false, stripLengthMm: 250, lanes: 3 };
+  it('gives every strip its own lane, both sides, up to the PIO\'s eight', () => {
+    const p = { ...defaultParams(), autoLength: false, stripLengthMm: 250 };
     expect(p.backData).toBe('independent');
-    expect(derive(p).stripUnits).toBe(6);
-    expect(derive(p).ledsPerLane).toBe(2 * 36);
+    expect(derive(p).stripUnits).toBe(8);
+    expect(derive(p).ledsPerLane).toBe(36);
   });
 
   it('puts the 400 lines/s floor at ~167 rpm for 144 columns', () => {
@@ -115,13 +110,6 @@ describe('firmware model', () => {
       const angle = 2 * Math.PI * (Math.floor(s.k! + 1e-9) + (t - s.m) / (s.P * q.columnsPerRev));
       expect(Math.abs(angle - motion.phi(t))).toBeLessThan((2 * Math.PI) / q.columnsPerRev); // within a column
     }
-  });
-
-  it('finds a magnetometer pass at the field peak, not at the next sample', () => {
-    const polled = deadReckoningError({ ...p, hallPollMs: 4 }, 0, 12, 18);
-    const peak = deadReckoningError({ ...p, hallSensor: 'magnetometer', magOdrHz: 1000 }, 0, 12, 18);
-    expect(polled).toBeGreaterThan(2);
-    expect(peak).toBeLessThan(0.1);
   });
 
   it('turns the lights off once a stopped wheel times out, and only once', () => {

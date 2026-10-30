@@ -16,8 +16,8 @@
 //
 // Wheel dimensions other than the bore and tip radius are TYPICAL VALUES until measured.
 import {
-  adiff, arcMerge, box, type BulgePt, ccw, circlePts, clamp, cleanRing, convexHull, deg, densify, dist, filletRing, mirrorPt,
-  outlineOf, pmod, pointSegDist, pol, type Pt, rad, rectPts, Ring, rot, rotRing,
+  adiff, arcMerge, boreContour, box, type BulgePt, ccw, circlePts, clamp, cleanRing, convexHull, deg, densify, dist, filletRing, mirrorPt,
+  outlineOf, pmod, pointSegDist, pol, type Pt, rad, rectPts, Ring, rot, rotRing, sampleBulge, slotPts,
 } from './geom';
 import { type Material, MATERIALS } from './materials';
 import { type Spoke, Wheel, type WheelSpec } from './wheel';
@@ -28,7 +28,9 @@ export interface PanelSpec {
   strips: number;           // LED strips (blades) per side, evenly spaced
   material: string;
   stripW: number; stripT: number; ledPitch: number; // LED strip in its sleeve, and its pixel pitch
-  boreD: number;            // centre hole, round the hub body outboard of the flange
+  boreD: number;            // centre hole: worked out (the bore reaches out to just inside the strips' inner ends)
+  boreMinD: number;         // the bore is never smaller than this: round the hub body outboard of the flange
+  boreToStrip: number;      // the bore's edge sits this far inside the strips' inner ends
   tipEndR: number | null;   // radius of the blade tips on the wheel; null = just inside the rim wall
   tipClear: number;         // tip-end corners inside the rim wall
   tipSlot: 'auto' | 'none'; // a nipple under a tip: slot the tip round it, or stop every blade short of the nipples
@@ -42,6 +44,8 @@ export interface PanelSpec {
   holesEvery: number;       // strip ties every N LED pixels, between pixels
   gridEdge: number;         // material from a hole to an edge, and between ties
   stripStartGap: number;    // first LED at least this far outside the bore
+  stripStartR: number | null; // and no closer to the axle than this (the strips may stop short of the hub, where the fork is close); null = just outside the bore
+  stripMaxLen: number;      // longest strip, from the tip inward: one half-metre strip per blade
   discCross: number;        // the disc reaches this spoke cross (1 = nearest the hub; 0 = the outermost, interlaced one) and is tied at every crossing there
   discRadialR: number;      // radial lacing (no crosses): the disc's ties straddle each spoke this far out from the flange's hole circle
   spokeGap: number;         // spoke ties: room between the spoke and each hole of the pair
@@ -49,7 +53,7 @@ export interface PanelSpec {
   tipTieZone: number;       // the outermost spoke tie is within this of the tip end
   earMax: number;           // farthest a tab reaches beyond the blade's edge for a spoke tie; 0 = the gap between one side's spokes at the rim
   valveD: number; valveLen: number; valveClear: number; // valve stem (with its nut) inside the rim, and the room it needs
-  sensor: boolean;          // a hall switch per strip, midway between strips near the disc's edge, on the outer face, tied on
+  sensor: boolean;          // a hall switch per strip, midway between strips (opposite a single blade) near the disc's edge, on the outer face, tied on
   sensorBody: [number, number, number]; // body width (across the blade) × length (along it) × thickness
   sensorLeads: number;      // its leads run this far toward the hub, past the body
   ledMa: number;            // most current one LED draws (full white)
@@ -63,11 +67,11 @@ export const PANEL_DEFAULTS: PanelSpec = {
   strips: 3, material: 'pp_08',
   // Adafruit DotStar 144 LED/m black (product 2241, SK9822): 14 mm wide × 4 mm in its weatherproof sleeve
   stripW: 14, stripT: 4, ledPitch: 1000 / 144,
-  boreD: 38.1, tipEndR: 298.45, tipClear: 3, tipSlot: 'auto', nippleD: 4, tipSlotClear: 1,
+  boreD: 38.1, boreMinD: 38.1, boreToStrip: 4, tipEndR: 298.45, tipClear: 3, tipSlot: 'auto', nippleD: 4, tipSlotClear: 1,
   bladeW: 0, cornerR: 2,
   // 40 lb (178 N, 3.6 × 1.27 mm) and 18 lb (80 N, 2.4 × 1.1 mm) ties both fit the 4.6 mm holes.
   tieW: 3.6, tieT: 1.27, tieHead: [6.0, 5.9, 4.3], tieClear: 1,
-  holesEvery: 2, gridEdge: 4, stripStartGap: 3,
+  holesEvery: 2, gridEdge: 4, stripStartGap: 3, stripStartR: null, stripMaxLen: 500,
   discCross: 0, discRadialR: 30, spokeGap: 0.5, tieSpan: 80, tipTieZone: 30, earMax: 0,
   valveD: 8, valveLen: 35, valveClear: 3,
   // Melexis US5881LUA unipolar hall switch (Adafruit 158): 4.08 × 3.00 × 1.51 mm, marked face out. It
@@ -79,7 +83,7 @@ export const PANEL_DEFAULTS: PanelSpec = {
 
 export type Spec = PanelSpec & Material;
 /** Strips per side the panels are made for. */
-export const PANEL_STRIP_RANGE = [2, 3, 4];
+export const PANEL_STRIP_RANGE = [1, 2, 3, 4];
 export type HoleKind = 'strip' | 'spoke' | 'disc' | 'sensor' | 'wire';
 
 export interface Hole {
@@ -87,7 +91,8 @@ export interface Hole {
   a: number;         // the square's sides run along and across this angle
   kind: HoleKind;
   tie: number;       // the two holes of one tie share this (the four of a board, too)
-  d?: number;        // a round hole of this diameter (screws), not a square one
+  d?: number;        // a round hole of this diameter, not a square one
+  slot?: boolean;    // wire: a slot this wide from c straight in to the bore, round at c (cut with the bore)
   bulge: BulgePt[];
   ring: Ring;
 }
@@ -110,7 +115,8 @@ export interface Flat {
   outlinePts: Pt[];        // straight-edged outline (the disc as short chords) before filleting
   outlineBulge: BulgePt[]; // filleted, with the disc as true arcs
   outline: Ring;           // filleted, sampled
-  holes: Hole[];
+  holes: Hole[];           // a slot's ring is its shape up to the bore; it is cut as part of the bore
+  bore: { bulge: BulgePt[]; ring: Ring }; // the centre hole, with the wire slots opening into it
   rhoLed0: number; rhoLed1: number; nLeds: number;
   stripTieRhos: number[][]; // each blade's strip ties
   slots: { blade: number; rimHole: number }[];
@@ -139,7 +145,7 @@ export const minBladeW = (pp: Spec) => Math.ceil(2 * (rowOffset(pp) + holeSize(p
 const HEAD_R = 2.5; // spoke heads on the flange face
 
 // ---------------------------------------------------------------- shape queries
-export const bodyContains = (g: Flat, p: Pt) => Math.hypot(...p) > g.rBore && g.outline.contains(p);
+export const bodyContains = (g: Flat, p: Pt) => Math.hypot(...p) > g.rBore && g.outline.contains(p) && !g.holes.some((h) => h.slot && h.ring.contains(p));
 export function shapeContains(g: Flat, p: Pt): boolean {
   if (!bodyContains(g, p)) return false;
   for (const h of g.holes) {
@@ -153,8 +159,8 @@ function polyArea(r: Pt[]) {
   for (let i = 0; i < r.length; i++) s += r[i][0] * r[(i + 1) % r.length][1] - r[(i + 1) % r.length][0] * r[i][1];
   return s / 2;
 }
-export const bodyArea = (g: Flat) => Math.abs(polyArea(g.outline.pts)) - Math.PI * g.rBore ** 2;
-export const shapeArea = (g: Flat) => bodyArea(g) - g.holes.reduce((s, h) => s + Math.abs(polyArea(h.ring.pts)), 0);
+export const bodyArea = (g: Flat) => Math.abs(polyArea(g.outline.pts)) - Math.abs(polyArea(g.bore.ring.pts));
+export const shapeArea = (g: Flat) => bodyArea(g) - g.holes.reduce((s, h) => s + (h.slot ? 0 : Math.abs(polyArea(h.ring.pts))), 0);
 
 // ---------------------------------------------------------------- the dished surface the panel lies on
 /** The panel's inner face on the wheel: its height |z| every dr of radius (for the clearances). */
@@ -220,9 +226,12 @@ function surfaceOf(wh: Wheel, side: number, rMax: number): Surface {
 let holeCache = new Map<string, { bulge: BulgePt[]; ring: Ring }>();
 function holeAt(pp: Spec, h: HoleSpec): Hole {
   const s = holeSize(pp);
-  const key = `${h.c[0].toFixed(6)},${h.c[1].toFixed(6)},${h.a.toFixed(6)},${h.d ?? s},${pp.cutCornerR}`;
+  const key = `${h.c[0].toFixed(6)},${h.c[1].toFixed(6)},${h.a.toFixed(6)},${h.d ?? s},${pp.cutCornerR},${h.slot ? pp.boreD : ''}`;
   let f = holeCache.get(key);
-  if (!f && h.d) { // a circle: two half-circle arcs
+  if (!f && h.slot) { // cut with the bore: no outline of its own
+    f = { bulge: [], ring: new Ring(slotPts(h.c, h.d!, pp.boreD / 2)) };
+    holeCache.set(key, f);
+  } else if (!f && h.d) { // a circle: two half-circle arcs
     const r = h.d / 2, [x, y] = h.c;
     f = { bulge: [[x + r, y, 1], [x - r, y, 1]], ring: new Ring(circlePts(r, 36, h.c)) };
     holeCache.set(key, f);
@@ -466,10 +475,16 @@ function outlineFrom(pp: Spec, f: Features) {
   return { outlinePts, outlineBulge: arcMerge(fr.bulge, f.rhoDisc), outline: new Ring(fr.sampled) };
 }
 
+/** The bore and the wire slots opening into it, as one cut. */
+function boreOf(pp: Spec, f: Features): Flat['bore'] {
+  const bulge = boreContour(f.rBore, f.holes.filter((h) => h.slot).map((h) => ({ c: h.c, d: h.d! })), pp.cornerR);
+  return { bulge, ring: new Ring(sampleBulge(bulge, 5)) };
+}
+
 function buildFlat(pp: Spec, f: Features): Flat {
   return {
     arms: f.arms, bladeW: f.bladeW, rBore: f.rBore, rhoDisc: f.rhoDisc, rhoEnd: f.rhoEnd, ...outlineFrom(pp, f),
-    holes: f.holes.map((h) => holeAt(pp, h)), rhoLed0: f.rhoLed0, rhoLed1: f.rhoLed1, nLeds: f.nLeds,
+    holes: f.holes.map((h) => holeAt(pp, h)), bore: boreOf(pp, f), rhoLed0: f.rhoLed0, rhoLed1: f.rhoLed1, nLeds: f.nLeds,
     stripTieRhos: f.stripTieRhos, slots: f.slots, sensors: f.sensors,
   };
 }
@@ -582,19 +597,23 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
       tie++;
     });
   }
-  // wire holes: one per strip, for the strip's and its sensor's wires to the inner side. With the
-  // sensors placed, each goes just inside its sensor's leads, every one at the same spot beside its
-  // sensor so they repeat with the strips; else as near the strip's inner end as it can be beside the
-  // strip: in the disc, or on a small tab off the blade where the disc is too small.
+  // wire slots: one per strip, for the strip's and its sensor's wires to the inner side. Each runs from
+  // its round end straight in to the bore, which opens the disc's ring so it bends to the spokes' cone.
+  // With the sensors placed, each ends just inside its sensor's leads, every one at the same spot
+  // beside its sensor so they repeat with the strips; else as near the strip's inner end as it can be
+  // beside the strip, as a slot where one clears the strip, or else a round hole in the disc or on a
+  // small tab off the blade where the disc is too small.
   if (pp.wireHoleD > 0) {
     const r = pp.wireHoleD / 2, lane = pp.stripW / 2;
     const feet = f.sensors.map((b) => new Ring(sensorAt(pp, b.a, b.rho, 0, 1)));
-    // spot [x, e] in the frame at angle a: clear of the strips, every other hole, the sensors and the bore
-    const fits = (x: number, e: number, a: number, onPart: boolean) => {
-      const spec = { c: rot([x, e], a), a, kind: 'wire' as const, tie, d: pp.wireHoleD };
+    // spot [x, e] in the frame at angle a: clear of the strips, every other hole, the sensors and (a
+    // round hole) the bore. A slot is checked all the way in to the bore.
+    const fits = (x: number, e: number, a: number, onPart: boolean, slot = true) => {
+      const spec: HoleSpec = { c: rot([x, e], a), a, kind: 'wire' as const, tie, d: pp.wireHoleD, ...(slot ? { slot } : {}) };
       const q = holeAt(pp, spec).ring;
-      const lanes = arms.every((b) => q.pts.every((p) => { const [u, v] = rot(p, -b); return u < 0 || Math.abs(v) >= lane + 1; }));
-      if (!lanes || q.areaDist([0, 0]) - rBore < edge || (onPart && !insideBy(outline, q, edge - 0.05))) return null;
+      const out = q.pts.filter((p) => Math.hypot(...p) > rBore);
+      const lanes = arms.every((b) => out.every((p) => { const [u, v] = rot(p, -b); return u < 0 || Math.abs(v) >= lane + 1; }));
+      if (!lanes || (!slot && q.areaDist([0, 0]) - rBore < edge) || (onPart && !insideBy(outline, q, edge - 0.05))) return null;
       if (others.some((o) => o.boundaryDist(q, edge) < edge - 0.05) || feet.some((o) => o.boundaryDist(q, 1) < 1 || o.contains(q.pts[0]))) return null;
       return { spec, q };
     };
@@ -623,10 +642,11 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
       spots.sort((p, q) => dist(p, end) - dist(q, end));
       let hit = null as { spec: HoleSpec; q: Ring } | null;
       for (const [x, e] of spots) { hit = fits(x, e, a, true); if (hit) break; }
+      if (!hit) for (const [x, e] of spots) { hit = fits(x, e, a, true, false); if (hit) break; }
       if (!hit) { // a tab off the blade for it, blended into the blade's edge
         for (const [x, e] of spots) {
           if (Math.abs(e) + r + edge - wHalf > 20) continue;
-          hit = fits(x, e, a, false);
+          hit = fits(x, e, a, false, false);
           if (!hit) continue;
           const m = r + edge, ey = sg * (wHalf - 0.5);
           ears.push(rotRing(convexHull([[x - m, e - m], [x + m, e - m], [x + m, e + m], [x - m, e + m], [x - m - 6, ey], [x + m + 6, ey]]), a));
@@ -816,6 +836,13 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     const far = rEnd * rad(720 / wh.p.spokes), h = holeSize(pp) / 2;
     pp.earMax = Math.ceil(far + wh.p.spokeD / 2 + pp.spokeGap + 2 * h * Math.SQRT2 + pp.gridEdge - bladeW / 2 + 2);
   }
+  // the strips are laid from the tip in, so the outermost LED sits as far out as it can and the image
+  // is as large as it can be: whole pixels, no closer to the axle than the hub or the panels' own
+  // limit, and one half-metre strip at most. Only a nipple slot may shorten them later, at the tip.
+  const stripMin = Math.max(pp.boreMinD / 2 + pp.stripStartGap, pp.stripStartR ?? 0, rEnd - 2 - pp.stripMaxLen);
+  const ledStart = rEnd - 2 - Math.floor((rEnd - 2 - stripMin) / pp.ledPitch + 1e-9) * pp.ledPitch;
+  // the bore then reaches out to just inside the strips' inner ends: no material the strips don't need
+  pp.boreD = 2 * Math.max(pp.boreMinD / 2, ledStart - pp.boreToStrip);
   const rBore = pp.boreD / 2;
   // the dished surface each panel lies on, the disc's ties, and the disc that holds them
   const sideCtx: Ctx['side'] = {};
@@ -832,12 +859,10 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     s.rSupport = s.ties.length ? Math.max(...s.ties.map((t) => t.r)) : rBore;
   }
   const c: Ctx = { wh, pp, bladeW, rEnd, xMax: Math.min(rEnd, wh.nippleTipR() - pp.tipSlotClear), side: sideCtx };
-  // the strips start just outside the bore, so the pixel gaps (where ties over a strip go) are known
-  // before the blades turn; only a nipple slot may shorten the strips later
-  const ledStart = rBore + pp.stripStartGap;
+  // the pixel gaps (where ties over a strip go) are known before the blades turn
   const searchGaps: Record<number, number[]> = {};
   for (const side of [-1, 1]) {
-    searchGaps[side] = freeGaps(pp, ledStart, Math.floor((rEnd - 2 - ledStart) / pp.ledPitch));
+    searchGaps[side] = freeGaps(pp, ledStart, Math.round((rEnd - 2 - ledStart) / pp.ledPitch));
   }
 
   // Turn all the blades together (they stay evenly spaced) for: every stretch tied, the valve clear,
@@ -883,7 +908,7 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   const arms = Array.from({ length: N }, (_, k) => pmod(best!.t0 + k * period, 360)).sort((a, b) => a - b);
   const axis = symmetric(best!.t0), mirrored = axis !== null;
 
-  // the strips: all the same, from just outside the bore to the tip or a nipple slot
+  // the strips: all the same, from their start to the tip or a nipple slot
   let rho1 = rEnd - 2;
   let tipSlot: PanelDesign['tipSlot'] = null;
   if (pp.tipSlot === 'auto') {

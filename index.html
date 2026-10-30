@@ -22,12 +22,14 @@
       #toast[hidden] { display: none; }
       #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; font-size: 20px; background: rgba(0, 120, 255, 0.15); border: 3px dashed var(--accent); pointer-events: none; }
 
-      /* Ride panel: the preset's name, then the Next button (the wheel's one hardware button), the speed, its slider and Auto. */
+      /* Ride panel: the preset's name, then the wheel's two buttons (Next, brightness), the speed, its slider and Auto. */
       #ride { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); box-sizing: border-box; display: grid; gap: 6px; background: var(--panel); border-radius: 12px; padding: 8px 12px; backdrop-filter: blur(6px); user-select: none; transition: left 0.2s; }
       #ride .row { display: flex; align-items: center; gap: 12px; }
       #preset-name { max-width: 100%; min-width: 0; text-align: left; font: inherit; font-size: 14px; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       #ride #preset-next { font-size: 13px; padding: 5px 12px; border-radius: 8px; border: 1px solid #2f5d93; background: #1d3a5f; font-weight: 600; cursor: pointer; white-space: nowrap; }
       #ride #preset-next:hover { background: #24497a; }
+      #ride #bright { font-size: 13px; padding: 5px 10px; border-radius: 8px; border: 1px solid #3a4152; background: #1b2030; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      #ride #bright:hover { background: #262d42; }
       #ride .auto { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
       #ride .auto input { margin: 0; accent-color: var(--accent); cursor: pointer; }
       #ride .speed { flex: none; white-space: nowrap; }
@@ -97,7 +99,29 @@
       body.view-panels #panels-view { display: block; }
       body.view-panels.panel-open #panels-view { right: var(--panel-w); }
       body.view-panels #app, body.view-panels #ride, body.view-panels #strip-frame, body.view-panels #buffer { visibility: hidden; }
-      .pv-bar { position: absolute; z-index: 1; top: 10px; left: 10px; right: 150px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      /* Electronics: its drawings take the main area the same way. */
+      #elec-view { position: fixed; inset: 0; display: none; background: #0b0e15; overflow: hidden; touch-action: none; user-select: none; }
+      body.view-elec #elec-view { display: block; }
+      body.view-elec.panel-open #elec-view { right: var(--panel-w); }
+      body.view-elec #app, body.view-elec #ride, body.view-elec #strip-frame, body.view-elec #buffer { visibility: hidden; }
+      .ev-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+      .ev-stage svg { display: block; }
+      .elec-pane ul.notes { margin: 8px 0 0; padding-left: 16px; color: var(--muted); }
+      .elec-pane ul.notes li { margin-top: 4px; }
+      .elec-pane .bom-group { margin: 12px 0 4px; font-weight: 600; }
+      .elec-pane .bom-group span { color: var(--muted); font-weight: 400; }
+      .elec-pane table.bom { border-collapse: collapse; width: 100%; }
+      .elec-pane .bom td { padding: 3px 0; vertical-align: top; border-top: 1px solid var(--line); }
+      .elec-pane .bom td.qty { width: 34px; color: var(--muted); }
+      .elec-pane .bom td.price { text-align: right; white-space: nowrap; padding-left: 8px; font-variant-numeric: tabular-nums; }
+      .elec-pane .bom .src { color: var(--muted); font-size: 12px; }
+      .elec-pane .bom a { color: var(--accent); text-decoration: none; }
+      .elec-pane .bom a:hover { text-decoration: underline; }
+      /* The drawing views' header: the bar, then the title and hint, stacked so a wrapped bar pushes them down. */
+      .pv-head { position: absolute; z-index: 1; top: 10px; left: 10px; right: 150px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+      body.panel-open .pv-head { right: 12px; }
+      .pv-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: auto; }
       .pv-bar button { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #3a4152; background: var(--panel); cursor: pointer; white-space: nowrap; }
       .pv-bar button:hover { background: #1b2030; }
       .pv-bar button[aria-pressed="true"] { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
@@ -106,9 +130,9 @@
       .pv-group button { border-radius: 0; margin-left: -1px; }
       .pv-group button:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
       .pv-group button:last-child { border-radius: 0 8px 8px 0; }
-      .pv-title, .pv-hint, .pv-readout, .pv-status { position: absolute; z-index: 1; left: 12px; pointer-events: none; }
-      .pv-title { top: 52px; right: 12px; font-size: 13px; font-weight: 600; }
-      .pv-hint { top: 72px; right: 12px; color: var(--muted); }
+      .pv-readout, .pv-status { position: absolute; z-index: 1; left: 12px; pointer-events: none; }
+      .pv-title { padding: 2px 2px 0; font-size: 13px; font-weight: 600; }
+      .pv-hint { padding: 0 2px; color: var(--muted); }
       .pv-readout { bottom: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
       .pv-status { top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 10px 14px; border-radius: 10px; background: var(--panel); font-size: 14px; }
       .pv-status[hidden] { display: none; }
@@ -130,8 +154,8 @@
       .panels-summary button.primary { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
       .panels-summary button.primary:hover { background: #24497a; }
       @media (max-width: 699px) {
-        body.view-panels.panel-open #panels-view { right: 0; bottom: 62dvh; }
-        .pv-bar { right: 110px; }
+        body.view-panels.panel-open #panels-view, body.view-elec.panel-open #elec-view { right: 0; bottom: 62dvh; }
+        .pv-head { right: 110px; }
         .pv-bar button { padding: 5px 8px; font-size: 12px; }
         .pv-title, .pv-hint { display: none; }
       }
@@ -151,7 +175,8 @@
     <div id="ride">
       <button id="preset-name" type="button" title="Edit presets">Preset</button>
       <div class="row">
-        <button id="preset-next" type="button" title="Next preset (N): the wheel's button">Next ▶</button>
+        <button id="preset-next" type="button" title="The wheel's preset button: click for the next preset (N), double-click to toggle Auto">Next ▶</button>
+        <button id="bright" type="button" title="The wheel's brightness button: click to step 100 → 50 → 25 → 12 % (B), double-click to sleep; asleep, either button wakes it">☀ 100%</button>
         <span class="speed"><span id="ride-speed">0.0</span><span id="ride-unit">mph</span></span>
         <input id="ride-slider" type="range" min="0" max="40" step="0.5" aria-label="Bicycle speed" />
         <label class="auto" title="Ride stop-and-go through the city, and go to the next preset at each stop, when the lights go out"><input id="auto-next" type="checkbox" />Auto</label>
@@ -172,6 +197,7 @@
         <button type="button" role="tab" data-tab="simulator">Simulator</button>
         <button type="button" role="tab" data-tab="stats">Stats</button>
         <button type="button" role="tab" data-tab="panels" title="The flat-cut panels that hold the strips on the hub">Panels</button>
+        <button type="button" role="tab" data-tab="electronics" title="Circuit, wiring, hub module and shopping list">Electronics</button>
       </nav>
       <div class="pane" data-pane="presets" role="tabpanel">
         <ol id="preset-list"></ol>
@@ -200,9 +226,20 @@
         <div class="section">Result</div>
         <div class="panels-summary panels-result"></div>
       </div>
+      <div class="pane elec-pane" data-pane="electronics" role="tabpanel">
+        <p class="hint">A Feather RP2350 in a module round the hub drives every strip; the left panel is wired to it and the right panel plugs in. Worked out from the Hardware and Panels settings.</p>
+        <div class="panels-summary panels-actions"></div>
+        <div class="section">Battery and hub</div>
+        <div class="gui"></div>
+        <div class="section">Result</div>
+        <div class="panels-summary elec-result"></div>
+        <div class="section">Shopping list</div>
+        <div class="panels-summary elec-shopping"></div>
+      </div>
       <footer><a href="https://github.com/adamburr/pov-wheel-sim" target="_blank" rel="noopener">Source on GitHub ↗</a></footer>
     </aside>
     <div id="panels-view" aria-label="Panel drawing"></div>
+    <div id="elec-view" aria-label="Electronics drawings"></div>
     <div id="toast" role="status" hidden></div>
     <div id="drop">Drop an image, clip or setup file</div>
     <script type="module" src="/src/main.ts"></script>

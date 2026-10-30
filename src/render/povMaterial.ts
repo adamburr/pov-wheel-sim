@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import fragmentShader from './pov.frag.glsl?raw';
-import { BANNER_LOWER, bannerLowerOf, LEDS, type Params, SHUTTERS, speedMps } from '../params';
-import type { Derived } from '../sim/timing';
+import { BANNER_LOWER, bannerLowerOf, brightnessScale, LED, type Params, SHUTTERS, speedMps } from '../params';
+import { type Derived, lanesFor } from '../sim/timing';
 import { animSpecFor, type AnimSpec, MAX_SLICES, type Slice } from '../sim/firmware';
 import { bannerTileM, type FrameStack } from '../image/polarize';
 
@@ -166,7 +166,7 @@ export class PovDisplay {
 
   update(p: Params, d: Derived, slices: Slice[], tRef: number, camera: THREE.Camera, anim?: AnimSpec) {
     this.ensurePlane(p, d);
-    const led = LEDS[p.ledType];
+    const led = LED;
     const u = this.shared;
     const n = Math.min(slices.length, MAX_SLICES);
     for (let i = 0; i < n; i++) {
@@ -198,7 +198,7 @@ export class PovDisplay {
     u.uStagger.value = p.radialStagger ? 1 : 0;
     u.uBackRow.value = independent ? p.stripCount * d.ledsPerStrip : 0;
     u.uBackChain.value = independent ? p.stripCount : 0;
-    u.uLanes.value = Math.max(1, Math.min(p.lanes, d.stripUnits));
+    u.uLanes.value = lanesFor(d.stripUnits);
     u.uLatchBase.value = d.latchBaseS;
     u.uLatchPerLed.value = d.latchPerLedS;
 
@@ -210,7 +210,7 @@ export class PovDisplay {
     u.uGbPeriod.value = gbP;
     u.uGbPhase.value = gbP ? tRef % gbP : 0;
     u.uGbDuty.value = p.globalBrightness / 31;
-    u.uCurrentScale.value = led.gbMode === 'current' ? p.globalBrightness / 31 : 1;
+    u.uCurrentScale.value = (led.gbMode === 'current' ? p.globalBrightness / 31 : 1) * brightnessScale(p);
     u.uOverflowBlank.value = p.syncMode === 'hall' && p.overflow === 'blank' ? 1 : 0;
 
     const eye = p.exposureModel === 'eye';

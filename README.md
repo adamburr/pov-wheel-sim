@@ -1,6 +1,6 @@
 # POV Wheel Simulator
 
-A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel display, in the spirit of Adafruit's [CircuitPython POV Bike Wheel](https://learn.adafruit.com/circuitpython-pov-bike-wheel/overview). Use it to see what a build will look like *before* you cut LED strips: wheel size, strip count, LED density, speed, chip, LED type, firmware, and camera exposure are all adjustable.
+A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel display, in the spirit of Adafruit's [CircuitPython POV Bike Wheel](https://learn.adafruit.com/circuitpython-pov-bike-wheel/overview). Use it to see what a build will look like *before* you cut LED strips: wheel size, strip count, LED density, speed, firmware timing and camera exposure are all adjustable. The electronics are one platform: an Adafruit Feather RP2350 driving Adafruit DotStar (SK9822) strips.
 
 **Live demo:** https://adamburr.github.io/pov-wheel-sim/
 
@@ -8,7 +8,7 @@ A tunable three.js simulation of a DIY persistence-of-vision (POV) bicycle wheel
 
 ## Examples
 
-These are all renders from the simulator, starting from the Water preset and the default build (700c wheel, 3 strips of 144 LED/m APA102, RP2350, 60% pedal surge) with stop-and-go off and the roadside strip hidden, unless the caption says otherwise. The banner shots are crops of the roadside strip.
+These are all renders from the simulator, starting from the Water preset and the build as it was when they were taken (700c wheel, 3 strips of 144 LED/m APA102, RP2350, 60% pedal surge) with stop-and-go off and the roadside strip hidden, unless the caption says otherwise. The banner shots are crops of the roadside strip.
 
 <table>
   <tr>
@@ -37,7 +37,7 @@ These are all renders from the simulator, starting from the Water preset and the
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/ws2812-dashes.jpg" alt="Dashed arcs from WS2812 PWM"><br><sub><b>WS2812B at 400 Hz PWM</b> (close-up, 2020 LEDs, no diffuser, 20 mph, 1/30 s, polar test grid): the arcs break into dashes.</sub></td>
-    <td width="50%"><img src="docs/images/adafruit-floor.jpg" alt="Broken-up image below the 400 lines/s floor"><br><sub><b>Adafruit CircuitPython preset</b> at 10 mph, 1 s, smiley: below its 400 lines/s floor the image squeezes, repeats and breaks up.</sub></td>
+    <td width="50%"><img src="docs/images/adafruit-floor.jpg" alt="Broken-up image below the 400 lines/s floor"><br><sub><b>A 400 lines/s floor</b> (as in Adafruit's CircuitPython guide; Firmware details) at 10 mph, 1 s, smiley: below it the image squeezes, repeats and breaks up.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/ride-by.jpg" alt="Cycloid streaks from a roadside camera"><br><sub><b>Ride-by,</b> 10 mph, 1/4 s, smiley: a fixed roadside camera sees the LEDs trace cycloids.</sub></td>
@@ -54,17 +54,21 @@ These are all renders from the simulator, starting from the Water preset and the
 
 ## Using the app
 
-Two views show the same moment and the same animation. The main view follows the bike, and a narrow **roadside strip** above it watches the bike ride past like a basic phone camera at night, without flash (a 1/8 s exposure by default). The main view mimics the human eye. You can move the strip below the main view, give it its own exposure, or hide it under *Simulator → Camera*. The panel at the bottom is for riding: the current **preset** with a **Next ▶** button (or press **N**), then the speed, its slider and **Auto**.
+Two views show the same moment and the same animation. The main view follows the bike, and a narrow **roadside strip** above it watches the bike ride past like a basic phone camera at night, without flash (a 1/8 s exposure by default). The main view mimics the human eye. You can move the strip below the main view, give it its own exposure, or hide it under *Simulator → Camera*. The panel at the bottom is for riding: the current **preset**, then the wheel's two buttons, then the speed, its slider and **Auto**:
+
+- **Next ▶** is the wheel's preset button. Click for the next preset (or press **N**); double-click to toggle **Auto**.
+- **☀** is the wheel's brightness button. Click to step 100, 50, 25 and 12 % (or press **B**). Double-click to put the wheel to sleep; a click on either button wakes it.
 
 **⚙️ Settings** opens a panel: on the right on a computer, or from the bottom on a phone. Every section starts with just a few choices, and its **Details** folders hold the rest.
 
 | Tab | What it holds |
 |---|---|
 | **Presets** | The list of presets and the settings of the selected one: what to show (a pattern or your own image, GIF or video), text, wheel-locked or banner mode, brightness, water and animation options |
-| **Hardware** | The build: wheel size, LED type, strip count and density, controller chip, firmware and battery, with every timing value under Details |
+| **Hardware** | The build: wheel size, strips per side and LED details, the sensors, with every timing value under Details |
 | **Simulator** | How the simulation looks and rides: camera side, human eye or camera shutter, the roadside strip's position and exposure, units, pedal surge, rendering. Not part of the setup |
 | **Stats** | Live build stats: rpm, column timing, resolution, refresh rate, RAM, current draw and battery life, with warnings for common pitfalls |
 | **Panels** | The flat-cut panels that are tied to the spokes and hold the strips: a drawing of the part (pan, zoom, measure), its tie and clearance checks, and the cut files for a laser or knife cutter. See [LED panels](#led-panels) |
+| **Electronics** | The circuit, the wiring, the hub module and the carrier board's layout, the battery and LED current limit, and a **shopping list** (on screen and as CSV). See [Electronics](#electronics) |
 
 ### Presets
 
@@ -78,7 +82,40 @@ A setup is the hardware build plus all the presets. It saves automatically in th
 
 ### LED panels
 
-To build the wheel, two flat-cut panels of 0.8 mm polypropylene lie on the spokes, one each side, zip-tied to them, and carry the strips (the electronics go on the hub). Each is a disc round the hub, tied at the interlaced (third) spoke cross, with one radial blade per strip from the disc to the rim, evenly spaced whatever the spoke pattern. The strips have their own tie holes; the blades are tied to the spokes by separate hole pairs, on small tabs where a spoke runs beside the blade; with both edges of every blade tied against flutter; a hall sensor per strip sits on the disc midway between strips, just inside the disc ties; and a wire hole just inside each sensor takes its wires and its strip's to the inner side. It works for any common lacing (20–36 spokes, radial to 4-cross; 32-spoke 3-cross by default) and 2 to 4 strips; the blades turn so the left and right panels come out alike, as mirror images on the default wheel (one part, cut twice). The **Panels** tab designs them from the same build as the simulator (strips, LEDs / m, spokes, rim, magnet sensors) plus their own settings (material, bore, tip radius, ties, holes, hub and fork). While it's open, the main area shows the part instead of the ride: on the wheel over every spoke, as cut, with its dimensions. Drag to pan, scroll or pinch to zoom, double-click to fit, and **📏 Measure** between snapped points. The tab lists the part size, mass, ties, spans and clearances, with a warning for any check that fails, and writes the **cut files** (DXF, inches), a reference drawing and a full report. **Use in simulator** points the simulator's strips at where the panels hold the LEDs. [docs/panels.md](docs/panels.md) has the design notes and what to measure before you order.
+![The default LEFT panel in the Panels tab: four blades on the wheel over every spoke, with the disc round the hub, spoke and disc ties, hall sensors and the strips' 38 LEDs](docs/images/panel-drawing.png)
+
+To build the wheel, two flat-cut panels of 0.8 mm polypropylene lie on the spokes, one each side, zip-tied to them, and carry the strips (the electronics go on the hub). Each is a disc round the hub, tied at the interlaced (third) spoke cross, with one radial blade per strip from the disc to the rim, evenly spaced whatever the spoke pattern. The strips have their own tie holes; the blades are tied to the spokes by separate hole pairs, on small tabs where a spoke runs beside the blade; with both edges of every blade tied against flutter; a hall sensor per strip sits on the disc midway between strips, just inside the disc ties; and a wire slot from just inside each sensor in to the bore takes its wires and its strip's to the inner side (the slots also let the disc bend to the spokes' cone). Each strip is one half-metre strip (38 of its 72 LEDs on the default wheel), laid from the blade's tip inward so the image is as large as it can be. The strips stop short of the hub, where the fork is close, and the bore grows to 4 mm inside their inner ends: Ø 57 mm on the default wheel, never smaller than the measured 1.5" hub. It works for any common lacing (20–36 spokes, radial to 4-cross; 32-spoke 3-cross by default) and 1 to 4 strips (one blade per side needs a rim weight to balance it); the blades turn so the left and right panels come out alike, as mirror images on the default wheel (one part, cut twice). The **Panels** tab designs them from the same build as the simulator (strips, LEDs / m, spokes, rim, magnet sensors) plus their own settings (material, bore, tip radius, ties, holes, hub and fork). While it's open, the main area shows the part instead of the ride: on the wheel over every spoke, as cut, with its dimensions. Drag to pan, scroll or pinch to zoom, double-click to fit, and **📏 Measure** between snapped points. The tab lists the part size, mass, ties, spans and clearances, with a warning for any check that fails, and writes the **cut files** (DXF, inches), a reference drawing and a full report. **Use in simulator** points the simulator's strips at where the panels hold the LEDs. [docs/panels.md](docs/panels.md) has the design notes and what to measure before you order.
+
+![Close-up of the disc: four 10 mm wire slots open into the 57 mm bore, with the hall sensors' ties beside them and the strips' tie holes along the blades](docs/images/panel-disc.png)
+
+### Electronics
+
+One platform: an Adafruit Feather RP2350 (8 MB PSRAM) in a module on the hub shell, between the flanges, driving 144/m DotStar strips (SK9822).
+
+- **Data:** one PIO program gives every strip its own data lane on GPIO0–7, with a clock per side on GPIO10/11. All of these reach the Feather's headers, so there is no ribbon cable.
+- **Level shifting:** three 74AHCT125s shift the 3.3 V signals to 5 V.
+- **Sensors:** a hall sensor per strip sits on the left panel.
+- **Power:** two 18650 cells feed a 5 V boost converter, which the firmware turns off when the wheel stops.
+- **Controls:** a magnet held to a reed switch turns the wheel on and off. Two sealed buttons in the electronics box's lid choose the preset and the brightness, as the ride bar's **Next ▶** and **☀** do in the simulator.
+- **Connections:** the left panel is wired straight to the module. The right panel plugs in through a 9-pin IP68 connector (Weipu SP13), which also takes a USB-C charging lead when the right panel is off.
+
+The **Electronics** tab works all of this out from the build (strips per side, LEDs per strip, spokes, hub). It lists the power budget and a **shopping list** (on screen and as CSV), and draws four sheets. [docs/electronics.md](docs/electronics.md) has the design notes.
+
+The **Circuit** sheet shows the power path, the on/off latch, the controller's pins, the level shifters, the buttons and both panels' connections:
+
+![Circuit sheet: battery, protection, fuse, boost and charger; the reed-switch latch; the Feather's pin map with eight data lanes on GPIO0–7; hall and button inputs; three 74AHCT125 level shifters; the left harness and the right connector's pins](docs/images/electronics-circuit.png)
+
+The **Wiring** sheet shows the left panel's harness, the hub module's layers, the right panel's plug-in connector and the charging lead, with every wire's colour and gauge:
+
+![Wiring sheet: the left panel's 13-wire harness into the hub module, the logic, power board and battery pack in their bracket, the 9-pin connector to the right panel, the USB-C charging lead, and the harness and connector pin tables](docs/images/electronics-wiring.png)
+
+The **Hub module** sheet shows the module to scale. It is one stack on one side of the hub shell: the battery pack, then the electronics box, in a 3D-printed bracket tied to the shell. A hook-and-loop strap holds the pack and box, so they come off easily. The sheet checks the stack's fit between the spoke cones, and adds up the module, the connector and the valve to work out the rim weight that balances them (10.5 g on the default wheel):
+
+![Hub module sheet: end view with the bracket, strap, lid buttons and zip ties; section through the axle with the room between the spoke cones; and the whole-wheel balance with the rim weight](docs/images/electronics-hub.png)
+
+The **Board** sheet shows the carrier board's layout. The Feather plugs in above it, with the shifters, latch and pull-ups underneath and numbered wire pads at each end:
+
+![Board sheet: the 62 × 23 mm carrier with the Feather's header rows, three SOIC shifters, the power switches, and numbered pads for the left harness, the right connector and the box's power board and controls](docs/images/electronics-board.png)
 
 ### Changing the defaults
 
@@ -188,14 +225,16 @@ Position comes from hall-sensor dead reckoning: whole turns at each magnet pass,
 | Where | Highlights |
 |---|---|
 | Presets | Show: test patterns (some animated) or your own image, animated GIF/WebP/APNG, or video. Text, wheel-locked or banner mode, spin (the firmware turns a wheel-locked picture once every so many seconds, fractions allowed, by shifting the columns it sends, so it needs no extra frames), banner gap, whether a banner picture is pinned to the road or rides with the bike, the banner's lower-half pattern (arches, rainbow arches, scallops, beads, truss bridge or a full-height picture; your own pictures always fill the full height), brightness. *Water:* fluid type (water, splashy, thick), fill, rim drag, slosh, and under Details the FLIP ratio, viscosity and particle spacing. *Bouncing smiley:* bounce, wall grip, push. *Tumble dryer:* ribbons, drum turn, drum grip, push, layer shuffle. *Animation:* playback speed, timed or every-N-turns frame advance. *Picture details:* polar (picture) or Adafruit columns-as-angles layout, fill (crop to fill the wheel, or the whole picture letterboxed), zoom and move (to keep a face out of the dark hub), edges (where the picture doesn't reach: a heavily blurred mirror of it, or dark), fit, rotation. Presets hold only the look; hardware and simulator settings don't change when you switch presets |
-| Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* type (APA102, SK9822, HD107S, WS2812B, SK6812), strip count, LED/m, both sides, with package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma, bit depth and inner-LED dimming under Details. *Controller:* chip (ATmega328P → Teensy 4.x, RP2350 default), firmware (C/Arduino hall sensor, Adafruit CircuitPython guide behaviour, or ideal encoder-locked), battery, with clock, lanes, overhead, PWM, sync, columns per turn, lines/s floor, hall poll and debounce, the animation import limits (max frames, video sample rate), and the firmware's physics simulation (sim rate and acceleration smoothing for the water and the bouncing smiley, plus the water's grid and pressure iterations) under the details folders |
+| Hardware | Setup name. *Wheel:* size presets (700c default, 29", 27.5", 26", 24", 20", 16", 12"), with rim, tire, depth and spokes under Details. *LEDs:* strips per side (1 to 4), both sides, with LED/m, package, diffuser, start radius, length, back-strip data (own data by default, so images read correctly from both sides; *shared* mirrors the non-drive side like the Adafruit wiring), stagger, gamma, bit depth and inner-LED dimming under Details. *Controller:* sensor per strip and the preset switching, with clock, overhead, PWM, sync (hall sensors, an ideal encoder, or free-running), columns per turn, lines/s floor, hall poll and debounce, the animation import limits (max frames, video sample rate), and the firmware's physics simulation (sim rate and acceleration smoothing for the water and the bouncing smiley, plus the water's grid and pressure iterations) under the details folders |
 | Simulator | *Camera:* drive or non-drive side, human eye or camera shutter for the main view, roadside strip above, below or hidden, strip exposure (the same as the main view, or its own shutter, 1/8 s by default, like a phone camera at night), with eye persistence, auto exposure and EV under Details. *Ride:* mph or km/h, pedal surge (from estimated rider power), with cadence, acceleration and braking under Details. *Render:* daylight, glow, wheel and column-buffer display, time scale, pause |
+| Panels | Strips per side, tip radius, the bore's minimum (the measured hub; the bore grows to just inside the strips), nipple slot. *Spoke ties:* disc cross, tie spacing, tip tie, tab reach. *Strip, holes and blade:* strip size, how close to the axle the strips may come, tie and hole sizes, corners, blade width. *Hub and fork:* lacing, flange and fork dimensions |
+| Electronics | 18650 cells in parallel and their capacity (the Stats battery figure follows), the LED current limit, the hub shell's diameter. The result lists the pins, power, balance and the shopping list |
 
-LED PWM rates vary between datasheets and clone parts, so every value filled in from the LED and chip tables can still be edited.
+LED PWM rates vary between datasheets, so the timing values under Details can still be edited.
 
 ## Layout
 
-- `src/params.ts`: parameters, the hardware lookup tables, and which settings belong to presets vs the hardware
+- `src/params.ts`: parameters, the platform's chip and LED figures, and which settings belong to presets vs the hardware
 - `default-setup.json`, `src/defaults.ts`: the default setup and how the app loads it
 - `media/`: images the default presets show, referenced by path from `default-setup.json`
 - `src/presets.ts`, `src/setupFile.ts`, `src/mediaStore.ts`: named presets, the setup file, and stored uploads
@@ -203,5 +242,6 @@ LED PWM rates vary between datasheets and clone parts, so every value filled in 
 - `src/sim/`: LED bus timing, wheel kinematics, hall-sensor firmware model, stats
 - `src/image/`: test patterns, image loading, conversion to the firmware column buffer
 - `src/render/`: POV integration shader, wheel model with motion blur, HDR/bloom, camera
+- `src/electronics/`: the electronics design (pins, level shifters, connector, harnesses, power, hub module, shopping list), its drawings and the Electronics tab
 - `src/panels/`: the LED panel generator (laced-wheel model, the dished spoke surface for the clearances, the part's geometry, spoke and strip ties, clearance checks), its worker, DXF output, the drafting view and the Panels tab
-- `test/`: unit tests for timing, the PWM integral, the firmware model, presets and setup files, and the panel design
+- `test/`: unit tests for timing, the PWM integral, the firmware model, presets and setup files, the panel design and the electronics

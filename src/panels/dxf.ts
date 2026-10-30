@@ -1,5 +1,6 @@
 // DXF output. The files are R12 (AC1009), the version every CAD, CAM and laser/waterjet service
-// reads: closed POLYLINEs whose bulges make the corner fillets true arcs, plus a CIRCLE for the bore.
+// reads: closed POLYLINEs whose bulges make the corner fillets true arcs, plus the bore: a CIRCLE, or a
+// closed POLYLINE with the wire slots that open into it.
 import type { BulgePt, Pt } from './geom';
 import { flatExtras, type PanelDesign, type SideResult } from './design';
 
@@ -64,19 +65,20 @@ const IN = 1 / 25.4;
 
 /**
  * The cut file: 1:1, inches, one layer ("0"), closed outlines only: straight lines and true circular
- * arcs (polyline bulges) plus one circle for the bore. The part is turned to its smallest bounding
+ * arcs (polyline bulges) plus the bore (a circle, or one outline with its slots). The part is turned to its smallest bounding
  * box on the sheet and placed 2 mm in from the origin, so every coordinate is positive.
  */
 export function cutDxf(s: SideResult): string {
   const th = (s.cutRot * Math.PI) / 180, cs = Math.cos(th), sn = Math.sin(th);
   const R = ([x, y, b]: BulgePt): BulgePt => [x * cs - y * sn, x * sn + y * cs, b];
-  const outline = s.g.outlineBulge.map(R), holes = s.g.holes.map((h) => h.bulge.map(R));
+  const outline = s.g.outlineBulge.map(R), holes = s.g.holes.filter((h) => !h.slot).map((h) => h.bulge.map(R));
   const ox = -Math.min(...outline.map((p) => p[0])) + 2, oy = -Math.min(...outline.map((p) => p[1])) + 2;
   const T = ([x, y, b]: BulgePt): BulgePt => [(x + ox) * IN, (y + oy) * IN, b];
   const dxf = new Dxf('in');
   dxf.polyline(outline.map(T));
   for (const h of holes) dxf.polyline(h.map(T));
-  dxf.circle([ox * IN, oy * IN], s.g.rBore * IN);
+  if (s.g.holes.some((h) => h.slot)) dxf.polyline(s.g.bore.bulge.map(R).map(T));
+  else dxf.circle([ox * IN, oy * IN], s.g.rBore * IN);
   return dxf.toString();
 }
 
@@ -87,8 +89,9 @@ export function referenceDxf(d: PanelDesign): string {
   for (const [dx, label, s] of [[-L.g.rhoEnd - 30, 'LEFT  (seen from the right; reference only, do not cut)', L], [R.g.rhoEnd + 30, 'RIGHT (seen from the right; reference only, do not cut)', R]] as const) {
     const mv = <T extends number[]>(p: T) => [p[0] + dx, ...p.slice(1)] as T;
     dxf.polyline(s.g.outlineBulge.map(mv), 'OUTLINE');
-    for (const h of s.g.holes) dxf.polyline(h.bulge.map(mv), 'OUTLINE');
-    dxf.circle([dx, 0], s.g.rBore, 'OUTLINE');
+    for (const h of s.g.holes) if (!h.slot) dxf.polyline(h.bulge.map(mv), 'OUTLINE');
+    if (s.g.holes.some((h) => h.slot)) dxf.polyline(s.g.bore.bulge.map(mv), 'OUTLINE');
+    else dxf.circle([dx, 0], s.g.rBore, 'OUTLINE');
     const { leds, sensors, spokes } = flatExtras(d, s);
     for (const l of leds) dxf.polyline(l.map(mv), 'LED_STRIP', false);
     for (const b of sensors) dxf.polyline(b.map(mv), 'SENSOR_UNDER');

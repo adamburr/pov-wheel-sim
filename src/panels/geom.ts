@@ -292,3 +292,69 @@ export function arcMerge(pts: BulgePt[], R: number, tol = 0.01): BulgePt[] {
   }
   return out;
 }
+
+/** Points along a closed bulge polyline: its straight runs as they are, its arcs every stepDeg at most. */
+export function sampleBulge(pts: BulgePt[], stepDeg = 10): Pt[] {
+  const out: Pt[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0, b] = pts[i], [x1, y1] = pts[(i + 1) % pts.length];
+    out.push([x0, y0]);
+    if (Math.abs(b) < 1e-12) continue;
+    const th = 4 * Math.atan(b); // signed sweep: + counter-clockwise
+    const dx = x1 - x0, dy = y1 - y0, c = Math.hypot(dx, dy);
+    if (c < 1e-12) continue;
+    const r = c / (2 * Math.sin(Math.abs(th) / 2)), d = c / 2 / Math.tan(th / 2); // centre: off the chord's midpoint, to its left for +
+    const cx = (x0 + x1) / 2 - (dy / c) * d, cy = (y0 + y1) / 2 + (dx / c) * d;
+    const a0 = Math.atan2(y0 - cy, x0 - cx), k = Math.max(2, Math.ceil(Math.abs(th) / rad(stepDeg)));
+    for (let j = 1; j < k; j++) out.push([cx + r * Math.cos(a0 + (th * j) / k), cy + r * Math.sin(a0 + (th * j) / k)]);
+  }
+  return out;
+}
+
+/**
+ * A slot of width d from c straight in toward the origin, its outer end round about c, its inner end
+ * just inside a circle of radius R round the origin (the bore it opens into). Counter-clockwise ring.
+ */
+export function slotPts(c: Pt, d: number, R: number, n = 18): Pt[] {
+  const phi = Math.atan2(c[1], c[0]), L = Math.hypot(...c), w = d / 2;
+  const xIn = Math.sqrt(Math.max(0, R * R - w * w)) - 0.5;
+  const P = (x: number, y: number): Pt => [x * Math.cos(phi) - y * Math.sin(phi), x * Math.sin(phi) + y * Math.cos(phi)];
+  const pts: Pt[] = [P(xIn, -w)];
+  for (let i = 0; i <= n; i++) { const t = -Math.PI / 2 + (Math.PI * i) / n; pts.push(P(L + w * Math.cos(t), w * Math.sin(t))); }
+  pts.push(P(xIn, w));
+  return pts;
+}
+
+/**
+ * The bore (radius R round the origin) with slots opening into it: one closed contour of straight
+ * lines and true arcs (bulge points, counter-clockwise), each slot's mouth filleted with radius f.
+ * Slots: their round outer ends' centres and widths; each runs straight in toward the origin.
+ */
+export function boreContour(R: number, slots: { c: Pt; d: number }[], f: number): BulgePt[] {
+  if (!slots.length) return [[R, 0, 1], [-R, 0, 1]];
+  const ss = slots.map((s) => ({ phi: Math.atan2(s.c[1], s.c[0]), L: Math.hypot(...s.c), w: s.d / 2 })).sort((a, b) => a.phi - b.phi);
+  const out: BulgePt[] = [];
+  const at = (phi: number, x: number, y: number): Pt => [x * Math.cos(phi) - y * Math.sin(phi), x * Math.sin(phi) + y * Math.cos(phi)];
+  const mouth = (s: (typeof ss)[number]) => ({ xc: Math.sqrt((R + f) ** 2 - (s.w + f) ** 2), k: R / (R + f) });
+  for (let i = 0; i < ss.length; i++) {
+    const s = ss[i], { xc, k } = mouth(s);
+    // the fillet centres sit at (xc, ±(w + f)); the tangent points on the bore are those centres scaled by k
+    const c1: Pt = [xc, -(s.w + f)], t1: Pt = [xc * k, -(s.w + f) * k], a1: Pt = [xc, -s.w];
+    const u: Pt = [(t1[0] - c1[0]) / f, (t1[1] - c1[1]) / f], v: Pt = [(a1[0] - c1[0]) / f, (a1[1] - c1[1]) / f];
+    const fb = -Math.tan(Math.acos(clamp(u[0] * v[0] + u[1] * v[1], -1, 1)) / 4); // clockwise round the material
+    out.push([...at(s.phi, t1[0], t1[1]), fb]);
+    out.push([...at(s.phi, xc, -s.w), 0]);
+    out.push([...at(s.phi, s.L, -s.w), 1]); // round the outer end
+    out.push([...at(s.phi, s.L, s.w), 0]);
+    out.push([...at(s.phi, xc, s.w), fb]);
+    // along the bore to the next slot's mouth, in arcs of 90° at most
+    const n = ss[(i + 1) % ss.length], nm = mouth(n);
+    const a0 = s.phi + Math.atan2((s.w + f) * k, xc * k), a1n = n.phi - Math.atan2((n.w + f) * nm.k, nm.xc * nm.k);
+    const sweep = pmod(a1n - a0, 2 * Math.PI) || 2 * Math.PI, m = Math.max(1, Math.ceil(sweep / (Math.PI / 2 + 1e-9)));
+    for (let q = 0; q < m; q++) {
+      const t = a0 + (sweep * q) / m;
+      out.push([R * Math.cos(t), R * Math.sin(t), Math.tan(sweep / m / 4)]);
+    }
+  }
+  return out;
+}

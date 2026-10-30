@@ -2,7 +2,7 @@
 // and the downloads (the cut file, a reference drawing and the full report).
 import GUI from 'lil-gui';
 import type { Params } from '../params';
-import { derive } from '../sim/timing';
+import { derive, LED_RIM_CLEAR_MM } from '../sim/timing';
 import { designReport, type PanelDesign } from './design';
 import { cutFiles, referenceDxf } from './dxf';
 import { applyToSim, PANEL_STRIPS } from './fromParams';
@@ -31,9 +31,9 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
   const actions = pane.querySelector<HTMLElement>('.panels-actions')!;
   const summary = pane.querySelector<HTMLElement>('.panels-result')!;
   const gui = new GUI({ container: pane.querySelector<HTMLElement>('.gui')!, autoPlace: false });
-  gui.add(p, 'stripCount', 2, 4, 1).name('Strips per side');
+  gui.add(p, 'stripCount', 1, 4, 1).name('Strips per side');
   gui.add(p, 'panelTipRadiusMm', 0, 400, 0.05).name('Tip radius (mm, 0 = rim)');
-  gui.add(p, 'panelBoreMm', 10, 80, 0.1).name('Bore Ø (mm)');
+  gui.add(p, 'panelBoreMm', 10, 80, 0.1).name('Bore Ø, at least (mm)');
   gui.add(p, 'panelTipSlot', { 'Where a nipple is under a tip': 'auto', 'None: stop short of the nipples': 'none' }).name('Nipple slot');
   const ties = gui.addFolder('Spoke ties').close();
   ties.add(p, 'panelDiscCross', 0, 4, 1).name('Disc to spoke cross (0 = outermost)');
@@ -42,6 +42,7 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
   ties.add(p, 'panelTabMaxMm', 0, 120, 1).name('Tab reach beyond blade (mm, 0 = auto)');
   const holes = gui.addFolder('Strip, holes and blade').close();
   holes.add(p, 'panelStripWidthMm', 5, 30, 0.5).name('Strip width (mm)');
+  holes.add(p, 'panelStripMinMm', 15, 120, 1).name('Strips no closer than r (mm)');
   holes.add(p, 'panelStripThickMm', 1, 10, 0.1).name('Strip thickness (mm)');
   holes.add(p, 'panelTieWidthMm', 1.5, 8, 0.1).name('Tie width (mm)');
   holes.add(p, 'panelTieClearMm', 0, 3, 0.1).name('Hole clearance (mm)');
@@ -68,7 +69,7 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
       <button type="button" data-act="report" title="Every computed number">Report (JSON)</button>
       ${d.identical ? '<p class="hint order-note">📝 Left and right are mirror images: cut two and turn one over.</p>' : ''}` : '';
     if (!PANEL_STRIPS.includes(p.stripCount)) {
-      summary.innerHTML = `<p class="hint">The panels come with 2 to 4 blades per side, one per strip. The hardware has ${p.stripCount} strips: pick 2–4 below.</p>`;
+      summary.innerHTML = `<p class="hint">The panels come with 1 to 4 blades per side, one per strip. The hardware has ${p.stripCount} strips: pick 1–4 below.</p>`;
       return;
     }
     if (!d) {
@@ -83,17 +84,19 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
       ['Part', both((s) => `${s.partSizeIn[0]} × ${s.partSizeIn[1]} in (${s.partSizeMm[0]} × ${s.partSizeMm[1]} mm)`)],
       ['Material', `${pp.label}, ${pp.thickness.toFixed(2)} mm`],
       ['Mass', both((s) => `${s.massG} g`) + ' per panel'],
-      ['Blades', `${d.arms.length} × ${L.bladeW} mm wide, ${d.armSpacing}° apart, at ${d.arms.map((a) => `${a.toFixed(2)}°`).join(', ')}`],
+      ['Blades', `${d.arms.length} × ${L.bladeW} mm wide, ${d.arms.length > 1 ? `${d.armSpacing}° apart, ` : ''}at ${d.arms.map((a) => `${a.toFixed(2)}°`).join(', ')}`],
       ['LEDs', `${L.ledsPerStrip} per blade, r ${L.ledStartR}–${L.ledEndR} mm`],
+      ['Bore', `Ø ${pp.boreD.toFixed(1)} mm: out to ${pp.boreToStrip} mm inside the strips' inner ends${pp.boreD <= pp.boreMinD + 1e-6 ? ` (held at the ${pp.boreMinD} mm minimum)` : ''}`],
       ['Disc', `Ø ${L.discD} mm${d.wheel.p.crosses ? ` to spoke cross ${L.discCross}` : ', tied to the spokes'}: ${both((s) => `${s.discTies}`)} ties at r ${L.discTieR ?? '–'} mm`
         + (L.discTiesUnderStrips || R.discTiesUnderStrips ? ` (${Math.max(L.discTiesUnderStrips, R.discTiesUnderStrips)} under a strip left out)` : '')],
-      ['Sensors', pp.sensor ? `a hall switch (US5881) midway between each pair of strips, marked face out, tied on`
+      ['Sensors', pp.sensor ? `a hall switch (US5881) ${d.arms.length > 1 ? 'midway between each pair of strips' : 'opposite the blade'}, marked face out, tied on`
         + ` (${both((s) => `${s.sensorsOnDisc} on the disc`)}), r ${both((s) => s.sensorR.join('/'))} mm · the strip's field there ≤ ${Math.max(L.sensorFieldUT ?? 0, R.sensorFieldUT ?? 0)} µT`
         + ` at full white; the switch releases at ${pp.sensorReleaseMT} mT or more · ${Math.min(L.forkClearance.sensorFaceToForkMm ?? 0, R.forkClearance.sensorFaceToForkMm ?? 0)} mm from its face to the fork for the magnet` : 'none'],
       ['Spoke ties', both((s) => `${s.spokeTiesPerBlade.join('/')} per blade`) + ` · tabs up to ${Math.max(L.maxEarMm, R.maxEarMm)} mm`],
       ['Spans', `≤ ${Math.max(L.longestSpanMm, R.longestSpanMm)} mm between ties · tips ${Math.max(L.tipOverhangMm, R.tipOverhangMm)} mm past the last`],
-      ['Holes', both((s) => `${s.holesTotal} (${s.holes.strip} strip, ${s.holes.spoke} spoke, ${s.holes.disc} disc, ${s.holes.sensor} sensor, ${s.holes.wire} wire)`) + ` · □ ${(pp.tieW + pp.tieClear).toFixed(1)} mm`],
-      ['Wire holes', pp.wireHoleD > 0 ? `Ø${pp.wireHoleD} mm in the disc, one just inside each hall sensor's leads, for the sensor's and its strip's wires to the inner side` : 'none'],
+      ['Holes', both((s) => `${s.holesTotal} (${s.holes.strip} strip, ${s.holes.spoke} spoke, ${s.holes.disc} disc, ${s.holes.sensor} sensor, ${s.holes.wire} wire slot${s.holes.wire === 1 ? '' : 's'})`) + ` · □ ${(pp.tieW + pp.tieClear).toFixed(1)} mm`],
+      ['Wire slots', pp.wireHoleD > 0 ? `${pp.wireHoleD} mm wide, one per strip from just inside its hall sensor's leads straight in to the bore (cut with it), for the sensor's and the strip's wires to the inner side; they open the disc so it bends to the spokes' cone`
+        + (L.holes.wire > [...d.sides.LEFT.g.holes].filter((h) => h.slot).length ? ' (a round hole where a slot doesn\'t fit)' : '') : 'none'],
       ['Fork', `${fc.minMm} mm (${fc.governedBy}) · bare panel ${Math.min(L.forkClearance.panelFaceMm, R.forkClearance.panelFaceMm)} mm`],
       ['Valve', `${Math.min(L.valveClearMm, R.valveClearMm)} mm clear`],
     ];
@@ -101,10 +104,10 @@ export function buildPanelsTab(p: Params, pane: HTMLElement, onChange: (key: str
     const notes = [d.rimNote,
       over ? `${over} spoke tie${over > 1 ? 's go' : ' goes'} over the strip between two LEDs, where a spoke runs under the strip and no tab reaches another: fit ${over > 1 ? 'them' : 'it'} after the strip.` : '',
       d.tipSlot ? `Nipple slot ${d.tipSlot.widthMm} wide × ${d.tipSlot.depthMm} mm deep where a nipple is under a tip (from the assumed rim and nipple: confirm).` : '',
-      'Bore and tip radius are measured; the other wheel, hub and fork values are typical until measured.'].filter(Boolean);
+      'The hub (the bore\'s 1.5" minimum) and the tip radius are measured; the other wheel, hub and fork values are typical until measured.'].filter(Boolean);
     // where the simulator's strips are, against where these panels hold the LEDs
     const sd = derive(p);
-    const simRim = p.bsdMm / 2 - 8 - (d.sim.stripStartMm + d.sim.stripLengthMm) < p.rimDepthMm;
+    const simRim = p.bsdMm / 2 - LED_RIM_CLEAR_MM - (d.sim.stripStartMm + d.sim.stripLengthMm) < p.rimDepthMm;
     const simStart = Math.round(sd.rStart * 1000), simEnd = Math.round(sd.rEnd * 1000);
     const matches = !p.autoLength && p.stripStartMm === d.sim.stripStartMm && p.stripLengthMm === d.sim.stripLengthMm
       && p.ledDensity === d.sim.ledDensity && sd.ledsPerStrip === L.ledsPerStrip;
