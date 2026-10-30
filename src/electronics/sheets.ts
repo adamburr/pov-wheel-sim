@@ -1,7 +1,8 @@
 // The electronics drawings, as SVG: the circuit, the wiring between the panels and the hub module,
 // the hub module round the hub, and the carrier board's layout. Each sheet is drawn in its own units
 // (the hub and board sheets in mm, to scale) and fitted to the view by the viewer.
-import { CARRIER, type Electronics } from './design';
+import { type BoardPart, CARRIER, carrierLayout, type Pkg } from './carrier';
+import type { Electronics } from './design';
 
 export type SheetId = 'circuit' | 'wiring' | 'hub' | 'board';
 export const SHEETS: { id: SheetId; label: string; title: string }[] = [
@@ -113,6 +114,17 @@ class Pen {
     this.line([[x + 6, y + 17], [x + 14, y + 17]], { stroke: C.ink, w: 2 });
     this.text(x - 8, y + 21, label, { size: 11, fill: C.muted, anchor: 'end' });
   }
+  /** PNP transistor centred at (x, y): base on the left at (x - 24, y), emitter up (x, y - 24), collector down (x, y + 24). */
+  pnp(x: number, y: number, label: string) {
+    this.circle(x, y, 15, { stroke: C.ink, w: 1.5 });
+    this.line([[x - 24, y], [x - 6, y]], { stroke: C.ink });
+    this.line([[x - 6, y - 10], [x - 6, y + 10]], { stroke: C.ink, w: 2 });
+    this.line([[x - 6, y - 5], [x, y - 12], [x, y - 24]], { stroke: C.ink });
+    this.line([[x - 6, y + 5], [x, y + 12], [x, y + 24]], { stroke: C.ink });
+    this.raw(`<polygon points="${x - 6},${y - 5} ${x - 1.5},${y - 10.5} ${x - 4.5},${y - 11.5}" fill="${C.ink}"/>`); // emitter arrow, into the base
+    this.text(x + 19, y - 2, label, { size: 11, fill: C.ink, weight: 600 });
+    this.text(x + 19, y + 12, 'PNP', { size: 10, fill: C.muted });
+  }
   /** A labelled box with pins on its left and right edges: [name, net] pairs, one per row. */
   block(x: number, y: number, w: number, title: string, sub: string, left: [string, string][], right: [string, string][], o: { pitch?: number; stub?: number } = {}) {
     const pitch = o.pitch ?? 22, stub = o.stub ?? 26;
@@ -194,14 +206,16 @@ function circuit(e: Electronics): Sheet {
   const gn = 120, qx = 200, qy = ly + 90;
   g.line([[qx, qy - 24], [qx, ly + 10]], { stroke: C.power });
   g.net(qx, ly + 6, 'VBAT', 'start');
-  g.fet(qx, qy, 'P', 'Q1  AO3401A');
+  g.pnp(qx, qy, 'Q1  BC327');
   g.line([[qx, qy + 24], [qx, qy + 50]], { stroke: C.power });
   g.net(qx, qy + 58, 'VSYS', 'start');
-  // gate node: 100k up to VBAT, Q2 down to ground
-  g.line([[qx - 24, qy], [gn, qy]], { stroke: C.ctl });
+  // the latch node: 10k up to VBAT (Q1 off), 1k to Q1's base, Q2 down to ground
+  g.line([[qx - 24, qy], [qx - 34, qy]], { stroke: C.ctl });
+  g.res(qx - 74, qy, '1k');
+  g.line([[qx - 74, qy], [gn, qy]], { stroke: C.ctl });
   g.dot(gn, qy, C.ctl);
   g.line([[gn, qy], [gn, qy - 30]], { stroke: C.ctl });
-  g.res(gn, qy - 70, '100k', true);
+  g.res(gn, qy - 70, '10k', true);
   g.line([[gn, qy - 70], [gn, ly + 10], [qx, ly + 10]], { stroke: C.power });
   g.dot(qx, ly + 10, C.power);
   g.line([[gn, qy], [gn, qy + 40]], { stroke: C.ctl });
@@ -231,31 +245,20 @@ function circuit(e: Electronics): Sheet {
   g.text(20, ry0 + 76, 'Off: a press powers the Feather (Q1); it sets HOLD only if a second press follows.', { size: 11, fill: C.muted });
   g.text(20, ry0 + 92, 'On: one press steps brightness; a double press, and the firmware drops HOLD.', { size: 11, fill: C.muted });
 
-  // right-side 5 V switch
+  // right side's 5 V: through a Schottky, so the charging lead's 5 V can't reach the left strips
   const ry = ry0 + 150;
-  g.heading(20, ry - 22, 'RIGHT-SIDE 5 V SWITCH');
-  const q3x = 250, q3y = ry + 60, q4x = 160;
-  g.line([[q3x, q3y - 24], [q3x, ry]], { stroke: C.power });
-  g.net(q3x, ry - 4, '+5V_R', 'start');
-  g.fet(q3x, q3y, 'P', 'Q3  AO4407A');
-  g.line([[q3x, q3y + 24], [q3x, q3y + 44]], { stroke: C.power });
-  g.net(q3x, q3y + 52, '+5V_L', 'start');
-  g.line([[q3x - 24, q3y], [q4x, q3y]], { stroke: C.ctl });
-  g.dot(q4x, q3y, C.ctl);
-  g.line([[q4x, q3y], [q4x, q3y - 10]], { stroke: C.ctl });
-  g.res(q4x, q3y - 50, '100k', true);
-  g.line([[q4x, q3y - 50], [q4x, ry], [q3x, ry]], { stroke: C.power });
-  g.dot(q3x, ry, C.power);
-  g.line([[q4x, q3y], [q4x, q3y + 16]], { stroke: C.ctl });
-  g.fet(q4x, q3y + 40, 'N', 'Q4');
-  g.line([[q4x, q3y + 64], [q4x, q3y + 70]], { stroke: C.gnd });
-  g.gnd(q4x, q3y + 70);
-  g.line([[q4x - 24, q3y + 40], [q4x - 40, q3y + 40]], { stroke: C.ctl });
-  g.net(q4x - 40, q3y + 40, 'LED_EN', 'end');
-  g.text(20, q3y + 110, 'Source on the connector side: switched off, it keeps the charging lead\'s 5 V off the left strips.', { size: 11, fill: C.muted });
+  g.heading(20, ry - 22, 'RIGHT SIDE\'S 5 V');
+  const q3y = ry + 20;
+  g.net(100, q3y, '+5V_L', 'end');
+  g.line([[100, q3y], [140, q3y]], { stroke: C.power });
+  g.diode(140, q3y, 'D3  SB540');
+  g.line([[170, q3y], [210, q3y]], { stroke: C.power });
+  g.net(210, q3y, '+5V_R');
+  g.text(20, q3y + 40, 'The right strips run about 0.4 V lower (fine for SK9822s); charging, the lead\'s 5 V can\'t reach the left strips.', { size: 11, fill: C.muted });
+  g.text(20, q3y + 56, 'With the logic off, the boost is off and nothing drives +5V_L.', { size: 11, fill: C.muted });
 
   // divider and hall supply
-  const dy = q3y + 170;
+  const dy = q3y + 110;
   g.heading(20, dy - 22, 'SENSING');
   g.net(60, dy, 'VSYS', 'end');
   g.res(60, dy, '100k');
@@ -618,83 +621,124 @@ function hub(e: Electronics, spokes: number): Sheet {
 }
 
 // ---------------------------------------------------------------- carrier board
+/** Through-hole footprints, lying along x (a vertical part turns them a quarter): pad centres, the pad and hole sizes, and the body. */
+const TH = (pins: [number, number][], body: { w: number; h: number; round?: boolean; at?: [number, number] }, pad = 1.7, hole = 0.8) => ({ pins, body, pad, hole });
+const PKG: Record<Pkg, ReturnType<typeof TH>> = {
+  // pins 1–7 along the bottom left to right, 8–14 along the top right to left; rows 0.3" apart
+  'DIP-14': TH(Array.from({ length: 14 }, (_, i) => (i < 7 ? [-7.62 + 2.54 * i, 3.81] : [7.62 - 2.54 * (i - 7), -3.81]) as [number, number]), { w: 18.6, h: 6.3 }),
+  'SIP-8': TH(Array.from({ length: 8 }, (_, i) => [-8.89 + 2.54 * i, 0] as [number, number]), { w: 20.2, h: 2.4 }),
+  'SIP-6': TH(Array.from({ length: 6 }, (_, i) => [-6.35 + 2.54 * i, 0] as [number, number]), { w: 15.1, h: 2.4 }),
+  axial: TH([[-1.27, 0], [1.27, 0]], { w: 2.5, h: 2.5, round: true, at: [-1.27, 0] }), // standing: the body over pin 1
+  'DO-35': TH([[-1.27, 0], [1.27, 0]], { w: 2.0, h: 2.0, round: true, at: [-1.27, 0] }),
+  'DO-201': TH([[-2.54, 0], [2.54, 0]], { w: 5.3, h: 5.3, round: true, at: [-2.54, 0] }, 2.4, 1.3),
+  'TO-92': TH([[-2.54, 0], [0, 0], [2.54, 0]], { w: 4.8, h: 3.8 }),
+  disc: TH([[-1.27, 0], [1.27, 0]], { w: 4.0, h: 2.5 }),
+  'radial-5': TH([[-1.0, 0], [1.0, 0]], { w: 5.0, h: 5.0, round: true }),
+  'radial-6.3': TH([[-1.25, 0], [1.25, 0]], { w: 6.3, h: 6.3, round: true }),
+};
+const GROUP: Record<BoardPart['group'], string> = { shift: C.data, power: C.power, input: C.hall, filter: C.ctl };
+
 function board(e: Electronics): Sheet {
   const g = new Pen();
-  const S = 16; // px per mm
-  const ox = 230, oy = 80;
+  const S = 18; // px per mm
+  const Wmm = CARRIER.w, Hmm = CARRIER.h;
+  const ox = 240, oy = 110;
   const B = (x: number, y: number) => [ox + x * S, oy + y * S];
-  const Wmm = CARRIER.w, Hmm = CARRIER.h, fx0 = (Wmm - CARRIER.feather) / 2;
-  g.heading(20, 30, `CARRIER BOARD, ${Wmm} × ${Hmm.toFixed(1)} mm, top side (the Feather plugs in above it)`);
+  const { parts, headers, fx0, fy0 } = carrierLayout(e);
+  g.heading(20, 30, `CARRIER BOARD, ${Wmm} × ${Hmm} mm, top side, to scale: an etched 2-layer PCB with through-hole parts only, for soldering by hand`);
   g.rect(ox, oy, Wmm * S, Hmm * S, { fill: C.board, stroke: C.copper, w: 2, r: 2.5 * S });
-  // Feather outline and its header rows (0.8" apart)
-  const [fxp, fyp] = B(fx0, 0);
-  g.rect(fxp, fyp, CARRIER.feather * S, Hmm * S, { stroke: C.silk, dash: '6 5', w: 1.2, r: 2 * S });
-  const rowY = [1.27, Hmm - 1.27];
-  const rows: [number, number][] = [[16, rowY[0]], [12, rowY[1]]];
-  for (const [count, y] of rows) {
-    const x0 = fx0 + (CARRIER.feather - (count - 1) * 2.54) / 2 + (count === 12 ? 2.54 * 2 : 0);
-    for (let i = 0; i < count; i++) {
-      const [cx, cy] = B(x0 + i * 2.54, y);
-      g.circle(cx, cy, 0.9 * S, { fill: C.copper });
-      g.circle(cx, cy, 0.5 * S, { fill: '#0b0e15' });
+  // the Feather above, on one end, and its two header rows with every pin named
+  const [fxp, fyp] = B(fx0, fy0);
+  g.rect(fxp, fyp, CARRIER.feather * S, CARRIER.featherH * S, { stroke: C.silk, dash: '6 5', w: 1.2, r: 2 * S });
+  g.text(fxp + 6, fyp + CARRIER.featherH * S / 2 + 4, 'USB', { size: 10, fill: C.silk });
+  const pad = (x: number, y: number, d: number, hole: number) => {
+    const [cx, cy] = B(x, y);
+    g.circle(cx, cy, (d / 2) * S, { fill: C.copper });
+    g.circle(cx, cy, (hole / 2) * S, { fill: '#0b0e15' });
+    return [cx, cy];
+  };
+  for (const h of headers) {
+    const [cx, cy] = pad(h.x, h.y, 1.7, 1.0);
+    const top = h.y < Hmm / 2;
+    g.text(cx, cy + (top ? -1.2 : 1.75) * S, h.label, { size: 9, fill: h.net ? (h.net === 'GND' ? C.silk : netColour(h.net)) : '#6f7d6f', anchor: 'middle', weight: h.net ? 700 : 400 });
+  }
+  // every part: through-hole pads, its body, and its reference
+  for (const p of parts) {
+    const k = PKG[p.pkg], v = !!p.vertical;
+    const T = ([x, y]: [number, number]): [number, number] => (v ? [p.at[0] + y, p.at[1] + x] : [p.at[0] + x, p.at[1] + y]);
+    const [bw, bh] = v ? [k.body.h, k.body.w] : [k.body.w, k.body.h];
+    const [bx, by] = B(...T(k.body.at ?? [0, 0]));
+    if (k.body.round) g.circle(bx, by, (bw / 2) * S, { fill: '#2a2f2a', stroke: GROUP[p.group], w: 1.4 });
+    else g.rect(bx - (bw * S) / 2, by - (bh * S) / 2, bw * S, bh * S, { fill: p.pkg === 'DIP-14' || p.pkg.startsWith('SIP') ? '#1b1b1b' : '#2a2f2a', stroke: GROUP[p.group], w: 1.4, r: p.pkg === 'TO-92' ? 8 : 2 });
+    k.pins.forEach((q, i) => {
+      const [x, y] = T(q);
+      if (i === 0) { const [cx, cy] = B(x, y); g.rect(cx - (k.pad / 2) * S, cy - (k.pad / 2) * S, k.pad * S, k.pad * S, { fill: C.copper, r: 1 }); g.circle(cx, cy, (k.hole / 2) * S, { fill: '#0b0e15' }); }
+      else pad(x, y, k.pad, k.hole);
+    });
+    const [cx, cy] = B(...p.at);
+    if (p.pkg === 'DIP-14') {
+      g.text(cx, cy - 1, p.ref, { size: 14, weight: 700, fill: C.silk, anchor: 'middle', rot: v ? -90 : 0 });
+      g.text(cx + (v ? 14 : 0), cy + (v ? 0 : 14), p.value, { size: 10, fill: '#b9c2b0', anchor: 'middle', rot: v ? -90 : 0 });
+    } else if (p.pkg.startsWith('SIP')) {
+      g.text(cx, cy - 1.8 * S, `${p.ref}  ${p.value}`, { size: 10, fill: C.silk, anchor: 'middle' });
+    } else {
+      const side = p.pkg === 'axial' || p.pkg === 'DO-35' || p.pkg === 'DO-201' ? (v ? [1.6, 0] : [0, 1.8]) : [0, 0];
+      const [lx, ly] = B(p.at[0] + side[0], p.at[1] + side[1]);
+      g.text(lx + (side[0] ? 2 : 0), ly + 4, p.ref, { size: 9, weight: 700, fill: C.silk, anchor: side[0] ? 'start' : 'middle' });
     }
   }
-  g.text(B(Wmm / 2, 3.6)[0], B(0, 3.6)[1], 'Feather female headers (16 + 12): check the pin positions against the Feather', { anchor: 'middle', size: 12, fill: C.silk });
-  const part = (x: number, y: number, w: number, h: number, ref: string, label: string, col = '#1b1b1b') => {
-    const [px, py] = B(x, y);
-    g.rect(px, py, w * S, h * S, { fill: col, stroke: C.silk, w: 1.2, r: 2 });
-    g.text(px + (w * S) / 2, py + (h * S) / 2 + 1, ref, { anchor: 'middle', size: 13, weight: 700, fill: C.silk });
-    if (label) g.text(px + (w * S) / 2, py + (h * S) / 2 + 16, label, { anchor: 'middle', size: 10, fill: '#b9c2b0' });
-  };
-  // shifters in a row, along the header rows the lanes come from
-  e.shifters.forEach((u, i) => part(fx0 + 4 + i * 11, 4.8, 8.7, 6.0, u.ref, '74AHCT125'));
-  // series resistors below them
-  const nR = e.shifters.reduce((s, u) => s + u.ch.length, 0);
-  for (let i = 0; i < nR; i++) part(fx0 + 4 + i * 2.6, 12, 1.6, 0.8, '', '', '#5a4a2a');
-  g.text(B(fx0 + 4, 14.2)[0], B(0, 14.2)[1], `${nR} × 33 Ω`, { size: 11, fill: C.silk });
-  // power switching and latch
-  const qx = fx0 + 38;
-  part(qx, 4.8, 6, 5, 'Q3', 'SO-8');
-  part(qx, 11.2, 3, 2.5, 'Q1', '');
-  part(qx + 3.6, 11.2, 3, 2.5, 'Q2', '');
-  part(qx, 14.2, 3, 2.5, 'Q4', '');
-  part(qx + 3.6, 14.2, 3, 2.5, 'D1', '');
-  part(qx + 7.2, 14.2, 3, 2.5, 'D2', '');
-  // hall pull-ups and filters
-  for (let i = 0; i < e.halls + 6; i++) part(fx0 + 4 + i * 2.6, 16.2, 1.6, 0.8, '', '', '#5a4a2a');
-  g.text(B(fx0 + 4, 18.4)[0], B(0, 18.4)[1], 'hall and button pull-ups, button RC, divider, filter', { size: 11, fill: C.silk });
-  // wire pads at each end
+  // wire holes along the top (the left harness) and bottom (the right connector and the power board), numbered
   const leftPads = e.leftHarness.map((w) => w.net);
   const rightPads = ['+5V_R', 'GND', 'CLK_R5', ...Array.from({ length: e.sides === 2 ? e.n : 0 }, (_, i) => `R${i + 1}_5`)];
   const powerPads = ['+5V_L', 'GND', 'VBAT', 'LED_EN', 'CE', 'BTN_P', 'S1', 'GND'];
-  // Numbered pads in two columns at each end; the legend beside the board names each one.
-  const padCol = (pads: string[], x: number, title: string, legendX: number, anchor: 'start' | 'end') => {
-    const rows = Math.ceil(pads.length / 2);
-    const pitch = (Hmm - 2) / rows;
+  const wireRow = (pads: string[], y: number, title: string, legendX: number, anchor: 'start' | 'end') => {
     pads.forEach((net, i) => {
-      const col = Math.floor(i / rows), row = i % rows;
-      const [cx, cy] = B(x + col * 2.6, 1 + row * pitch + pitch / 2);
-      g.rect(cx - 0.9 * S, cy - 0.65 * S, 1.8 * S, 1.3 * S, { fill: C.copper, r: 3 });
-      g.text(cx, cy + 4, String(i + 1), { size: 11, fill: '#1b1b1b', anchor: 'middle', weight: 700 });
-      const ly = oy + 14 + i * 16;
-      g.text(legendX, ly, `${i + 1}  ${net}`, { size: 11, fill: netColour(net), anchor });
+      const [cx, cy] = pad(4 + i * 2.54, y, 2.0, 1.0); // 2 mm pad, 1 mm hole: 22–26 AWG
+      g.text(cx, cy + 3.5, String(i + 1), { size: 8, fill: C.silk, anchor: 'middle', weight: 700 });
+      g.text(legendX, oy + 14 + i * 16, `${i + 1}  ${net}`, { size: 11, fill: netColour(net), anchor });
     });
     g.text(legendX, oy - 10, title, { size: 11, fill: C.muted, anchor, weight: 600 });
   };
-  padCol(leftPads, 1.2, `J2 left harness (${leftPads.length})`, ox - 24, 'end');
-  padCol([...rightPads, ...powerPads], Wmm - 3.8, `J1 pigtail, power board (${rightPads.length + powerPads.length})`, ox + Wmm * S + 24, 'start');
-  g.text(B(Wmm / 2, 0)[0], oy + Hmm * S + 18, 'Box pads: power board (GND, +5V_L in 18 AWG), the lid\'s two buttons; the charger\'s IN shares +5V_R.', { size: 11, fill: C.muted, anchor: 'middle' });
-  const y0 = Math.max(oy + Hmm * S + 50, oy + 30 + 16 * Math.max(leftPads.length, rightPads.length + powerPads.length));
+  wireRow(leftPads, 1.9, `top row: J2 left harness (${leftPads.length})`, ox - 24, 'end');
+  wireRow([...rightPads, ...powerPads], Hmm - 1.9, `bottom row: J1 pigtail, power board (${rightPads.length + powerPads.length})`, ox + Wmm * S + 24, 'start');
+  g.text(B(Wmm / 2, 0)[0], oy + Hmm * S + 24, 'Box wires: power board (GND, +5V_L in 18 AWG) and the lid\'s two buttons; the charger\'s IN shares +5V_R.', { size: 11, fill: C.muted, anchor: 'middle' });
+  const [sbx, sby] = [ox + Wmm * S - 10 * S, oy + Hmm * S + 48];
+  g.line([[sbx, sby], [sbx + 10 * S, sby]], { stroke: C.muted, w: 2 });
+  g.text(sbx + 5 * S, sby - 5, '10 mm', { size: 10, fill: C.muted, anchor: 'middle' });
+
+  // the parts list, then the Feather's pins
+  const ty = Math.max(oy + Hmm * S + 90, oy + 30 + 16 * Math.max(leftPads.length, rightPads.length + powerPads.length));
+  g.heading(20, ty, 'PARTS (all through-hole)');
+  const legend: [BoardPart['group'], string][] = [['shift', 'level shifting'], ['power', 'power and latch'], ['input', 'hall and button inputs'], ['filter', 'sensing and filters']];
+  legend.forEach(([grp, label], i) => { g.rect(230 + i * 170, ty - 10, 12, 12, { stroke: GROUP[grp], w: 2, r: 2 }); g.text(248 + i * 170, ty, label, { size: 11, fill: C.muted }); });
+  const half = Math.ceil(parts.length / 2);
+  parts.forEach((p, i) => {
+    const col = Math.floor(i / half), row = i % half;
+    const x = 20 + col * 700, y = ty + 26 + row * 17;
+    g.text(x, y, p.ref, { size: 11, weight: 700, fill: GROUP[p.group] });
+    g.text(x + 44, y, p.value, { size: 11 });
+    g.text(x + 120, y, p.pkg, { size: 11, fill: C.muted });
+    g.text(x + 205, y, p.fn, { size: 11, fill: C.muted });
+  });
+  const px0 = 1440;
+  g.heading(px0, ty, 'FEATHER PINS');
+  headers.filter((h) => h.net).forEach((h, i) => {
+    const y = ty + 26 + i * 17;
+    g.text(px0, y, h.label, { size: 11, weight: 700 });
+    g.text(px0 + 50, y, h.net!, { size: 11, fill: netColour(h.net!) });
+  });
+  const y0 = ty + 26 + Math.max(half, headers.filter((h) => h.net).length) * 17 + 20;
   const notes = [
-    'Placement only, for routing in KiCad: the Feather sits 8.5 mm above on female headers, so parts under it stay below ~3 mm.',
-    'Every signal comes through the Feather\'s headers: the lanes from TX, RX, SDA, SCL, D12, D5, D6, D13; no ribbon cable.',
-    'Wire pads at both ends take the harnesses straight on: 22 AWG for 5 V and ground, 26 AWG for signals.',
-    'Keep each 33 Ω resistor next to its shifter output; run each lane over unbroken ground, clocks clear of the hall inputs.',
-    'Q3 carries the right side\'s 5 V (≤ 2 A): wide copper on both layers. The cells\' current never comes onto this board.',
+    'Through-hole only, for a DIY build: DIP shifters (Adafruit 1787), resistor packs, 1/4 W resistors standing up, TO-92 transistors, standing diodes and radial capacitors.',
+    'The low parts (DIPs, resistor packs) sit under the Feather on its 8.5 mm female headers; everything taller sits beside it. Solder the low parts first, the headers last.',
+    'Etched: about $5–15 for a few bare boards (OSH Park, JLCPCB, PCBWay); no assembly needed. Or build it on a perfboard cut to 90 × 32 mm, following this placement.',
+    'Placement only, for routing in KiCad. Header pins follow Adafruit\'s Feather layout: check the long row\'s 3rd and last pins on the RP2350.',
+    'Keep each lane\'s 33 Ω pack by its shifter and every lane over unbroken ground. D3 carries the right side\'s 5 V (≤ 2 A): wide copper, and it gets warm. The cells\' current never comes onto this board.',
   ];
-  notes.forEach((s, i) => g.text(ox, y0 + i * 18, s, { size: 12, fill: C.muted }));
-  const W = ox + Wmm * S + 200;
-  return { svg: g.svg(W, y0 + notes.length * 18 + 20), w: W, h: y0 + notes.length * 18 + 20 };
+  notes.forEach((t, i) => g.text(20, y0 + i * 18, t, { size: 12, fill: C.muted }));
+  const W = Math.max(ox + Wmm * S + 260, 1700);
+  const H = y0 + notes.length * 18 + 20;
+  return { svg: g.svg(W, H), w: W, h: H };
 }
 
 export function drawSheet(id: SheetId, e: Electronics, spokes: number): Sheet {

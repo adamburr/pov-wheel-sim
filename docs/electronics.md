@@ -15,7 +15,7 @@ The tab also lists the power budget, warns about anything that doesn't fit, and 
 |---|---|---|
 | Controller | Adafruit Feather RP2350 with 8 MB PSRAM (6130) | Two cores, PIO, and room for animations in PSRAM. Everything is wired from its headers; its HSTX port isn't used |
 | Strips | Adafruit DotStar 144/m, black: one half metre (2328, 72 LEDs) per blade, cut to the blade from the tip in, 38 LEDs on the default wheel. Not the 1 m 2241: it is two halves joined, with a 2–3 mm pitch error at the joint | SK9822: clock and data, so no timing-critical single wire |
-| Level shifters | 74AHCT125, four channels each (SOIC on the carrier; the 1787 DIP for a breadboard) | SK9822s at 5 V want a high above 3.5 V; the Feather gives 3.3 V |
+| Level shifters | 74AHCT125, four channels each, DIP-14 (Adafruit 1787) | SK9822s at 5 V want a high above 3.5 V; the Feather gives 3.3 V |
 | Hall sensors | US5881 (158), one per strip, left panel only | The left panel times both sides; the right panel's sensor ties stay empty |
 | Power | Two 18650 high-drain cells in parallel, a 1S protection board, a 10 A fuse, a Pololu U3V70F5 5 V boost (2891) | Simple USB charging, and the boost has a true shutdown |
 | Mounting | A 3D-printed bracket tied to the hub shell, a hook-and-loop strap, an XT30 between the pack and the box, a stick-on rim weight | Easy on and off; balanced |
@@ -67,7 +67,7 @@ The wheel has two buttons, on the hub package, in the electronics box's lid on i
 
 - **Preset:** a click goes to the next preset; a double click turns Auto on or off (Auto: the next preset each time the lights go out).
 - **Brightness:** each press steps the LEDs to the next of four levels: 100, 50, 25, 12 %, then back to 100. The firmware scales its LED current limit with it and keeps the level when the wheel is switched off. A **double click turns the wheel off or on**:
-  - The button is wired into the power latch in place of a separate switch. Off, it pulls Q1's gate low through D1, so a press powers the Feather.
+  - The button is wired into the power latch in place of a separate switch. Off, it pulls Q1's base low through D1 and a 1 kΩ resistor, so a press powers the Feather.
   - The Feather boots in a few milliseconds and reads the button through D2 (`SW`). If a second press follows, it sets `HOLD` and stays on; if not, it lets go and switches off again.
   - On, a double press makes the firmware drop `HOLD`, and the wheel switches off when the button is released. Off, nothing draws current but leakage (a few tens of µA).
 
@@ -81,7 +81,7 @@ Each lane and clock goes through a 74AHCT125 powered at 5 V, with a 33 Ω series
 - **Runtime:** two 3000 mAh cells last about 0.9 h even pinned at the limit. Most pictures draw far less; see the Stats tab, whose battery figure follows the cells.
 - **Boost:** the boost runs straight off the protected, fused cells. `LED_EN` enables it. A 4.7 kΩ pull-down holds it off while the logic is off: the boost's own 100 kΩ pull-up to its input would otherwise turn it on.
 - **Off drain:** a few tens of µA through that divider.
-- **Logic:** the brightness button and `HOLD` latch only the Feather's supply, through Q1, a small P-MOSFET. Cut the Feather's CHG jumper so only the bq24074 charges.
+- **Logic:** the brightness button and `HOLD` latch only the Feather's supply, through Q1, a BC327 PNP transistor. Cut the Feather's CHG jumper so only the bq24074 charges.
 - **Hall sensors:** the US5881 needs at least 3.5 V, so the sensors run from the battery through a 100 Ω/10 µF filter. Their 10k pull-ups go to 3.3 V. The sensors' ground has its own wire, kept off the strips' return current.
 - **Strips idle:** about 1 mA per LED even when dark, so the firmware turns the boost off when the wheel stops.
 
@@ -89,7 +89,7 @@ Each lane and clock goes through a 74AHCT125 powered at 5 V, with a 33 Ω series
 
 Unplug the right panel and plug in the charging lead: a USB-C sink breakout with 5.1 kΩ on CC1/CC2, wired VBUS to pins 1 and 2 and GND to pins 3 and 4 of an SP13 plug. Its 5 V goes up `+5V_R` to the charger's input.
 
-- **Q3:** an AO4407A P-MOSFET with its source on the connector side. Switched off, it keeps the 5 V off the left strips. When running, `LED_EN` turns it on and the boost feeds both sides.
+- **D3:** an SB540 Schottky diode from the left side's 5 V to the right side's. The charging lead's 5 V can't flow back through it to the left strips. Running, the boost feeds both sides, with the right strips about 0.4 V lower, which the SK9822s don't mind. D3 drops about 0.8 W at the LED limit and gets warm.
 - **Charger:** its CE pin is pulled up by the logic's supply, so it charges only while the wheel is off and never from its own boost.
 - **Charge time:** about 7 h at 1 A for two cells, or about 5 h at 1.5 A with the jumper.
 
@@ -97,7 +97,7 @@ Unplug the right panel and plug in the charging lead: a USB-C sink breakout with
 
 To turn the wheel on, hold the magnet to the mark:
 
-1. S1 closes and pulls Q1's gate low through D1.
+1. S1 closes and pulls Q1's base low through D1.
 2. The Feather boots and sets `HOLD`, which keeps Q1 on through Q2.
 
 To turn it off, hold the magnet to the mark again:
@@ -134,9 +134,9 @@ Each piece goes in through the spokes on its own, end first, so check the gaps o
 |---|---|
 | Bracket | 46 × 31 mm |
 | Battery pack | 41 × 22 mm |
-| Electronics box | 29 × 36 mm |
+| Electronics box | 38 × 36 mm |
 
-At the stack's outer corner (r 84 mm) there are about 49 mm between the spoke cones; the box needs 29.
+At the stack's outer corner (r 90 mm) there are about 47 mm between the spoke cones; the box needs 38.
 
 ## Balance
 
@@ -162,9 +162,23 @@ The bracket has to fit between the flanges; the tab warns when it doesn't.
 
 ## Carrier board
 
-The carrier board is 62 × 22.9 mm, the Feather's outline with a strip of wire pads at each end. The Feather plugs in 8.5 mm above it on female headers, and every signal comes through them: there is no ribbon cable. Under the Feather sit the three SOIC shifters with their 33 Ω resistors, Q1–Q4, D1–D2, and the pull-ups and filters for the hall sensors and buttons.
+Every part on the carrier board is through-hole, so it's an easy DIY solder job with no surface-mount parts:
 
-The harnesses solder straight to the numbered pads: J2 at one end; at the other, the J1 pigtail, the power board's wires, and the lid's two buttons. The Board sheet is a placement for routing in KiCad, not a routed board. Check the header positions against the Feather.
+- **Chips and packs:** the DIP-14 shifters (Adafruit 1787), and 8-pin resistor packs for the 33 Ω series resistors.
+- **Pull-ups:** a 6-pin bussed pack holds the hall and preset-button pull-ups.
+- **Small parts:** 1/4 W resistors standing up, a BC327 and a 2N7000 in TO-92, standing 1N4148s and an SB540, and radial capacitors.
+
+The board is 90 × 32 mm and etched, 2-layer: a few bare boards cost about $5–15 from OSH Park, JLCPCB or PCBWay, with no assembly needed. A perfboard cut to size works too, following the same placement.
+
+- **Under the Feather:** the Feather plugs in at one end, 8.5 mm up on female headers, and every signal comes through them, with no ribbon cable. Only low parts sit under it: two of the shifters and the resistor packs.
+- **Beside the Feather:** the third shifter, the standing resistors, the transistors, the diodes and the capacitors.
+- **Order:** solder the low parts first and the headers last.
+
+The harnesses solder into numbered 1 mm holes along the board's long edges. J2 runs along the top. Along the bottom go the J1 pigtail, the power board's wires and the lid's two buttons.
+
+The board is 96 mm long in its box. The box still fits between the spoke cones, with about 47 mm free where 38 are needed.
+
+The Board sheet is a placement for routing in KiCad, not a routed board. It names every header pin and lists every part. Check the header positions against the Feather.
 
 ## Waterproofing
 

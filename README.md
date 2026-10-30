@@ -113,9 +113,9 @@ The **Hub module** sheet shows the module to scale. It is one stack on one side 
 
 ![Hub module sheet: end view with the bracket, strap, lid buttons and zip ties; section through the axle with the room between the spoke cones; and the whole-wheel balance with the rim weight](docs/images/electronics-hub.png)
 
-The **Board** sheet shows the carrier board's layout. The Feather plugs in above it, with the shifters, latch and pull-ups underneath and numbered wire pads at each end:
+The **Board** sheet shows the carrier board's layout, every part through-hole for a DIY build. The Feather plugs in at one end, with the low parts (DIP shifters, resistor packs) under it and the rest beside it. Numbered wire holes run along the long edges, and the sheet lists every part and every header pin:
 
-![Board sheet: the 62 × 23 mm carrier with the Feather's header rows, three SOIC shifters, the power switches, and numbered pads for the left harness, the right connector and the box's power board and controls](docs/images/electronics-board.png)
+![Board sheet: the 90 × 32 mm through-hole carrier with the Feather's header rows, three DIP-14 shifters, resistor packs, standing resistors, TO-92 transistors, diodes and capacitors, and numbered wire holes for the left harness, the right connector and the box's power board and buttons](docs/images/electronics-board.png)
 
 ### Changing the defaults
 

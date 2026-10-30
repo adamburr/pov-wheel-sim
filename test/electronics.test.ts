@@ -106,6 +106,18 @@ describe('electronics', () => {
     expect(designElectronics({ ...p, bsdMm: 1300, stripStartMm: 15, stripLengthMm: 600 }).warnings.join(' ')).toMatch(/half-metre/);
   });
 
+  it('lists the carrier board\'s parts from its own layout, every one through-hole', () => {
+    const lines = e.bom.filter((b) => b.group === 'Carrier board');
+    expect(lines.find((b) => /74AHCT125/.test(b.item))!.qty).toBe(e.shifters.length);
+    // the 33 Ω series resistors come in packs of four, enough for every lane and clock
+    const packs = lines.find((b) => /4 × 33Ω/.test(b.item))!.qty;
+    expect(packs * 4).toBeGreaterThanOrEqual(e.shifters.flatMap((u) => u.ch).length);
+    // every part counted once; no surface-mount packages
+    const refs = lines.flatMap((b) => b.item.match(/\(([^)]*)\)$/)?.[1].split(', ') ?? []);
+    expect(new Set(refs).size).toBe(refs.length);
+    expect(lines.some((b) => /SOIC|SOT-23|0603|0805/.test(b.item + b.part))).toBe(false);
+  });
+
   it('writes the shopping list as CSV with a row per line', () => {
     const csv = bomCsv(e).trim().split('\n');
     expect(csv[0]).toBe('Group,Qty,Item,Part,Source,Each (USD),Line (USD),Link,Note');

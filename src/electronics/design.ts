@@ -12,6 +12,7 @@
 // Everything is wired from the headers, so no ribbon cable to the HSTX port (whose pins, GPIO12–19,
 // stay unused). It costs the UART and I2C (STEMMA QT) pins: debug goes over USB.
 import { LED, type Params } from '../params';
+import { CARRIER, carrierLayout } from './carrier';
 import { hallSensors } from '../sim/firmware';
 import { derive } from '../sim/timing';
 
@@ -78,8 +79,7 @@ const PIN_A = 3;             // Weipu SP13 9-pin, per contact
 const CELL = { d: 18.4, len: 65.2, g: 46.5 };
 const STRIP_G_PER_MM = 0.06;  // DotStar 144/m in its sleeve, about 60 g a metre (estimate: weigh yours)
 const BLADE_G_PER_MM = 0.04;  // a 27 mm polypropylene blade with its tabs, per mm of length (estimate)
-/** The carrier board: the Feather's 50.8 × 22.9 mm with a strip of wire pads at each end. */
-export const CARRIER = { w: 62, h: 22.86, feather: 50.8 };
+export { CARRIER };
 const WIRE_COLOURS = ['blue', 'green', 'white', 'grey'];
 const HALL_COLOURS = ['brown', 'violet', 'pink', 'tan'];
 
@@ -119,7 +119,7 @@ export function designElectronics(p: Params): Electronics {
   ];
   notes.push('Controls on the hub package: two sealed buttons in the electronics box\'s lid, its outer face. The panels\' discs cover the box from the sides, so reach them through the spokes beyond the discs\' edge (raised caps help). Preset: a click for the next preset, a double click to turn Auto on or off (the next preset each time the lights go out). Brightness: cycles 100, 50, 25, 12 % (the firmware scales its LED current limit), and keeps the level when switched off; a double click turns the wheel on or off. It is wired into the power latch: off, a press powers the Feather, which stays on only if a second press follows. The preset button has a 10k pull-up, 1k in series and 100 nF; the brightness button sits on the latch\'s 100k pull-up.');
   notes.push('Power: the boost runs straight off the cells (through the protection board and fuse) and LED_EN turns it on; a 4.7 kΩ pull-down holds it off while the logic is off. The brightness button and HOLD latch only the logic\'s supply, so the off drain is a few tens of µA.');
-  notes.push('Charging: with the right panel unplugged, a lead from a USB-C charger into J1 feeds 5 V back up +5V_R to the charger. Q3 keeps it off the left strips, and the charger only runs while the logic is off.');
+  notes.push('Charging: with the right panel unplugged, a lead from a USB-C charger into J1 feeds 5 V back up +5V_R to the charger. The SB540 diode (D3) between the two sides keeps it off the left strips, and the charger only runs while the logic is off.');
   notes.push('Data on GPIO0–7, all on the headers: the UART (TX/RX) and I2C (SDA/SCL, the STEMMA QT socket) go to the strips, so debug over USB. GPIO7 is also the red LED: it flickers with right strip 4\'s data. GPIO8 is the PSRAM\'s chip select: leave it alone. A1 and A3 are spare.');
 
   // ---- Level shifters: every lane and clock through a 74AHCT125 at 5 V (3.3 V in reads as high) ----
@@ -266,7 +266,25 @@ export function designElectronics(p: Params): Electronics {
   if (L > HALF) warnings.push(`${L} LEDs per strip is more than a half-metre strip holds (${HALF}): shorten the strips (Hardware → LEDs → Details).`);
   notes.push(`One half-metre strip per blade (${stripsNeeded} in all): each is cut to ${Math.min(L, HALF)} of its ${HALF} LEDs, from the tip in, stopping short of the hub flange; the offcuts are spares.`);
   notes.push('Buy half metres, not 1 m strips: a 1 m strip is two halves soldered together, with a 2–3 mm pitch error at the joint.');
-  const shifterN = shifters.length;
+  // the carrier's parts, counted from its layout: all through-hole, soldered by hand
+  const KIND: Record<string, string> = {
+    'DIP-14': '74AHCT125 quad buffer (3.3 V → 5 V), DIP-14', 'SIP-8': 'resistor pack, 8-pin SIP', 'SIP-6': 'resistor pack, 6-pin SIP',
+    axial: 'resistor, 1/4 W', 'DO-35': 'diode', 'DO-201': 'Schottky diode, 5 A', 'TO-92': 'transistor, TO-92', disc: 'ceramic capacitor',
+    'radial-5': 'electrolytic capacitor', 'radial-6.3': 'electrolytic capacitor',
+  };
+  const byValue = new Map<string, { refs: string[]; pkg: string; value: string; part: string }>();
+  for (const q of carrierLayout({ shifters, halls, pins }).parts) {
+    const k = `${q.value}|${q.pkg}`;
+    const v = byValue.get(k) ?? { refs: [], pkg: q.pkg, value: q.value, part: q.part };
+    v.refs.push(q.ref);
+    byValue.set(k, v);
+  }
+  const carrierBom: BomLine[] = [...byValue.values()].map(({ refs, pkg, value, part }) => ({
+    group: 'Carrier board' as const, qty: refs.length,
+    item: `${pkg === 'DIP-14' ? KIND[pkg] : `${value} ${KIND[pkg]}`} (${refs.join(', ')})`,
+    part, source: pkg === 'DIP-14' ? 'Adafruit 1787, Digi-Key, Mouser' : 'Digi-Key, Mouser',
+    ...(pkg === 'DIP-14' ? { url: 'https://www.adafruit.com/product/1787', each: 1.5 } : {}),
+  }));
   const bom: BomLine[] = [
     { group: 'Wheel', qty: stripsNeeded, item: 'DotStar LED strip, 144/m, black, 0.5 m (SK9822)', part: '2328', source: 'Adafruit', url: 'https://www.adafruit.com/product/2328', each: 24.95, note: `one per blade, cut to ${Math.min(L, HALF)} LEDs` },
     { group: 'Wheel', qty: 1, item: 'Feather RP2350 with HSTX port and 8 MB PSRAM', part: '6130', source: 'Adafruit', url: 'https://www.adafruit.com/product/6130', each: 15.5 },
@@ -287,21 +305,9 @@ export function designElectronics(p: Params): Electronics {
     { group: 'Wheel', qty: 2, item: 'Waterproof circular connector, 9-pin, IP68, cable plug (male)', part: 'Weipu SP1310/P9', source: 'Digi-Key, Mouser', note: 'right panel + charging lead' },
     { group: 'Wheel', qty: 1, item: 'SP13 dust cap for the socket (riding without the right panel)', part: 'Weipu SP13 cap', source: 'Digi-Key, Mouser' },
     { group: 'Wheel', qty: 1, item: 'USB-C sink breakout with 5.1 kΩ CC resistors (charging lead)', part: 'any USB-C breakout', source: 'any' },
-    { group: 'Carrier board', qty: 1, item: `Carrier PCB, ${CARRIER.w} × 23 mm, 2-layer (from the Board sheet)`, part: '—', source: 'PCB fab (OSH Park, JLCPCB…)' },
-    { group: 'Carrier board', qty: shifterN, item: '74AHCT125 quad buffer, SOIC-14 (3.3 V → 5 V level shifter)', part: 'SN74AHCT125DR', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 1, item: 'P-MOSFET, logic level, SO-8 (right-side 5 V switch)', part: 'AO4407A', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 1, item: 'P-MOSFET, logic level, SOT-23 (logic power latch)', part: 'AO3401A', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 2, item: 'N-MOSFET, SOT-23 (latch hold, right-side switch)', part: '2N7002', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 2, item: 'Schottky diode, SOT-23 (on/off button to the latch, its sense)', part: 'BAT54', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: chans.length, item: '33 Ω resistor, 0603 (series, one per lane and clock)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: halls + 2, item: '10 kΩ resistor, 0603 (hall and preset-button pull-ups, charger CE)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 6, item: '100 kΩ resistor, 0603 (gate pulls, on/off button pull-up, battery divider, CE pull-down)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 1, item: '100 Ω resistor, 0603 (hall supply filter)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 1, item: '4.7 kΩ resistor, 0603 (holds the boost off while the logic is off)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 1, item: '1 kΩ resistor, 0603 (preset button, in series)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: shifterN + 2, item: '100 nF capacitor, 0603 (one per shifter, divider, preset button)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 2, item: '10 µF capacitor, 0805 (5 V, hall supply)', part: '—', source: 'Digi-Key, Mouser' },
-    { group: 'Carrier board', qty: 1, item: 'Feather female headers, 16 + 12 pin', part: '—', source: 'Adafruit' },
+    { group: 'Carrier board', qty: 1, item: `Carrier PCB, ${CARRIER.w} × ${CARRIER.h} mm, 2-layer, through-hole (from the Board sheet)`, part: '—', source: 'PCB fab (OSH Park, JLCPCB, PCBWay)', note: 'bare board: every part below is through-hole, soldered by hand' },
+    ...carrierBom,
+    { group: 'Carrier board', qty: 1, item: 'Feather female headers, 16 + 12 pin', part: '2886', source: 'Adafruit', url: 'https://www.adafruit.com/product/2886', each: 0.95 },
     { group: 'Sealing and wiring', qty: halls, item: '100 nF capacitor across each hall sensor\'s leads', part: '—', source: 'any' },
     { group: 'Sealing and wiring', qty: sides, item: '470 µF 6.3 V low-ESR capacitor at each panel\'s 5 V star', part: '—', source: 'any' },
     { group: 'Sealing and wiring', qty: 1, item: 'Silicone wire, 22 AWG, red and black (power)', part: '—', source: 'any', note: '~2 m each' },
@@ -313,10 +319,9 @@ export function designElectronics(p: Params): Electronics {
     { group: 'Sealing and wiring', qty: stripsNeeded * 2, item: 'Silicone end caps for the strips\' sleeves', part: '—', source: 'any' },
     { group: 'Sealing and wiring', qty: 1, item: 'UV-resistant zip ties, 2.5 and 3.6 mm', part: '—', source: 'any' },
     { group: 'Bench prototype (optional)', qty: 1, item: 'FeatherWing Doubler (50.9 × 47 mm): the Feather beside a prototyping area for the shifters and latch', part: '2890', source: 'Adafruit', url: 'https://www.adafruit.com/product/2890', each: 7.5 },
-    { group: 'Bench prototype (optional)', qty: shifterN, item: '74AHCT125 quad level shifter, DIP-14', part: '1787', source: 'Adafruit', url: 'https://www.adafruit.com/product/1787', each: 1.5 },
   ];
   const knownCost = Math.round(bom.filter((b) => b.group !== 'Bench prototype (optional)' && b.each).reduce((s, b) => s + b.qty * b.each!, 0) * 100) / 100;
-  notes.push('Bench prototype: a FeatherWing Doubler with the DIP 74AHCT125s and the latch on its prototyping half, wired from the headers like the carrier board.');
+  notes.push('Carrier board: every part is through-hole for a DIY build (DIP shifters, resistor packs, TO-92 transistors, standing resistors and diodes), on an etched 90 × 32 mm board with the Feather plugged in at one end. To try the circuit first, the same parts fit a breadboard or a FeatherWing Doubler.');
   notes.push('Firmware updates: the Feather\'s USB-C is inside the logic box. Leave a removable boot over it in the box\'s end, or plan to reopen the box.');
 
   if (LED.protocol !== 'clocked') warnings.push('The level shifters and lanes assume clocked LEDs (DotStar).');
