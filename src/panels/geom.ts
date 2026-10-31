@@ -162,10 +162,16 @@ export function pointInRing([x, y]: Pt, ring: Pt[]): boolean {
 }
 
 export function pointSegDist(p: Pt, a: Pt, b: Pt): number {
+  return Math.sqrt(pointSegDist2(p, a, b));
+}
+
+/** The square of pointSegDist: for comparing against a squared limit in hot loops. */
+export function pointSegDist2(p: Pt, a: Pt, b: Pt): number {
   const dx = b[0] - a[0], dy = b[1] - a[1];
   const L2 = dx * dx + dy * dy;
   const t = L2 > 0 ? clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2, 0, 1) : 0;
-  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+  const ex = p[0] - a[0] - t * dx, ey = p[1] - a[1] - t * dy;
+  return ex * ex + ey * ey;
 }
 
 /** Intersection of two open segments: [t along a, u along b, x, y], or undefined. */

@@ -50,18 +50,21 @@ export class Spoke {
   crossings: [number, number, number, number][] = []; // (t along the spoke 0..1, other spoke, x, y)
   interlace?: [number, number, number, number];        // (t, x, y, +1 outboard / -1 inboard)
   readonly length: number;
+  /** The hub and rim ends in plan. */
+  readonly a: Pt;
+  readonly b: Pt;
   constructor(
     readonly i: number, readonly side: -1 | 1, readonly direction: -1 | 1,
     readonly rimDeg: number, readonly hubDeg: number, readonly p0: P3, readonly p1: P3,
   ) {
     this.length = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+    this.a = [p0[0], p0[1]];
+    this.b = [p1[0], p1[1]];
   }
   at(t: number): P3 {
     const { p0, p1 } = this;
     return [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, p0[2] + (p1[2] - p0[2]) * t];
   }
-  get a(): Pt { return [this.p0[0], this.p0[1]]; }
-  get b(): Pt { return [this.p1[0], this.p1[1]]; }
 }
 
 export class Wheel {

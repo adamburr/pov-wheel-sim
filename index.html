@@ -166,9 +166,10 @@
       body .pane .lil-gui.lil-root { --width: 100%; width: 100%; }
       body .pane .lil-gui.lil-root > .lil-title { display: none; }
       body .lil-gui .lil-gui > .lil-title { font-size: 14px; }
-      /* Numbers are typed (or dragged, or scrolled, in the box): the sliders are too short to set them with. */
-      body .lil-gui .lil-controller.lil-number .lil-slider { display: none; }
-      body .lil-gui .lil-controller.lil-number.lil-has-slider input { width: 100%; min-width: 0; margin-left: 0; }
+      /* Numbers are typed (or dragged, or scrolled, in the box): the sliders are too short to set them with.
+         Strips per side, with only four values, keeps its slider. */
+      body .lil-gui .lil-controller.lil-number:not(.keep-slider) .lil-slider { display: none; }
+      body .lil-gui .lil-controller.lil-number.lil-has-slider:not(.keep-slider) input { width: 100%; min-width: 0; margin-left: 0; }
       @media (pointer: coarse) { body .lil-gui { --input-font-size: 16px; } }
     </style>
   </head>

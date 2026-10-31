@@ -188,7 +188,8 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
 
   // ---------- Hardware tab: the build, each section with its details tucked away ----------
   const hg = tabGui('hardware');
-  hg.add(p, 'stripCount', 1, 4, 1).name('Strips per side');
+  // the one setting with only a few values, so it keeps its slider
+  hg.add(p, 'stripCount', 1, 4, 1).name('Strips per side').domElement.classList.add('keep-slider');
 
   // Everything about the wheel itself. A size brings typical values for the rest of it: measure yours.
   const wheel = hg.addFolder('Wheel');

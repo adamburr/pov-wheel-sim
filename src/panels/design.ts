@@ -16,7 +16,7 @@
 // Wheel dimensions other than the bore and tip radius are TYPICAL VALUES until measured.
 import {
   adiff, arcMerge, boreContour, box, type BulgePt, ccw, circlePts, clamp, cleanRing, convexHull, deg, densify, dist, filletRing, mirrorPt,
-  outlineOf, pmod, pointInRing, pointSegDist, pol, type Pt, rad, rectPts, Ring, rot, rotRing, sampleBulge, slotPts,
+  outlineOf, pmod, pointInRing, pointSegDist, pointSegDist2, pol, type Pt, rad, rectPts, Ring, rot, rotRing, sampleBulge, slotPts,
 } from './geom';
 import { type Material, MATERIALS } from './materials';
 import { PANEL_STRIP_RANGE } from './strips';
@@ -315,8 +315,16 @@ function spokeTieCands(c: Ctx, side: number, a: number, gaps: number[]): Cand[] 
   // the disc's ties: a spoke tie may sit over the disc's edge, clear of them
   const discHoles = ties.flatMap((t) => t.holes);
   // a tie can't go down through a hole that another spoke runs under
-  const blocked = (s: Spoke, holes: Pt[]) => own.some((o) => o !== s && holes.some((q) => pointSegDist(q, o.a, o.b) < h * Math.SQRT2 + wh.p.spokeD / 2))
-    || holes.some((q) => discHoles.some((dq) => dist(q, dq) < hole * Math.SQRT2 + edge));
+  const spokeNear = h * Math.SQRT2 + wh.p.spokeD / 2, spokeNear2 = spokeNear ** 2, discNear2 = (hole * Math.SQRT2 + edge) ** 2;
+  // each spoke's plan box, grown by the reach, to pass over the spokes nowhere near a hole quickly
+  const boxes = own.map((o) => [Math.min(o.a[0], o.b[0]) - spokeNear, Math.max(o.a[0], o.b[0]) + spokeNear,
+    Math.min(o.a[1], o.b[1]) - spokeNear, Math.max(o.a[1], o.b[1]) + spokeNear]);
+  const nearSpoke = (q: Pt, k: number) => {
+    const [x0, x1, y0, y1] = boxes[k];
+    return q[0] >= x0 && q[0] <= x1 && q[1] >= y0 && q[1] <= y1 && pointSegDist2(q, own[k].a, own[k].b) < spokeNear2;
+  };
+  const blocked = (s: Spoke, holes: Pt[]) => own.some((o, k) => o !== s && holes.some((q) => nearSpoke(q, k)))
+    || holes.some((q) => discHoles.some((dq) => (q[0] - dq[0]) ** 2 + (q[1] - dq[1]) ** 2 < discNear2));
   // near the rim, the tie's pad stays inside the rim wall, inside the blades' arced tips and clear of every
   // nipple (either side's)
   const rimIn = Math.min(wh.p.rimWallR - pp.tipClear, c.rEnd), padR = h * Math.SQRT2 + edge, nipR = wh.nippleTipR() - padR - pp.nippleD / 2;
