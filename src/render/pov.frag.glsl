@@ -20,7 +20,6 @@ uniform int uLeds;
 uniform float uRStart;
 uniform float uPitch;
 uniform float uHalfW;
-uniform float uStagger;
 uniform float uSide;         // +1 drive-side LEDs, -1 back LEDs
 uniform int uBackRow;        // row offset of back-strip data (0 when shared)
 uniform int uBackChain;      // chain-unit offset of back strips (0 when wired in parallel)
@@ -29,11 +28,7 @@ uniform float uLatchBase;
 uniform float uLatchPerLed;
 uniform float uPwmPeriod;
 uniform float uPwmPhase;
-uniform float uGbPeriod;
-uniform float uGbDuty;
-uniform float uGbPhase;
 uniform float uCurrentScale;
-uniform int uOverflowBlank;
 uniform float uT;            // exposure length (box)
 uniform float uTau;          // > 0: human-eye exponential persistence
 uniform float uGain;
@@ -183,7 +178,7 @@ vec3 bannerDuty(float tu, vec4 A, vec4 D, float offAng, float rk, int frame) {
 }
 
 // Light emitted by one LED over [ta, tb] within slice (A, B), split at column changes.
-vec3 emit(float ta, float tb, vec4 A, vec4 B, vec4 D, int s, float offAng, float rk, float latch, int row, float ph, float gph) {
+vec3 emit(float ta, float tb, vec4 A, vec4 B, vec4 D, int s, float offAng, float rk, float latch, int row, float ph) {
   bool locked = B.y < 0.0;
   float C = float(uC);
   float x0, xs;
@@ -204,37 +199,27 @@ vec3 emit(float ta, float tb, vec4 A, vec4 B, vec4 D, int s, float offAng, float
     float j = floor(x);
     float tn = xs > 1e-9 ? ta + (j + 1.0 - x0) / xs : tb;
     tn = it == 11 ? tb : clamp(tn, t + 1e-9, tb);
-    bool on = true;
-    float col;
-    if (locked) {
-      col = mod(j, C);
+    // past the last column the firmware wraps round to the first
+    float col = locked ? mod(j, C) : mod(j + offCol, C);
+    vec3 duty;
+    float tSend = locked ? 0.5 * (t + tn) : B.x + j * B.y;
+    int frame = frameAt(tSend, A, D);
+    // Spin: the firmware turns a still picture by offsetting the column it sends, more each
+    // moment. One column at a time, so it turns smoothly and needs no extra frames.
+    if (uSpinRate != 0.0) col = mod(col + floor(fract(uSpinPhase + uSpinRate * tSend) * C), C);
+    if (uBanner == 1) {
+      // Each update is computed for one moment: the send time, or (with prediction) the
+      // middle of the interval it will be on screen. Encoder-locked firmware is exact.
+      float tu = locked ? tSend : tSend + (uPredict == 1 ? latch + 0.5 * B.y : 0.0);
+      duty = bannerDuty(tu, A, D, offAng, rk, frame);
     } else {
-      on = uBanner == 1 || !(uOverflowBlank == 1 && j >= C);
-      col = mod(j + offCol, C);
+      duty = texelFetch(uCols, ivec3(int(col), row, frame), 0).rgb;
     }
-    if (on) {
-      vec3 duty;
-      float tSend = locked ? 0.5 * (t + tn) : B.x + j * B.y;
-      int frame = frameAt(tSend, A, D);
-      // Spin: the firmware turns a still picture by offsetting the column it sends, more each
-      // moment. One column at a time, so it turns smoothly and needs no extra frames.
-      if (uSpinRate != 0.0) col = mod(col + floor(fract(uSpinPhase + uSpinRate * tSend) * C), C);
-      if (uBanner == 1) {
-        // Each update is computed for one moment: the send time, or (with prediction) the
-        // middle of the interval it will be on screen. Encoder-locked firmware is exact.
-        float tu = locked ? tSend : tSend + (uPredict == 1 ? latch + 0.5 * B.y : 0.0);
-        duty = bannerDuty(tu, A, D, offAng, rk, frame);
-      } else {
-        duty = texelFetch(uCols, ivec3(int(col), row, frame), 0).rgb;
-      }
-      vec3 lit = vec3(
-        sq(t, tn, duty.r, uPwmPeriod, ph),
-        sq(t, tn, duty.g, uPwmPeriod, ph),
-        sq(t, tn, duty.b, uPwmPeriod, ph));
-      // The slow global-brightness PWM gates the fast colour PWM; treat the fast one as its average.
-      if (uGbPeriod > 0.0) lit *= sq(t, tn, uGbDuty, uGbPeriod, gph) / max(tn - t, 1e-12);
-      e += lit;
-    }
+    vec3 lit = vec3(
+      sq(t, tn, duty.r, uPwmPeriod, ph),
+      sq(t, tn, duty.g, uPwmPeriod, ph),
+      sq(t, tn, duty.b, uPwmPeriod, ph));
+    e += lit;
     t = tn;
   }
   return e * uCurrentScale;
@@ -246,10 +231,9 @@ float weight(float ta, float tb) {
 
 
 // Shared per-LED constants for strip s.
-struct StripInfo { float stag; float offAng; int chainPos; };
+struct StripInfo { float offAng; int chainPos; };
 StripInfo stripInfo(int s) {
   StripInfo si;
-  si.stag = uStagger * float(s) / float(uStrips) * uPitch;
   si.offAng = TAU * float(s) / float(uStrips);
   int unit = uSide < 0.0 ? s + uBackChain : s;
   si.chainPos = unit / uLanes;
@@ -267,24 +251,23 @@ vec3 chaseSlice(vec2 P, vec4 A, vec4 B, vec4 D, float px, float hwT, float tanCo
   for (int s = 0; s < 8; s++) {
     if (s >= uStrips) break;
     StripInfo si = stripInfo(s);
-    int kc = int(floor((r - uRStart - si.stag) / uPitch));
+    int kc = int(floor((r - uRStart) / uPitch));
     for (int dk = -1; dk <= 1; dk++) {
       int k = kc + dk;
       if (k < 0 || k >= uLeds) continue;
-      float rk = uRStart + si.stag + (float(k) + 0.5) * uPitch;
+      float rk = uRStart + (float(k) + 0.5) * uPitch;
       float radCov = overlap(r - 0.5 * px, r + 0.5 * px, rk - hw, rk + hw) / px;
       if (radCov <= 0.0) continue;
       int row = rowBase + s * uLeds + k;
       float latch = uLatchBase + uLatchPerLed * float(si.chainPos * uLeds + k);
       float ph = hash(float(row) + 0.5) * uPwmPeriod + uPwmPhase;
-      float gph = hash(float(row) + 17.0) * uGbPeriod + uGbPhase;
       float u0 = A.z + si.offAng - th;
 
       if (abs(w) < 1e-6) {
         // Stationary wheel: a static LED.
         float d = r * (mod(u0 + PI, TAU) - PI);
         float cov = radCov * overlap(d - 0.5 * px, d + 0.5 * px, -hw, hw) / px;
-        if (cov > 0.0) acc += emit(t0, t1, A, B, D, s, si.offAng, rk, latch, row, ph, gph) * weight(t0, t1) * cov;
+        if (cov > 0.0) acc += emit(t0, t1, A, B, D, s, si.offAng, rk, latch, row, ph) * weight(t0, t1) * cov;
         continue;
       }
       float delta = min(hwT / max(r, 1e-4), PI);
@@ -297,7 +280,7 @@ vec3 chaseSlice(vec2 P, vec4 A, vec4 B, vec4 D, float px, float hwT, float tanCo
         if (ub <= ua) continue;
         float ta = t0 + (ua - u0) / w;
         float tb = t0 + (ub - u0) / w;
-        acc += emit(ta, tb, A, B, D, s, si.offAng, rk, latch, row, ph, gph) * weight(ta, tb) * radCov * tanCov;
+        acc += emit(ta, tb, A, B, D, s, si.offAng, rk, latch, row, ph) * weight(ta, tb) * radCov * tanCov;
       }
     }
   }
@@ -345,18 +328,17 @@ vec3 rideBySlice(vec2 P, vec4 A, vec4 B, vec4 D, float px, float hwT, float tanC
       float halfT = min(hwT / r, PI) / max(abs(udot), 1e-3);
       float ta = max(t0, tc - halfT), tb = min(t1, tc + halfT);
       if (tb <= ta) continue;
-      int kc = int(floor((r - uRStart - si.stag) / uPitch));
+      int kc = int(floor((r - uRStart) / uPitch));
       for (int dk = -1; dk <= 1; dk++) {
         int k = kc + dk;
         if (k < 0 || k >= uLeds) continue;
-        float rk = uRStart + si.stag + (float(k) + 0.5) * uPitch;
+        float rk = uRStart + (float(k) + 0.5) * uPitch;
         float radCov = overlap(r - 0.5 * px, r + 0.5 * px, rk - hw, rk + hw) / px;
         if (radCov <= 0.0) continue;
         int row = rowBase + s * uLeds + k;
         float latch = uLatchBase + uLatchPerLed * float(si.chainPos * uLeds + k);
         float ph = hash(float(row) + 0.5) * uPwmPeriod + uPwmPhase;
-        float gph = hash(float(row) + 17.0) * uGbPeriod + uGbPhase;
-        acc += emit(ta, tb, A, B, D, s, si.offAng, rk, latch, row, ph, gph) * weight(ta, tb) * radCov * tanCov;
+        acc += emit(ta, tb, A, B, D, s, si.offAng, rk, latch, row, ph) * weight(ta, tb) * radCov * tanCov;
       }
     }
   }

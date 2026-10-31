@@ -54,8 +54,7 @@ export class RibbonSource {
       this.aEstimate = 0;
       fresh = true;
     }
-    const posKey = [p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData,
-      p.radialStagger, p.imageRotationDeg].join('|');
+    const posKey = [p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.backData, p.imageRotationDeg].join('|');
     if (posKey !== this.posKey) {
       this.posKey = posKey;
       this.pos = ledPositions(p, d);
@@ -150,7 +149,7 @@ export class RibbonSource {
       const o = idx * 4;
       const px = Math.floor((pos[idx * 2] + R) * scale), py = Math.floor((R - pos[idx * 2 + 1]) * scale);
       const index = px >= 0 && py >= 0 && px < IMAGE && py < IMAGE ? this.bitmap[py * IMAGE + px] : 0;
-      const comp = index && p.radialCompensation ? ledRadius(p, d, 0, Math.floor(idx / C) % n) / d.rEnd : 1;
+      const comp = index && p.radialCompensation ? ledRadius(d, Math.floor(idx / C) % n) / d.rEnd : 1;
       for (let ch = 0; ch < 3; ch++) {
         const val = index ? this.palette[index * 3 + ch] * comp : 0;
         out[o + ch] = Math.round(val * 255);

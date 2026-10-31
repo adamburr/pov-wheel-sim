@@ -86,7 +86,8 @@ export function cutDxf(s: SideResult): string {
 export function referenceDxf(d: PanelDesign): string {
   const dxf = new Dxf('mm', [['0', 7], ['OUTLINE', 7], ['LED_STRIP', 30], ['SENSOR_UNDER', 6], ['SPOKES', 8], ['NOTES', 3]]);
   const L = d.sides.LEFT, R = d.sides.RIGHT;
-  for (const [dx, label, s] of [[-L.g.rhoEnd - 30, 'LEFT  (seen from the right; reference only, do not cut)', L], [R.g.rhoEnd + 30, 'RIGHT (seen from the right; reference only, do not cut)', R]] as const) {
+  for (const [dx, label, s] of [[-L.g.rhoEnd - 30, 'LEFT  (seen from the right; reference only, do not cut)', L], [R.g.rhoEnd + 30, 'RIGHT '
+    + '(seen from the right; reference only, do not cut)', R]] as const) {
     const mv = <T extends number[]>(p: T) => [p[0] + dx, ...p.slice(1)] as T;
     dxf.polyline(s.g.outlineBulge.map(mv), 'OUTLINE');
     for (const h of s.g.holes) if (!h.slot) dxf.polyline(h.bulge.map(mv), 'OUTLINE');

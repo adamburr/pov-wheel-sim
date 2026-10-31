@@ -106,7 +106,8 @@ function partScene(d: PanelDesign, s: SideResult): Scene {
   const sb = g.sensors.find((b) => b.blade === 0);
   if (sb) {
     const at = pol(sb.rho, sb.a - a0), out = pol(sb.rho + 60, sb.a - a0 + 12);
-    note(at, out, `hall sensor (US5881, marked face out, leads in) ${g.arms.length > 1 ? 'midway between strips' : 'opposite the blade'}, r ${sm.sensorR[0]} mm: a tie across its body, one across its leads`, 'left');
+    note(at, out, `hall sensor (US5881, marked face out, leads in) ${g.arms.length > 1 ? 'midway between strips' : 'opposite the blade'}, r `
+      + `${sm.sensorR[0]} mm: a tie across its body, one across its leads`, 'left');
   }
   const dt = s.discTies[0];
   if (dt) { const p = R(dt.holes[0]); note(p, [p[0] - 60, p[1] - 70], `disc tie round the spoke crossing at r ${dt.r.toFixed(1)} mm`, 'right'); }

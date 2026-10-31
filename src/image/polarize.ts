@@ -12,13 +12,12 @@ export interface ColumnBuffer {
 
 /** Row layout shared with the shader: row = (back * stripCount + strip) * ledsPerStrip + led. */
 export function rowCount(p: Params, d: Derived): number {
-  const backRows = p.doubleSided && p.backData === 'independent' ? 2 : 1;
+  const backRows = p.backData === 'independent' ? 2 : 1;
   return backRows * p.stripCount * d.ledsPerStrip;
 }
 
-export function ledRadius(p: Params, d: Derived, strip: number, led: number): number {
-  const stagger = p.radialStagger ? (strip / p.stripCount) * d.pitch : 0;
-  return d.rStart + stagger + (led + 0.5) * d.pitch;
+export function ledRadius(d: Derived, led: number): number {
+  return d.rStart + (led + 0.5) * d.pitch;
 }
 
 /**
@@ -55,13 +54,12 @@ export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
   const rows = rowCount(p, d);
   const out = new Uint8Array(C * rows * 4);
   const sample = dutySampler(img, p.gamma);
-  const levels = (1 << Math.max(1, Math.min(8, p.colorBits))) - 1;
   const rot = (p.imageRotationDeg * Math.PI) / 180;
   const dTheta = (Math.PI * 2) / C;
   const fitR = d.rEnd;
   let sum = 0;
 
-  const backs = p.doubleSided && p.backData === 'independent' ? 2 : 1;
+  const backs = p.backData === 'independent' ? 2 : 1;
   const acc = [0, 0, 0];
   const SA = 4, SR = 3; // area-average sub-samples across each column arc and LED pitch
 
@@ -69,7 +67,7 @@ export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
     for (let s = 0; s < p.stripCount; s++) {
       for (let k = 0; k < n; k++) {
         const row = (back * p.stripCount + s) * n + k;
-        const rk = ledRadius(p, d, s, k);
+        const rk = ledRadius(d, k);
         const comp = p.radialCompensation ? rk / d.rEnd : 1;
         for (let c = 0; c < C; c++) {
           acc[0] = acc[1] = acc[2] = 0;
@@ -97,9 +95,9 @@ export function polarize(img: Pixels, p: Params, d: Derived): ColumnBuffer {
           }
           const o = (row * C + c) * 4;
           for (let ch = 0; ch < 3; ch++) {
-            const q = Math.round(Math.min(1, acc[ch] * comp) * levels) / levels;
-            out[o + ch] = Math.round(q * 255);
-            sum += q;
+            const v = Math.round(Math.min(1, acc[ch] * comp) * 255);
+            out[o + ch] = v;
+            sum += v / 255;
           }
           out[o + 3] = 255;
         }
@@ -127,7 +125,6 @@ export function bannerBitmap(img: Pixels, p: Params, d: Derived): BannerBitmap {
   const width = Math.max(1, Math.round((height * img.width) / img.height));
   const out = new Uint8Array(width * height * 4);
   const sample = dutySampler(img, p.gamma);
-  const levels = (1 << Math.max(1, Math.min(8, p.colorBits))) - 1;
   const S = 3; // area-average sub-samples per axis
   const acc = [0, 0, 0];
   let sum = 0;
@@ -139,9 +136,9 @@ export function bannerBitmap(img: Pixels, p: Params, d: Derived): BannerBitmap {
       }
       const o = (y * width + x) * 4;
       for (let ch = 0; ch < 3; ch++) {
-        const q = Math.round(Math.min(1, acc[ch] / (S * S)) * levels) / levels;
-        out[o + ch] = Math.round(q * 255);
-        sum += q;
+        const v = Math.round(Math.min(1, acc[ch] / (S * S)) * 255);
+        out[o + ch] = v;
+        sum += v / 255;
       }
       out[o + 3] = 255;
     }
@@ -187,12 +184,12 @@ export function waterLut(p: Params, d: Derived, grid: number, cellM = waterCellM
   const C = p.columnsPerRev, n = d.ledsPerStrip, rows = rowCount(p, d);
   const lut = new Int32Array(C * rows).fill(-1);
   const rot = (p.imageRotationDeg * Math.PI) / 180;
-  const backs = p.doubleSided && p.backData === 'independent' ? 2 : 1;
+  const backs = p.backData === 'independent' ? 2 : 1;
   for (let back = 0; back < backs; back++) {
     for (let s = 0; s < p.stripCount; s++) {
       for (let k = 0; k < n; k++) {
         const row = (back * p.stripCount + s) * n + k;
-        const r = ledRadius(p, d, s, k);
+        const r = ledRadius(d, k);
         for (let c = 0; c < C; c++) {
           const th = -((c + 0.5) * ((Math.PI * 2) / C) + rot);
           const x = r * Math.cos(th), y = r * Math.sin(th);
@@ -214,12 +211,12 @@ export function ledPositions(p: Params, d: Derived): Float32Array {
   const C = p.columnsPerRev, n = d.ledsPerStrip, rows = rowCount(p, d);
   const pos = new Float32Array(C * rows * 2);
   const rot = (p.imageRotationDeg * Math.PI) / 180;
-  const backs = p.doubleSided && p.backData === 'independent' ? 2 : 1;
+  const backs = p.backData === 'independent' ? 2 : 1;
   for (let back = 0; back < backs; back++) {
     for (let s = 0; s < p.stripCount; s++) {
       for (let k = 0; k < n; k++) {
         const row = (back * p.stripCount + s) * n + k;
-        const r = ledRadius(p, d, s, k);
+        const r = ledRadius(d, k);
         for (let c = 0; c < C; c++) {
           const th = -((c + 0.5) * ((Math.PI * 2) / C) + rot);
           pos[(row * C + c) * 2] = r * Math.cos(th);
@@ -269,7 +266,7 @@ export function renderWater(maps: WaterMaps, lut: Int32Array, p: Params, d: Deri
       if (b < 0.3 && local > 0.2) { a = 1; f = 1; } // spray: small droplets still glint at full brightness
     }
     const k = Math.floor(idx / C) % n;
-    const comp = p.radialCompensation ? ledRadius(p, d, 0, k) / d.rEnd : 1;
+    const comp = p.radialCompensation ? ledRadius(d, k) / d.rEnd : 1;
     for (let ch = 0; ch < 3; ch++) {
       const v = g(colour(f, ch)) * a * comp;
       out[o + ch] = Math.round(v * 255);

@@ -40,14 +40,17 @@ export function carrierLayout(e: Pick<Electronics, 'shifters' | 'halls' | 'pins'
     at: [shiftAt[i][0], shiftAt[i][1]], vertical: shiftAt[i][2], group: 'shift', part: 'SN74AHCT125N (Adafruit 1787)',
   }));
   const decAt: [number, number, boolean][] = [[24.5, 19, true], [47, 12.4, true], [59.5, 27.2, false]];
-  e.shifters.forEach((u, i) => add({ ref: `C${i + 1}`, value: '100nF', pkg: 'disc', fn: `${u.ref} decoupling`, at: [decAt[i][0], decAt[i][1]], vertical: decAt[i][2], group: 'shift', part: 'ceramic, 2.54 mm leads' }));
+  e.shifters.forEach((u, i) => add({ ref: `C${i + 1}`, value: '100nF', pkg: 'disc', fn: `${u.ref} `
+    + `decoupling`, at: [decAt[i][0], decAt[i][1]], vertical: decAt[i][2], group: 'shift', part: 'ceramic, 2.54 mm leads' }));
   const chans = e.shifters.flatMap((u) => u.ch);
   const packs = Math.ceil(chans.length / 4);
   const packAt: [number, number][] = [[13.5, 19], [35.5, 19], [13.5, 22.8]];
   for (let i = 0; i < packs; i++) {
-    add({ ref: `RN${i + 1}`, value: '4 × 33Ω', pkg: 'SIP-8', fn: `series: ${chans.slice(4 * i, 4 * i + 4).map((k) => k.y).join(', ')}`, at: packAt[i], group: 'shift', part: 'Bourns 4608X-102-330LF (isolated)' });
+    add({ ref: `RN${i + 1}`, value: '4 × 33Ω', pkg: 'SIP-8', fn: `series: `
+      + `${chans.slice(4 * i, 4 * i + 4).map((k) => k.y).join(', ')}`, at: packAt[i], group: 'shift', part: 'Bourns 4608X-102-330LF (isolated)' });
   }
-  add({ ref: `RN${packs + 1}`, value: '5 × 10k', pkg: 'SIP-6', fn: `pull-ups to 3V3: ${[...Array.from({ length: e.halls }, (_, i) => `HALL${i + 1}`), 'BTN_PRESET'].join(', ')}`, at: [33.8, 22.8], group: 'input', part: 'Bourns 4606X-101-103LF (bussed)' });
+  add({ ref: `RN${packs + 1}`, value: '5 × 10k', pkg: 'SIP-6', fn: `pull-ups to 3V3: `
+    + `${[...Array.from({ length: e.halls }, (_, i) => `HALL${i + 1}`), 'BTN_PRESET'].join(', ')}`, at: [33.8, 22.8], group: 'input', part: 'Bourns 4606X-101-103LF (bussed)' });
 
   // beside the Feather: the third shifter (above), then the resistors standing up, the latch and the capacitors
   const resistors: [string, string, BoardPart['group']][] = [
@@ -71,7 +74,8 @@ export function carrierLayout(e: Pick<Electronics, 'shifters' | 'halls' | 'pins'
   add({ ref: 'Q2', value: '2N7000', pkg: 'TO-92', fn: 'latch hold (HOLD)', at: [76.5, 18], group: 'power', part: '2N7000' });
   add({ ref: 'D1', value: '1N4148', pkg: 'DO-35', fn: 'on/off button to the latch node', at: [81.2, 18], vertical: true, group: 'power', part: '1N4148, standing' });
   add({ ref: 'D2', value: '1N4148', pkg: 'DO-35', fn: 'on/off button sense (SW)', at: [84.2, 18], vertical: true, group: 'power', part: '1N4148, standing' });
-  add({ ref: 'D3', value: 'SB540', pkg: 'DO-201', fn: '+5V_L to +5V_R (keeps the charging lead off the left strips)', at: [87.6, 19.2], vertical: true, group: 'power', part: 'SB540 (5 A Schottky), standing' });
+  add({ ref: 'D3', value: 'SB540', pkg: 'DO-201', fn: '+5V_L to +5V_R (keeps the charging lead off the left '
+    + 'strips)', at: [87.6, 19.2], vertical: true, group: 'power', part: 'SB540 (5 A Schottky), standing' });
   const n = e.shifters.length;
   add({ ref: `C${n + 1}`, value: '100µF', pkg: 'radial-6.3', fn: '+5V_L bulk', at: [68.5, 26.2], group: 'power', part: '100 µF 10 V electrolytic, 6.3 mm' });
   add({ ref: `C${n + 2}`, value: '10µF', pkg: 'radial-5', fn: 'hall supply filter', at: [75, 26.2], group: 'filter', part: '10 µF 16 V electrolytic, 5 mm' });

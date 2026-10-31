@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import fragmentShader from './pov.frag.glsl?raw';
-import { BANNER_LOWER, bannerLowerOf, brightnessScale, LED, type Params, SHUTTERS, speedMps } from '../params';
+import { BANNER_LOWER, bannerLowerOf, brightnessScale, type Params, SHUTTERS, speedMps } from '../params';
 import { type Derived, lanesFor } from '../sim/timing';
 import { animSpecFor, type AnimSpec, MAX_SLICES, type Slice } from '../sim/firmware';
 import { bannerTileM, type FrameStack } from '../image/polarize';
@@ -28,16 +28,17 @@ export const FLANGE_R = 0.028;
 export const SPOKE_R = 0.001;
 export const STRIP_T = 0.003;
 export const DIE_T = 0.0015;
+const RIM_SPOKE_END = 0.003; // the spokes meet the centre plane this far outside the rim's inner wall
 
 /** Height of the spoke line above the centre plane at radius r (drive side; mirror for the other). */
 export function spokeZ(d: Derived, r: number): number {
-  const rimInner = d.maxLedRadius + 0.008;
+  const rimInner = d.rimWallR + RIM_SPOKE_END;
   return FLANGE_Z * Math.min(1, Math.max(0, (rimInner - r) / (rimInner - FLANGE_R)));
 }
 
 /** Tilt of the strips (and spokes) out of the wheel plane, in radians. */
 export function stripTilt(d: Derived): number {
-  return Math.atan(FLANGE_Z / (d.maxLedRadius + 0.008 - FLANGE_R));
+  return Math.atan(FLANGE_Z / (d.rimWallR + RIM_SPOKE_END - FLANGE_R));
 }
 
 /** Height of the LED faces at radius r: die on strip on spoke. */
@@ -46,8 +47,8 @@ export function ledFaceZ(d: Derived, r: number): number {
 }
 
 /**
- * The LED light plane(s). Front faces the drive side (+z); the back plane carries the
- * back-to-back strips when double-sided. Both share every uniform except the side.
+ * The LED light planes. Front faces the drive side (+z); the back plane carries the other
+ * side's strips. Both share every uniform except the side.
  */
 export class PovDisplay {
   readonly group = new THREE.Group();
@@ -69,10 +70,9 @@ export class PovDisplay {
       uSlices: { value: this.sliceTex }, uSliceCount: { value: 0 },
       uCols: { value: this.colTex }, uC: { value: 1 },
       uStrips: { value: 1 }, uLeds: { value: 1 }, uRStart: { value: 0 }, uPitch: { value: 0.007 },
-      uHalfW: { value: 0.003 }, uStagger: { value: 0 }, uBackRow: { value: 0 }, uBackChain: { value: 0 },
+      uHalfW: { value: 0.003 }, uBackRow: { value: 0 }, uBackChain: { value: 0 },
       uLanes: { value: 1 }, uLatchBase: { value: 0 }, uLatchPerLed: { value: 0 },
-      uPwmPeriod: { value: 0 }, uPwmPhase: { value: 0 }, uGbPeriod: { value: 0 }, uGbDuty: { value: 1 },
-      uGbPhase: { value: 0 }, uCurrentScale: { value: 1 }, uOverflowBlank: { value: 0 },
+      uPwmPeriod: { value: 0 }, uPwmPhase: { value: 0 }, uCurrentScale: { value: 1 },
       uT: { value: 0.25 }, uTau: { value: 0 }, uGain: { value: 1 },
       uRideBy: { value: 0 }, uRRoll: { value: 0.34 }, uFalloff: { value: 0.5 },
       uFrames: { value: 1 }, uFrameTimed: { value: 1 }, uFps: { value: 12 },
@@ -121,7 +121,7 @@ export class PovDisplay {
   private ensurePlane(p: Params, d: Derived) {
     const R = d.rEnd + 0.02;
     const rideBy = p.view === 'ride-by';
-    const key = `${p.view}|${R}|${rideBy ? p.trackLengthM : 0}|${d.rStart}|${d.maxLedRadius}`;
+    const key = `${p.view}|${R}|${rideBy ? p.trackLengthM : 0}|${d.rStart}|${d.rimWallR}`;
     let pair = this.planes.get(key);
     if (!pair) {
       // Settings or the window changed: drop stale shapes (the other view rebuilds its own).
@@ -166,7 +166,6 @@ export class PovDisplay {
 
   update(p: Params, d: Derived, slices: Slice[], tRef: number, camera: THREE.Camera, anim?: AnimSpec) {
     this.ensurePlane(p, d);
-    const led = LED;
     const u = this.shared;
     const n = Math.min(slices.length, MAX_SLICES);
     for (let i = 0; i < n; i++) {
@@ -188,14 +187,13 @@ export class PovDisplay {
     this.sliceTex.needsUpdate = true;
     u.uSliceCount.value = n;
 
-    const independent = p.doubleSided && p.backData === 'independent';
+    const independent = p.backData === 'independent';
     u.uC.value = p.columnsPerRev;
     u.uStrips.value = p.stripCount;
     u.uLeds.value = d.ledsPerStrip;
     u.uRStart.value = d.rStart;
     u.uPitch.value = d.pitch;
     u.uHalfW.value = d.halfWidth;
-    u.uStagger.value = p.radialStagger ? 1 : 0;
     u.uBackRow.value = independent ? p.stripCount * d.ledsPerStrip : 0;
     u.uBackChain.value = independent ? p.stripCount : 0;
     u.uLanes.value = lanesFor(d.stripUnits);
@@ -205,13 +203,8 @@ export class PovDisplay {
     const pwmP = p.pwmHz > 0 ? 1 / p.pwmHz : 0;
     u.uPwmPeriod.value = pwmP;
     u.uPwmPhase.value = pwmP ? tRef % pwmP : 0;
-    const slowGb = led.gbMode === 'pwm' && p.globalBrightness < 31 && p.gbPwmHz > 0;
-    const gbP = slowGb ? 1 / p.gbPwmHz : 0;
-    u.uGbPeriod.value = gbP;
-    u.uGbPhase.value = gbP ? tRef % gbP : 0;
-    u.uGbDuty.value = p.globalBrightness / 31;
-    u.uCurrentScale.value = (led.gbMode === 'current' ? p.globalBrightness / 31 : 1) * brightnessScale(p);
-    u.uOverflowBlank.value = p.syncMode === 'hall' && p.overflow === 'blank' ? 1 : 0;
+    // the SK9822's global brightness sets its current, so it scales the light without a slower PWM
+    u.uCurrentScale.value = (p.globalBrightness / 31) * brightnessScale(p);
 
     const eye = p.exposureModel === 'eye';
     u.uT.value = SHUTTERS[p.shutter];
@@ -249,7 +242,6 @@ export class PovDisplay {
     u.uSpinRate.value = spin;
     u.uSpinPhase.value = spin ? (((tRef * spin) % 1) + 1) % 1 : 0;
     u.uRRoll.value = d.tireRadius;
-    this.back.visible = p.doubleSided;
 
     for (const m of [this.front, this.back]) {
       const cam = (m.material as THREE.ShaderMaterial).uniforms.uCamLocal.value as THREE.Vector3;

@@ -15,7 +15,7 @@ The tab also lists the power budget, warns about anything that doesn't fit, and 
 |---|---|---|
 | Controller | Adafruit Feather RP2350 with 8 MB PSRAM (6130) | Two cores, PIO, and room for animations in PSRAM. Everything is wired from its headers; its HSTX port isn't used |
 | Strips | Adafruit DotStar 144/m, black: one half metre (2328, 72 LEDs) per blade, cut to the blade from the tip in, 38 LEDs on the default wheel. Not the 1 m 2241: it is two halves joined, with a 2–3 mm pitch error at the joint | SK9822: clock and data, so no timing-critical single wire |
-| Level shifters | 74AHCT125, four channels each, DIP-14 (Adafruit 1787) | SK9822s at 5 V want a high above 3.5 V; the Feather gives 3.3 V |
+| Level shifters | 74AHCT125, four channels each, DIP-14 (Adafruit 1787): two on the default build, three with 4 strips a side | SK9822s at 5 V want a high above 3.5 V; the Feather gives 3.3 V |
 | Hall sensors | US5881 (158), one per strip, left panel only | The left panel times both sides; the right panel's sensor ties stay empty |
 | Power | Two 18650 high-drain cells in parallel, a 1S protection board, a 10 A fuse, a Pololu U3V70F5 5 V boost (2891) | Simple USB charging, and the boost has a true shutdown |
 | Mounting | A 3D-printed bracket tied to the hub shell, a hook-and-loop strap, an XT30 between the pack and the box, a stick-on rim weight | Easy on and off; balanced |
@@ -24,27 +24,30 @@ The tab also lists the power budget, warns about anything that doesn't fit, and 
 | Buttons | Two sealed 12 mm IP67 momentary pushbuttons in the electronics box's lid: preset and brightness | The wheel's controls, on the hub package |
 | Right connector | Weipu SP13 9-pin, IP68: an inline socket on the module's pigtail, a plug on the right panel | Screw-lock, 3 A a contact, and cheap |
 
-The simulator now models only this platform. The other chips and LED types, CircuitPython and the magnetometer are gone. The clock (12 MHz), PWM and overhead values are still editable under Hardware → Controller → details.
+The simulator models only this platform, with the standard build fixed: the strip, both sides lit, each strip on its own data lane at 12 MHz, and a hall sensor per strip on an interrupt. The other chips and LED types and the magnetometer are gone. Only the LED PWM rate, which datasheets disagree on, is still editable, under Hardware → LEDs.
+
+To compare with Adafruit's CircuitPython firmware, turn on *Compare with Adafruit* under Simulator → Firmware. It switches on, together, the picture's columns as angles, a 400 lines/s floor, back strips sharing the front's data (a mirror image), a 4 MHz clock, the magnet polled every 4 ms (an assumed loop time) and no banner motion prediction. It isn't saved, and the Electronics tab keeps showing the standard build's wiring.
 
 ## Data: one PIO program on GPIO0–7
 
-One PIO program shifts out eight data lanes on **GPIO0–7**, eight pins in a row that all reach the Feather's headers. It side-sets both clocks in step: GPIO10 for the left side and GPIO11 for the right. Every strip gets its own lane, so a column takes `(38 + 2) × 32` bits at 12 MHz, about 0.1 ms, however many strips there are. Core 1 turns each column into the bit-planes the PIO shifts out.
+One PIO program shifts out the data lanes on **GPIO0–7**, eight pins in a row that all reach the Feather's headers. It side-sets both clocks in step: GPIO10 for the left side and GPIO11 for the right. Every strip gets its own lane, so a column takes `(38 + 2) × 32` bits at 12 MHz, about 0.1 ms, however many strips there are. Core 1 turns each column into the bit-planes the PIO shifts out.
 
 The header pins come from Adafruit's CircuitPython board definition for the Feather RP2350. The pinout guide's "D4" is a typo there: GPIO4 is the pin labelled **12**.
 
 | Lane | GPIO | Header pin | Strip |
 |---|---|---|---|
-| L1–L4 | 0–3 | TX, RX, SDA, SCL | left 1–4 |
-| R1–R4 | 4–7 | D12, D5, D6, D13 | right 1–4 |
+| L1–L3 | 0–2 | TX, RX, SDA | left 1–3 |
+| R1–R3 | 4–6 | D12, D5, D6 | right 1–3 |
+| L4 / R4 | 3 / 7 | SCL / D13 | a 4th strip a side, if fitted |
 | CLK_L / CLK_R | 10 / 11 | D10 / D11 | left / right clocks |
 
-With 3 strips per side the lanes are GPIO0–2 and GPIO4–6. With shared back data, the right buffers copy the left lanes.
+The default build has 3 strips per side, so the lanes are GPIO0–2 and GPIO4–6. With 4 strips per side they are GPIO0–3 and GPIO4–7. The back strips never share the front's data; only the simulator's Adafruit comparison does that.
 
 What this costs:
 
 - **UART:** TX and RX carry data, so debug output goes over USB, which the Feather does natively.
-- **I2C:** SDA and SCL carry data too, so the STEMMA QT socket can't be used. Nothing in the design needs I2C. If an IMU is added later, move the right side's lanes to another run of four pins and run a second PIO program.
-- **Red LED:** GPIO7 is also the Feather's red LED (D13), so it flickers with right strip 4's data. That's harmless.
+- **I2C:** SDA carries data too (and SCL with 4 strips), so the STEMMA QT socket can't be used. Nothing in the design needs I2C. If an IMU is added later, move the right side's lanes to another run of four pins and run a second PIO program.
+- **Red LED:** GPIO7 is also the Feather's red LED (D13). With 4 strips it flickers with right strip 4's data. That's harmless.
 
 What it buys: no ribbon cable folded under the Feather, no FPC socket, and every signal on the headers. That makes a FeatherWing Doubler bench build straightforward. Earlier the lanes were on the HSTX port's pins (GPIO12–19). Those were also eight pins in a row driven by one PIO program, but reached only through the ribbon cable.
 
@@ -52,7 +55,8 @@ The rest of the pins:
 
 | Pin | Use |
 |---|---|
-| D9, MI, SCK, MO | Hall sensors 1–4, one falling-edge interrupt each |
+| D9, MI, SCK | Hall sensors 1–3, one falling-edge interrupt each |
+| MO | Hall sensor 4, with 4 strips |
 | A0 | Battery voltage, through a 100k/100k divider |
 | A1 | Preset button |
 | A2 | `LED_EN`: turns on the boost and the right side's 5 V |
@@ -73,17 +77,17 @@ The wheel has two buttons, on the hub package, in the electronics box's lid on i
 
 The preset button has a 10k pull-up to 3.3 V, 1 kΩ in series and 100 nF at the pin, against noise and static in the wet; the brightness button sits on the latch's 100k pull-up. In the simulator, **Next ▶** and **☀** on the ride bar are these two buttons (keys N and B). Double-click **Next ▶** to toggle **Auto**, and **☀** to switch the wheel off or on.
 
-Each lane and clock goes through a 74AHCT125 powered at 5 V, with a 33 Ω series resistor at each output for the 20–30 cm runs and the connector.
+Each lane and clock goes through a 74AHCT125 powered at 5 V, with a 33 Ω series resistor at each output for the 20–30 cm runs and the connector. With 3 strips a side that is eight channels, two shifters; a 4th strip a side needs a third.
 
 ## Power
 
-- **Peak current:** full white on all 304 LEDs would draw 18 A. The firmware scales each column so the strips never draw more than the **LED current limit**, 3.5 A by default. From a 3.6 V cell the boost gives about 4.3 A, at about 6 A from the cells, or 3 A per cell.
+- **Peak current:** full white on all 228 LEDs would draw 13.7 A. The firmware scales each column so the strips never draw more than the **LED current limit**, 3.5 A by default. From a 3.6 V cell the boost gives about 4.3 A, at about 6 A from the cells, or 3 A per cell.
 - **Runtime:** two 3000 mAh cells last about 0.9 h even pinned at the limit. Most pictures draw far less; see the Stats tab, whose battery figure follows the cells.
 - **Boost:** the boost runs straight off the protected, fused cells. `LED_EN` enables it. A 4.7 kΩ pull-down holds it off while the logic is off: the boost's own 100 kΩ pull-up to its input would otherwise turn it on.
 - **Off drain:** a few tens of µA through that divider.
 - **Logic:** the brightness button and `HOLD` latch only the Feather's supply, through Q1, a BC327 PNP transistor. Cut the Feather's CHG jumper so only the bq24074 charges.
 - **Hall sensors:** the US5881 needs at least 3.5 V, so the sensors run from the battery through a 100 Ω/10 µF filter. Their 10k pull-ups go to 3.3 V. The sensors' ground has its own wire, kept off the strips' return current.
-- **Strips idle:** about 1 mA per LED even when dark, so the firmware turns the boost off when the wheel stops.
+- **Strips idle:** about 1 mA per LED even when dark (228 mA on the default build), so the firmware turns the boost off when the wheel stops.
 
 ### Charging through the right connector
 
@@ -95,15 +99,12 @@ Unplug the right panel and plug in the charging lead: a USB-C sink breakout with
 
 ### On and off
 
-To turn the wheel on, hold the magnet to the mark:
+The brightness button (S1) is the on/off switch. To turn the wheel on, double-click it:
 
-1. S1 closes and pulls Q1's base low through D1.
-2. The Feather boots and sets `HOLD`, which keeps Q1 on through Q2.
+1. The first press pulls Q1's base low through D1, so Q1 powers the Feather.
+2. The Feather boots and watches the button through D2 (`SW`). If a second press follows, it sets `HOLD`, which keeps Q1 on through Q2. If not, it lets go and the wheel switches off again, so a stray single press does nothing.
 
-To turn it off, hold the magnet to the mark again:
-
-1. The firmware sees `SW` go low through D2.
-2. It waits for the magnet to go, then drops `HOLD`.
+To turn it off, double-click it again. The firmware sees the double press on `SW`, waits for the release, then drops `HOLD`.
 
 The firmware also drops `HOLD` after some minutes stopped.
 
@@ -114,7 +115,8 @@ The firmware also drops `HOLD` after some minutes stopped.
 | 1, 2 | +5V_R | 5 V to the right strips; charging, 5 V in |
 | 3, 4 | GND | ground |
 | 5 | CLK_R5 | clock to every right strip |
-| 6–9 | R1_5–R4_5 | right strip data (spare pins are ground) |
+| 6–8 | R1_5–R3_5 | right strip data |
+| 9 | GND | spare (ground); right strip 4's data with 4 strips |
 
 At the limit the right side draws 1.75 A, about 0.9 A per 5 V contact; each contact is rated 3 A. The live side, the module's pigtail, carries the shrouded socket (SP1311/S9). The right panel and the charging lead carry plugs (SP1310/P9). Cap the socket when the right panel is off. Check the pin genders and numbering against the part's drawing before you wire it.
 
@@ -152,7 +154,7 @@ With **one blade per side**, both blades and their strips (about 53 g, estimated
 
 ## Hub measurements
 
-The sheet uses the Electronics tab's hub shell Ø (30 mm by default) and the Panels tab's hub values: flange hole circle Ø44 mm, flanges ±35 mm. These are typical road-hub numbers. The prototype's State Bicycle All-Road wheelset has track hubs with cut-out flanges, which look closer together than ±35 mm. Measure:
+The sheet uses the hub values under Hardware → Wheel → Hub: the shell Ø between the flanges (30 mm by default), flange hole circle Ø44 mm and flanges ±35 mm (the *Front, 100 mm* type). These are typical road-hub numbers. The prototype's State Bicycle All-Road wheelset has track hubs with cut-out flanges, which look closer together than ±35 mm. Measure:
 
 - the shell's diameter between the flanges
 - the spoke hole circle
@@ -192,7 +194,7 @@ The Board sheet is a placement for routing in KiCad, not a routed board. It name
 ## Open questions
 
 - **Pinout check:** check the SP13 9-pin's genders and numbering, and the Feather's header pin positions, against the parts' drawings.
-- **Hub measurements:** measure the hub shell diameter, the spoke hole circle, and the gap between the flanges.
+- **Hub measurements:** measure the hub shell diameter, the spoke hole circle, and the gap between the flanges, and enter them under Hardware → Wheel → Hub.
 - **Spoke gaps:** check that each piece passes through a gap between the spokes.
 - **Charger CE:** confirm the bq24074 breakout's CE pad and its default state.
 - **Boost:** confirm the U3V70F5 tolerates 5 V on its output while it is disabled, as it is during charging.

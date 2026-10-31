@@ -2,51 +2,75 @@
 // Preset tables only seed these values; every seeded value stays editable afterwards.
 import { MATERIALS } from './panels/materials';
 
-export interface WheelPreset { bsdMm: number; tireMm: number; spokes: number }
+/** A wheel size with typical values for the rest of the wheel: a tire, a spoke count and its lacing. */
+export interface WheelPreset { bsdMm: number; tireMm: number; spokes: number; crosses: number }
 export const WHEELS: Record<string, WheelPreset> = {
-  '700c (622)':        { bsdMm: 622, tireMm: 28, spokes: 32 },
-  '29" MTB (622)':     { bsdMm: 622, tireMm: 57, spokes: 32 },
-  '27.5" / 650b (584)': { bsdMm: 584, tireMm: 55, spokes: 32 },
-  '26" (559)':         { bsdMm: 559, tireMm: 50, spokes: 32 },
-  '24" (507)':         { bsdMm: 507, tireMm: 45, spokes: 32 },
-  '20" (406)':         { bsdMm: 406, tireMm: 50, spokes: 28 },
-  '16" (305)':         { bsdMm: 305, tireMm: 47, spokes: 28 },
-  '12" (203)':         { bsdMm: 203, tireMm: 50, spokes: 16 },
+  '700c (622)':        { bsdMm: 622, tireMm: 28, spokes: 32, crosses: 3 },
+  '29" MTB (622)':     { bsdMm: 622, tireMm: 57, spokes: 32, crosses: 3 },
+  '27.5" / 650b (584)': { bsdMm: 584, tireMm: 55, spokes: 32, crosses: 3 },
+  '26" (559)':         { bsdMm: 559, tireMm: 50, spokes: 32, crosses: 3 },
+  '24" (507)':         { bsdMm: 507, tireMm: 45, spokes: 32, crosses: 3 },
+  '20" (406)':         { bsdMm: 406, tireMm: 50, spokes: 28, crosses: 3 },
+  '16" (305)':         { bsdMm: 305, tireMm: 47, spokes: 28, crosses: 2 },
+  '12" (203)':         { bsdMm: 203, tireMm: 50, spokes: 16, crosses: 1 },
 };
+
+/** Front hubs, with typical values: measure yours. 'Custom' is whatever was typed in. */
+export interface HubPreset { oldMm: number; pcdMm: number; c2fMm: number }
+export const HUBS: Record<string, HubPreset> = {
+  'Front, 100 mm': { oldMm: 100, pcdMm: 44, c2fMm: 35 },
+  'Boost front, 110 mm': { oldMm: 110, pcdMm: 58, c2fMm: 40 },
+};
+export const CUSTOM_HUB = 'Custom';
+
+/** The most crosses a wheel with this many spokes can lace: past N/8 a spoke would leave its flange beyond the tangent. */
+export const maxCrosses = (spokes: number) => Math.floor(spokes / 8);
 
 export interface ChipPreset {
   name: string;
   cpuMHz: number;
-  maxClockMHz: number;   // practical LED clock the PIO can drive through the level shifters and wiring
   maxLanes: number;      // parallel data lines on a shared clock (PIO)
   ramKB: number;
+  psramKB: number;       // QSPI PSRAM on the board, for animation frames that don't fit in RAM
+  psramMBps: number;     // sustained PSRAM reads with the code also running from flash on the same bus (rough)
   overheadUs: number;    // per-column firmware overhead, compiled C
   mflops: number;        // sustained single-precision MFLOP/s on one core (rough)
 }
-// The one electronics platform: an Adafruit Feather RP2350 (with HSTX port and PSRAM) driving Adafruit
-// DotStar strips. PIO on the HSTX port's eight pins sends every strip its own data on a shared clock per
-// side (see src/electronics). Figures are approximate; mflops assumes ~0.4 flop/cycle on the M33's FPU.
-export const CHIP: ChipPreset = { name: 'RP2350', cpuMHz: 150, maxClockMHz: 24, maxLanes: 8, ramKB: 520, overheadUs: 3, mflops: 60 };
+// The one electronics platform: an Adafruit Feather RP2350 (with PSRAM) driving Adafruit DotStar
+// strips. PIO on GPIO0–7 (header pins) sends every strip its own data on a shared clock per
+// side (see src/electronics). Figures are approximate; mflops assumes ~0.4 flop/cycle on the M33's FPU,
+// psramMBps about half the QSPI bus's peak at 75 MHz.
+export const CHIP: ChipPreset = {
+  name: 'RP2350', cpuMHz: 150, maxLanes: 8, ramKB: 520, psramKB: 8192, psramMBps: 20, overheadUs: 3, mflops: 60,
+};
 
-export type Protocol = 'clocked' | 'single-wire';
 export interface LedPreset {
   name: string;
-  protocol: Protocol;
-  maxClockMHz: number;  // clocked: max SCK; single-wire: fixed bit rate
-  bitsPerLed: number;
+  perM: number;         // LEDs per metre of strip
+  dieMm: number;        // emitter footprint
   pwmHz: number;
-  gbMode: 'pwm' | 'current' | 'none'; // how 5-bit global brightness is implemented
-  gbPwmHz: number;       // APA102 superimposes a slower PWM when global brightness < 31
-  resetUs: number;       // single-wire latch/reset gap
 }
-// Adafruit DotStar 144/m (products 2241, 2328) use SK9822 LEDs. The PWM rate disagrees between
+// The one strip: Adafruit DotStar 144/m (product 2328), SK9822 LEDs in 5050 packages. Their 5-bit
+// global brightness sets the current, so it adds no slower PWM. The PWM rate disagrees between
 // datasheets; treat it as an editable starting point.
-export const LED: LedPreset = { name: 'DotStar (SK9822)', protocol: 'clocked', maxClockMHz: 15, bitsPerLed: 32, pwmHz: 4700, gbMode: 'current', gbPwmHz: 0, resetUs: 0 };
+export const LED: LedPreset = { name: 'DotStar (SK9822)', perM: 144, dieMm: 5.0, pwmHz: 4700 };
 
-// Emitter footprint (mm) for common LED packages.
-export const PACKAGES: Record<string, number> = { '5050': 5.0, '3535': 3.5, '2020': 2.0 };
+export type SyncMode = 'hall' | 'ideal';
 
-export type SyncMode = 'hall' | 'ideal' | 'free';
+/**
+ * Adafruit's CircuitPython POV firmware (its bike-wheel guide), for comparison: what it does
+ * differently from the standard build's own firmware. The simulator's Compare switch sets these;
+ * they're never saved. The 4 ms hall poll is an assumed loop time.
+ */
+export const ADAFRUIT_FIRMWARE = {
+  mapping: 'columns',       // the picture's columns are angles, not a polar picture
+  minLinesPerSec: 400,      // a floor on the column rate: below it the image squeezes and repeats
+  backData: 'same',         // each back strip wired in parallel with its front strip: a mirror image
+  clockMHz: 4,
+  hallPollMs: 4,            // the magnet polled in the main loop, not on an interrupt
+  predictMotion: false,
+} as const;
+const FIRMWARE_KEYS = Object.keys(ADAFRUIT_FIRMWARE) as (keyof typeof ADAFRUIT_FIRMWARE)[];
 
 export interface FluidPreset { flip: number; viscosity: number; separation: number }
 // How the simulated liquid behaves. FLIP near 1 keeps motion lively; viscosity damps it.
@@ -91,28 +115,26 @@ export function defaultParams() {
     tireMm: wheel.tireMm,
     rimDepthMm: 9,            // bead seat to the rim's inner wall: the prototype's, from the panels' measured tip radius
     spokes: wheel.spokes,
+    spokeCrosses: wheel.crosses, // lacing
+    hubPreset: 'Front, 100 mm', // not saved: whichever type the hub's values match (normalizeDevice)
+    hubOldMm: 100,            // over-locknut width
+    hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
+    hubFlangeOffsetMm: 35,    // hub centre to each flange (typical)
+    hubShellMm: 30,           // hub shell diameter between the flanges (typical; measure)
+    panelBoreMm: 38.1,        // the hub body at the panels, outboard of the flange (measured 1.5"): the panels' bore is never smaller
+    forkCrownRadiusMm: 340,   // where the fork legs meet the crown, from the axle (typical)
+    forkCrownHalfMm: 22,      // half the inside width at the crown (typical)
 
-    // Strips & LEDs
-    stripCount: 4,            // strips per side
-    ledDensity: 144,          // LED/m
-    ledPackage: '5050',
-    dieMm: PACKAGES['5050'],
+    // Strips & LEDs: the standard strip on both sides of the wheel, each strip on its own data lane
+    stripCount: 3,            // strips per side
     diffusionMm: 1.5,         // silicone sleeve / diffuser spread
-    stripStartMm: 33,         // radius where the first LED sits: the panels' strips, laid from the tip in
-    autoLength: false,
-    stripLengthMm: 264,       // to the panels' tips: 38 LEDs, from one half-metre strip each
-    doubleSided: true,
-    backData: 'independent' as 'same' | 'independent', // independent: each side has its own strips and data
-    radialStagger: false,
+    panelTipRadiusMm: 298.45, // radius of the blade tips, where the strips end (measured 11.75"); 0 = automatic, just inside the nipples
+    panelStripMinMm: 30,      // the strips, laid from the tips in, stop at least this far from the axle (the fork is close by the hub)
 
-    // Panels: the flat-cut LED supports, tied to the spokes (see src/panels). Strips, LED density,
-    // spokes and the rim come from the settings above.
+    // Panels: the flat-cut LED supports, tied to the spokes (see src/panels). The wheel, the strips
+    // and where the LEDs sit come from the settings above.
     panelMaterial: 'pp_08',   // polypropylene sheet, 0.8 mm
-    panelBoreMm: 38.1,        // smallest centre hole: round the hub (measured 1.5"); the bore grows to just inside the strips' inner ends
-    panelTipRadiusMm: 298.45, // radius of the blade tips on the wheel (measured 11.75"); 0 = just inside the rim
     panelTipSlot: 'auto' as 'auto' | 'none', // a nipple under a tip: slot the tip round it, or stop the blades short of the nipples
-    panelStripWidthMm: 14,    // LED strip in its sleeve (Adafruit 2241)
-    panelStripThickMm: 4,
     panelTieWidthMm: 3.6,     // zip tie strap; holes are square, tie width + clearance
     panelTieClearMm: 1,
     panelHolesEvery: 2,       // strip ties every N pixels
@@ -122,14 +144,7 @@ export function defaultParams() {
     panelDiscCross: 0,        // the disc reaches this spoke cross (1 = nearest the hub; 0 = the outermost, interlaced one) and is tied at each crossing there
     panelTieSpanMm: 80,       // longest stretch of blade between spoke ties
     panelTipTieMm: 30,        // a spoke tie within this of each tip
-    panelStripMinMm: 30,      // the strips, laid from the tips in, stop at least this far from the axle (the fork is close by the hub)
     panelTabMaxMm: 0,         // farthest a tab reaches beyond the blade's edge to a spoke; 0 = the gap between one side's spokes
-    spokeCrosses: 3,          // lacing
-    hubFlangePcdMm: 44,       // flange spoke-hole circle (typical; must be larger than the bore)
-    hubFlangeOffsetMm: 35,    // hub centre to each flange (typical)
-    hubOldMm: 100,            // over-locknut width
-    forkCrownRadiusMm: 340,   // where the fork legs meet the crown, from the axle (typical)
-    forkCrownHalfMm: 22,      // half the inside width at the crown (typical)
 
     // Ride
     speedUnit: 'mph' as 'mph' | 'km/h',
@@ -140,34 +155,30 @@ export function defaultParams() {
     brakeG: 0.5,
     braking: false,           // set by the Brake button; braking uses brakeG
     resumeSpeed: 10,
-    cityMode: true,           // automatic stop-and-go riding
+    cityMode: true,           // Auto: stop-and-go riding, and the wheel's next preset each time the lights go out
     citySpeed: 12,            // cruise speed between lights (same units as speed)
 
     // Electronics
-    clockMHz: 12,             // LED clock: 12 MHz is comfortable through the level shifters, wiring and the connector
-    overheadUs: CHIP.overheadUs,
     pwmHz: LED.pwmHz,
     globalBrightness: 31,     // 0..31
-    gbPwmHz: LED.gbPwmHz,
-    batteryMah: 6000,         // set from the cells in the Electronics tab
     cells: 2,                 // 18650 cells in parallel (1S)
     cellMah: 3000,
     ledCapA: 3.5,             // firmware limit on the strips' total current (the boost gives about 4 A)
-    hubShellMm: 30,           // hub shell diameter between the flanges (typical; measure)
 
-    // Firmware
+    // Firmware: a hall sensor per strip, each on an interrupt
     syncMode: 'hall' as SyncMode,
     columnsPerRev: 256,
-    minLinesPerSec: 0,
-    hallPollMs: 0,            // 0: an interrupt on each sensor's pin
     debounceMs: 20,
-    hallPerStrip: true,       // a hall sensor per strip: a magnet pass every 1/strips turn
-    overflow: 'wrap' as 'wrap' | 'blank',
-    predictMotion: true,      // banner mode: compute each update for mid-display time, not send time
-    nextOnDark: true,         // switch to the next preset each time the lights go out (stopping)
     brightnessLevel: 0,       // the wheel's brightness button: a step of BRIGHTNESS_STEPS, kept when switched off
     switchedOff: false,       // its double click switches the wheel off, and on again (not saved)
-    freeRunColsPerSec: 540,
+    // Set only by the simulator's Compare switch (ADAFRUIT_FIRMWARE); the standard build's values here
+    compareAdafruit: false,
+    mapping: 'polar' as 'polar' | 'columns',
+    minLinesPerSec: 0,
+    backData: 'independent' as 'same' | 'independent', // own data: each side has its own strips and data
+    clockMHz: 12,             // LED clock: 12 MHz is comfortable through the level shifters, wiring and the connector
+    hallPollMs: 0,            // 0: an interrupt on each sensor's pin
+    predictMotion: true,      // banner mode: compute each update for mid-display time, not send time
 
     // Image
     useMedia: false,          // show the preset's uploaded image/clip instead of the pattern
@@ -176,7 +187,7 @@ export function defaultParams() {
     bannerLower: 'arches' as BannerLower, // banner: the lower half is a picture or a pattern drawn around the voids
     bannerUpper: 'road' as 'road' | 'bike', // banner: the picture is pinned to the road or rides with the bike
     spinSeconds: 0,           // wheel-locked: the firmware turns the picture once every this many seconds (0 = still; positive turns it against the wheel, negative with it)
-    backSide: 'reads' as 'reads' | 'mirror', // own-data back strips: redraw the picture to read right, or show the drive side's pixels (a mirror image)
+    backSide: 'reads' as 'reads' | 'mirror', // the back strips: redraw the picture to read right, or show the drive side's pixels (a mirror image)
     // Animation
     frameAdvance: 'timed' as 'timed' | 'revolution', // timed: at animFps; revolution: at the magnet
     animFps: 12,              // the clip's own frame rate (set when a clip or pattern loads)
@@ -208,7 +219,6 @@ export function defaultParams() {
     dryerShuffle: 0.5,        // depth swaps per second between neighbouring ribbons (0 = a fixed order)
     pattern: 'Water (fluid sim)' as PatternName,
     text: 'HELLO',
-    mapping: 'polar' as 'polar' | 'columns',
     fit: 'disc' as 'disc' | 'annulus',
     pictureFill: 'crop' as 'crop' | 'whole', // a non-square picture: crop it to fill the wheel, or letterbox the whole of it
     pictureZoom: 1,           // scales a picture about the wheel's centre (1 = as filled)
@@ -217,7 +227,6 @@ export function defaultParams() {
     pictureEdges: 'mirror' as 'dark' | 'mirror', // where a picture doesn't reach: dark, or a blurred mirror tiling of it
     imageRotationDeg: 0,
     gamma: 2.2,
-    colorBits: 8,
     radialCompensation: false,
     showBuffer: false,
 
@@ -252,7 +261,7 @@ export type Params = ReturnType<typeof defaultParams>;
 // setup file (and, later, what gets flashed to the controller). Everything else only drives the
 // simulation: riding, camera, exposure and rendering.
 export const PRESET_KEYS = [
-  'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'backSide', 'mapping', 'fit', 'pictureFill',
+  'pattern', 'useMedia', 'text', 'displayMode', 'tileGapM', 'bannerLower', 'bannerUpper', 'spinSeconds', 'backSide', 'fit', 'pictureFill',
   'pictureZoom', 'pictureX', 'pictureY', 'pictureEdges', 'imageRotationDeg', 'globalBrightness',
   'waterFill', 'fluid', 'waterFlip', 'waterViscosity', 'waterSeparation', 'rimFriction', 'waterGain',
   'smileyBounce', 'smileyGrip', 'smileyGain',
@@ -263,17 +272,14 @@ export type PresetKey = (typeof PRESET_KEYS)[number];
 
 export const DEVICE_KEYS = [
   'setupName',
-  'wheelPreset', 'bsdMm', 'tireMm', 'rimDepthMm', 'spokes',
-  'stripCount', 'ledDensity', 'ledPackage', 'dieMm', 'diffusionMm', 'stripStartMm', 'autoLength',
-  'stripLengthMm', 'doubleSided', 'backData', 'radialStagger',
-  'clockMHz', 'overheadUs', 'pwmHz', 'gbPwmHz', 'batteryMah', 'cells', 'cellMah', 'ledCapA', 'hubShellMm',
-  'syncMode', 'columnsPerRev', 'minLinesPerSec', 'hallPollMs', 'debounceMs', 'hallPerStrip',
-  'overflow', 'predictMotion', 'nextOnDark', 'brightnessLevel', 'freeRunColsPerSec', 'gamma', 'colorBits', 'radialCompensation',
+  'wheelPreset', 'bsdMm', 'tireMm', 'rimDepthMm', 'spokes', 'spokeCrosses',
+  'hubOldMm', 'hubFlangePcdMm', 'hubFlangeOffsetMm', 'hubShellMm', 'panelBoreMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
+  'stripCount', 'diffusionMm', 'panelTipRadiusMm', 'panelStripMinMm', 'gamma', 'radialCompensation',
+  'pwmHz', 'cells', 'cellMah', 'ledCapA',
+  'syncMode', 'columnsPerRev', 'debounceMs', 'brightnessLevel',
   'waterGrid', 'waterHz', 'waterIters', 'accelSmoothMs', 'maxFrames', 'videoFps',
-  'panelMaterial', 'panelBoreMm', 'panelTipRadiusMm', 'panelTipSlot', 'panelStripWidthMm', 'panelStripThickMm',
-  'panelTieWidthMm', 'panelTieClearMm', 'panelStripMinMm', 'panelHolesEvery', 'panelEdgeMm', 'panelCornerMm',
-  'panelBladeWidthMm', 'panelDiscCross', 'panelTieSpanMm', 'panelTipTieMm', 'panelTabMaxMm', 'spokeCrosses', 'hubFlangePcdMm', 'hubFlangeOffsetMm',
-  'hubOldMm', 'forkCrownRadiusMm', 'forkCrownHalfMm',
+  'panelMaterial', 'panelTipSlot', 'panelTieWidthMm', 'panelTieClearMm', 'panelHolesEvery', 'panelEdgeMm', 'panelCornerMm',
+  'panelBladeWidthMm', 'panelDiscCross', 'panelTieSpanMm', 'panelTipTieMm', 'panelTabMaxMm',
 ] as const satisfies readonly (keyof Params)[];
 export type DeviceKey = (typeof DEVICE_KEYS)[number];
 
@@ -288,10 +294,9 @@ export const PATTERN_LABELS: Record<PatternName, string> = {
 
 // Allowed values for the string settings that pick from a list.
 const CHOICES: Partial<Record<keyof Params, readonly string[]>> = {
-  pattern: PATTERNS, bannerLower: BANNER_LOWER, bannerUpper: ['road', 'bike'], fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'], mapping: ['polar', 'columns'],
-  fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], pictureEdges: ['dark', 'mirror'], backSide: ['reads', 'mirror'], frameAdvance: ['timed', 'revolution'], wheelPreset: Object.keys(WHEELS),
-  ledPackage: Object.keys(PACKAGES), backData: ['same', 'independent'], syncMode: ['hall', 'ideal', 'free'],
-  overflow: ['wrap', 'blank'],
+  pattern: PATTERNS, bannerLower: BANNER_LOWER, bannerUpper: ['road', 'bike'], fluid: Object.keys(FLUIDS), displayMode: ['wheel', 'banner'],
+  fit: ['disc', 'annulus'], pictureFill: ['crop', 'whole'], pictureEdges: ['dark', 'mirror'], backSide: ['reads', 'mirror'], frameAdvance: ['timed', 'revolution'],
+  wheelPreset: Object.keys(WHEELS), hubPreset: [...Object.keys(HUBS), CUSTOM_HUB], syncMode: ['hall', 'ideal'],
   panelMaterial: Object.keys(MATERIALS), panelTipSlot: ['auto', 'none'],
 };
 
@@ -323,6 +328,47 @@ export function sanitize<K extends keyof Params>(raw: unknown, keys: readonly K[
   return out;
 }
 
+/**
+ * Pick a wheel size: its rim, tire, spokes and lacing, a fork crown just over the tire, and the
+ * blade tips back to just inside the new rim (a measured tip radius belongs to the old wheel).
+ */
+export function applyWheelSize(p: Params, key: string) {
+  const w = WHEELS[key];
+  if (!w) return;
+  Object.assign(p, { wheelPreset: key, bsdMm: w.bsdMm, tireMm: w.tireMm, spokes: w.spokes, spokeCrosses: w.crosses });
+  p.forkCrownRadiusMm = Math.round(w.bsdMm / 2 + w.tireMm + 1); // 340 mm on a 700 × 28c
+  p.panelTipRadiusMm = 0;
+}
+
+/** Pick a hub type: its typical width and flanges. */
+export function applyHub(p: Params, key: string) {
+  const h = HUBS[key];
+  if (!h) return;
+  Object.assign(p, { hubPreset: key, hubOldMm: h.oldMm, hubFlangePcdMm: h.pcdMm, hubFlangeOffsetMm: h.c2fMm });
+}
+
+/** The hub type the hub's values match, or Custom once one is typed in. */
+export function hubPresetOf(p: Params): string {
+  return Object.keys(HUBS).find((k) => {
+    const h = HUBS[k];
+    return h.oldMm === p.hubOldMm && h.pcdMm === p.hubFlangePcdMm && h.c2fMm === p.hubFlangeOffsetMm;
+  }) ?? CUSTOM_HUB;
+}
+
+/**
+ * Make the hardware settings agree with each other, after an edit or a load (storage, a setup
+ * file): the hub type its values match, and no more crosses than the spokes can lace.
+ */
+export function normalizeDevice(p: Params) {
+  p.hubPreset = hubPresetOf(p);
+  p.spokeCrosses = Math.min(p.spokeCrosses, maxCrosses(p.spokes));
+}
+
+/** Turn the comparison with Adafruit's CircuitPython firmware on or off (p.compareAdafruit). */
+export function applyFirmware(p: Params) {
+  Object.assign(p, p.compareAdafruit ? ADAFRUIT_FIRMWARE : pick(defaultParams(), FIRMWARE_KEYS));
+}
+
 /** Frames per second the firmware aims for in timed playback. */
 export function playbackFps(p: Params): number {
   return p.animFps * p.playbackRate;
@@ -337,7 +383,7 @@ export function speedMps(p: Params): number {
  * to a picture starts them afresh, so a picture always begins the same way, whatever the preset
  * showed before: cropped to fill the wheel and turning with it.
  */
-export const PICTURE_KEYS = ['displayMode', 'tileGapM', 'bannerUpper', 'spinSeconds', 'backSide', 'mapping', 'fit', 'pictureFill',
+export const PICTURE_KEYS = ['displayMode', 'tileGapM', 'bannerUpper', 'spinSeconds', 'backSide', 'fit', 'pictureFill',
   'pictureZoom', 'pictureX', 'pictureY', 'pictureEdges', 'imageRotationDeg',
   'frameAdvance', 'playbackRate', 'revsPerFrame'] as const satisfies readonly PresetKey[];
 

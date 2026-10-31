@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { bannerLowerOf, CHIP, defaultParams, LED, type Params, showPicture, speedMps } from './params';
+import { bannerLowerOf, CHIP, defaultParams, LED, normalizeDevice, type Params, showPicture, speedMps } from './params';
 import { buildUi, type Ui } from './ui';
 import { newId, PresetStore } from './presets';
 import { loadDevice, type MediaBytes, parseSetup, saveDevice, serializeSetup, setupFileName } from './setupFile';
@@ -11,6 +11,8 @@ import { WaterSource } from './image/waterSource';
 import { RibbonSource } from './image/ribbonSource';
 import { SmileySource } from './image/smileySource';
 import { CityRide } from './sim/city';
+import { RidePanel } from './ridePanel';
+import { acceptFiles } from './dropFiles';
 import { pedalSurge, riderPower } from './sim/rider';
 import { computeStats, exposureSeconds } from './sim/stats';
 import { type Animation, bannerTile, blankAnimation, loadMedia, makeAnimation, rawImageData, squareImageData } from './image/load';
@@ -18,24 +20,22 @@ import { bannerBitmap, bannerTileM, type FrameStack, polarize, stackFrames } fro
 import { PovDisplay } from './render/povMaterial';
 import { WheelModel } from './render/wheelGeometry';
 import { createPost } from './render/post';
+import { Road } from './render/road';
 import { createCamera, createStripCamera, placeCamera, placeStripCamera, setFreeArea } from './render/camera';
-import { PanelDrawing } from './panels/drawing';
-import { designElectronics } from './electronics/design';
-import { ElecView } from './electronics/view';
-import { type PackedDesign, unpackDesign } from './panels/transport';
-import { PANEL_STRIPS, panelInputs, panelKey } from './panels/fromParams';
+import type { Workshop } from './workshop';
 
 // The saved setup: the hardware build and the presets (the active one is loaded into p).
-// Reloading the page (plainly or forced) starts over from the defaults, like Reset; opening it
-// afresh (a new tab, a link) restores the saved setup. So does a saved setup that began from
-// other defaults: when default-setup.json changes (a new built-in preset, say), every browser
-// starts over from the new defaults once, on its next visit.
+// Opening or reloading the page restores the saved setup; only Reset starts over. A saved setup
+// that began from other defaults doesn't come back: when default-setup.json changes (a new
+// built-in preset, say), every browser starts over from the new defaults once, on its next visit.
+// The rest (the view, the camera, the layout, the simulator settings) is never saved, so the page
+// always opens on the ride.
 const storage = (() => { try { return window.localStorage; } catch { return undefined; } })();
 const DEFAULTS_KEY = 'pov-wheel-sim.defaults';
-const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-const startOver = navigation?.type === 'reload' || (() => { try { return storage?.getItem(DEFAULTS_KEY) !== DEFAULTS_ID; } catch { return false; } })();
+const startOver = (() => { try { return storage?.getItem(DEFAULTS_KEY) !== DEFAULTS_ID; } catch { return false; } })();
 const p = defaultParams();
 Object.assign(p, defaultDevice(), startOver ? {} : loadDevice(storage));
+normalizeDevice(p);
 const store = new PresetStore(storage, defaultBuiltIns);
 if (startOver) { saveDevice(storage, p); store.restoreBuiltIns(); }
 try { storage?.setItem(DEFAULTS_KEY, DEFAULTS_ID); } catch { /* blocked storage: nothing was saved anyway */ }
@@ -59,25 +59,7 @@ document.getElementById('app')!.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const { camera, controls } = createCamera(renderer.domElement);
-const hemi = new THREE.HemisphereLight(0xc8d8ff, 0x2a2420, 1);
-const sun = new THREE.DirectionalLight(0xfff4e0, 1);
-sun.position.set(2, 4, 3);
-scene.add(hemi, sun);
-
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(60, 60),
-  new THREE.MeshStandardMaterial({ color: 0x24262b, roughness: 0.95 }),
-);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
-const laneMarks = new THREE.Group();
-for (let i = -15; i <= 15; i++) {
-  const mark = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.08), new THREE.MeshStandardMaterial({ color: 0x8a8a70 }));
-  mark.rotation.x = -Math.PI / 2;
-  mark.position.set(i * 2, 0.001, -0.9);
-  laneMarks.add(mark);
-}
-scene.add(laneMarks);
+const road = new Road(scene);
 
 const wheel = new WheelModel();
 const pov = new PovDisplay();
@@ -108,8 +90,9 @@ let imageKey = '';
 let rebuildTimer = 0;
 
 function imageKeyFor(d: Derived) {
-  return [sourceVersion, bannerLowerOf(p) === 'picture', p.mapping, p.fit, p.pictureFill, p.pictureZoom, p.pictureX, p.pictureY, p.pictureEdges, p.useMedia, p.imageRotationDeg, p.gamma, p.colorBits, p.radialCompensation,
-    p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData, p.backSide, p.radialStagger].join('|');
+  return [sourceVersion, bannerLowerOf(p) === 'picture', p.mapping, p.fit, p.pictureFill, p.pictureZoom, p.pictureX, p.pictureY,
+    p.pictureEdges, p.useMedia, p.imageRotationDeg, p.gamma, p.radialCompensation, p.columnsPerRev, p.stripCount,
+    d.ledsPerStrip, d.rStart, d.pitch, p.backData, p.backSide].join('|');
 }
 
 const MAX_TEXTURE_BYTES = 128 * 1024 * 1024;
@@ -246,6 +229,7 @@ const hooks = {
   },
   onResetSetup: () => {
     Object.assign(p, defaultParams(), defaultDevice());
+    normalizeDevice(p);
     saveDevice(storage, p);
     store.restoreBuiltIns();
     if (p.cityMode) city.start(simTime, p);
@@ -257,6 +241,7 @@ const hooks = {
       const setup = parseSetup(await file.text());
       for (const [id, m] of Object.entries(setup.media)) await putMedia(id, new Blob([m.bytes as BlobPart], { type: m.type }));
       Object.assign(p, defaultDevice(), setup.device);
+      normalizeDevice(p);
       saveDevice(storage, p);
       store.replaceAll(setup.presets, setup.activePreset);
       hooks.onPresetSelected();
@@ -282,124 +267,47 @@ const hooks = {
   isAnimated: () => source.frames.length > 1,
   onShowPanels: (shown: boolean) => {
     history.replaceState(null, '', shown ? '#panels' : location.pathname + location.search);
-    if (shown) updatePanels(); else hooks.onLayout();
+    if (shown) loadWorkshop().then((w) => w?.updatePanels()); else hooks.onLayout();
   },
   onShowElectronics: (shown: boolean) => {
     history.replaceState(null, '', shown ? '#electronics' : location.pathname + location.search);
-    if (shown) updateElectronics(); else hooks.onLayout();
+    if (shown) loadWorkshop().then((w) => w?.updateElectronics()); else hooks.onLayout();
   },
 };
 
 // ---- Riding: stop-and-go automation and the speed readout ----
 // A fresh seed each page load, so the trips (including the first) differ every visit.
 const city = new CityRide(1 + Math.floor(Math.random() * 2147483645));
-const rideEl = document.getElementById('ride')!;
-const rideSpeed = document.getElementById('ride-speed')!;
-const rideUnit = document.getElementById('ride-unit')!;
-const rideSlider = document.getElementById('ride-slider') as HTMLInputElement;
-// Auto: stop-and-go riding and the next preset at each stop, together. Turned off, the bike rides on
-// steadily at the cruise speed; turned on, the trips start from the speed it was riding at.
-const autoNext = document.getElementById('auto-next') as HTMLInputElement;
-autoNext.addEventListener('change', () => {
-  const on = autoNext.checked;
-  if (on && !p.cityMode) { if (p.speed > 0) p.citySpeed = p.speed; p.cityMode = true; city.start(simTime, p); }
-  if (!on && p.cityMode) { p.cityMode = false; p.speed = p.citySpeed; p.braking = false; }
-  p.nextOnDark = on;
-  hooks.onDeviceEdit('nextOnDark');
-  refreshGui();
-});
-rideSlider.addEventListener('input', () => {
-  const v = Number(rideSlider.value);
-  if (p.cityMode) {
-    p.citySpeed = v;
-    if (city.phase === 'go' || city.phase === 'cruise') p.speed = v * city.fraction * city.share;
-  } else {
-    p.speed = v; p.braking = false;
-  }
-});
-function updateRidePanel(actualMps: number) {
-  const mph = p.speedUnit === 'mph';
-  rideSpeed.textContent = (actualMps / (mph ? 0.44704 : 1 / 3.6)).toFixed(1);
-  rideUnit.textContent = p.speedUnit;
-  rideSlider.max = mph ? '40' : '65';
-  // The slider sets the target: the cruise speed in stop-and-go, otherwise the riding speed.
-  if (document.activeElement !== rideSlider) rideSlider.value = String(p.cityMode ? p.citySpeed : p.speed);
-  autoNext.checked = p.cityMode && p.nextOnDark; // the preset switching can also be set in the Hardware panel
-}
+const ride = new RidePanel(p, city, () => simTime, refreshGui);
+
 ui = buildUi(p, hooks);
 loadSource();
 
-// ---- Panels: the flat-cut supports for the strips, designed while their tab is open ----
-// A design takes most of a second, so a worker does it, one at a time, always on the latest settings.
-const drawing = new PanelDrawing(document.getElementById('panels-view')!, () => ui!.openTab('presets', false));
-const designer = new Worker(new URL('./panels/worker.ts', import.meta.url), { type: 'module' });
-let designKey = '';
-let designing = 0; // id of the request in progress (0: none)
-let designQueued = false;
-let designId = 0;
-function sendDesign() {
-  designQueued = false;
-  designing = ++designId;
-  designer.postMessage({ id: designing, ...panelInputs(p) });
-}
-designer.onmessage = (e: MessageEvent<{ id: number; design?: PackedDesign; error?: string }>) => {
-  if (e.data.id !== designing) return;
-  designing = 0;
-  if (designQueued) { sendDesign(); return; } // the settings changed meanwhile
-  if (e.data.design) {
-    const d = unpackDesign(e.data.design);
-    ui!.panels.show({ design: d });
-    drawing.setDesign(d);
-  } else {
-    const msg = `Couldn't design the panels: ${e.data.error}`;
-    ui!.panels.show({ error: msg });
-    drawing.setDesign(undefined, msg);
-  }
-};
-function updatePanels() {
-  const key = panelKey(p);
-  if (key === designKey) return;
-  designKey = key;
-  if (!PANEL_STRIPS.includes(p.stripCount)) {
-    const msg = `The panels come with 1 to 4 blades per side, one per strip; the hardware has ${p.stripCount} strips.`;
-    designQueued = false;
-    designing = 0; // a design still running is for other settings
-    ui!.panels.show({ error: msg });
-    drawing.setDesign(undefined, msg);
-    return;
-  }
-  ui!.panels.show({ busy: true });
-  drawing.setDesign(undefined, 'Designing…');
-  if (designing) designQueued = true; else sendDesign();
-}
-// ---- Electronics: worked out at once from the settings while their tab is open ----
-const elecView = new ElecView(document.getElementById('elec-view')!, () => ui!.openTab('presets', false));
-function updateElectronics() {
-  const e = designElectronics(p);
-  ui!.electronics.show(e);
-  elecView.show(e, p.spokes);
-}
+// Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20. The Panels and
+// Electronics views (drawing, elecView) join it once their tab has opened.
+const povSim: Record<string, unknown> = { p, ui, store, hooks, camera, controls };
+Object.assign(window, { povSim });
 
-// Exposed for scripting from the devtools console, e.g. povSim.p.speed = 20.
-Object.assign(window, { povSim: { p, ui, store, hooks, camera, controls, drawing, elecView } });
+// ---- Panels and Electronics: their views and the panel designer load when either tab first opens ----
+let workshop: Workshop | undefined;
+let workshopLoading: Promise<Workshop | undefined> | undefined;
+function loadWorkshop(): Promise<Workshop | undefined> {
+  workshopLoading ??= import('./workshop').then(({ createWorkshop }) => {
+    workshop = createWorkshop(p, ui!);
+    Object.assign(povSim, { drawing: workshop.drawing, elecView: workshop.elecView });
+    return workshop;
+  }, () => {
+    workshopLoading = undefined; // try again the next time a tab opens
+    ui!.notify("Couldn't load the Panels and Electronics views. Check the connection and open the tab again.");
+    return undefined;
+  });
+  return workshopLoading;
+}
+// Once loaded, these run whenever the settings change while a tab is open (the panels on every frame).
+const updatePanels = () => workshop?.updatePanels();
+const updateElectronics = () => workshop?.updateElectronics();
 
-// Drag-and-drop and paste: images and clips go into the active preset; a .json opens as a setup.
-const drop = document.getElementById('drop')!;
-window.addEventListener('dragover', (e) => { e.preventDefault(); drop.style.display = 'flex'; });
-window.addEventListener('dragleave', () => { drop.style.display = 'none'; });
-window.addEventListener('drop', (e) => {
-  e.preventDefault();
-  drop.style.display = 'none';
-  const f = e.dataTransfer?.files[0];
-  if (!f) return;
-  if (f.type === 'application/json' || f.name.endsWith('.json')) hooks.onOpenSetup(f);
-  else if (f.type.startsWith('image/') || f.type.startsWith('video/')) hooks.onUpload(f);
-});
-window.addEventListener('paste', (e) => {
-  const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'));
-  const f = item?.getAsFile();
-  if (f) hooks.onUpload(f);
-});
+acceptFiles(hooks.onOpenSetup, hooks.onUpload);
 
 // ---- Stats ----
 // The live stats table lives in the settings panel's Stats tab; it only redraws while shown.
@@ -444,7 +352,7 @@ function resize() {
   // Keep the wheel clear of the speed panel and the settings: a side panel on wide screens, a
   // bottom sheet (which hides the speed panel) on phones.
   const panel = ui?.panelSize();
-  let bottom = rideEl.getBoundingClientRect().top - 8, right = w;
+  let bottom = ride.el.getBoundingClientRect().top - 8, right = w;
   if (panel && ui!.isSheet()) bottom = h - panel.h - 8;
   else if (panel) right = w - panel.w;
   // The roadside strip takes a slice of the free height, at the top or just above the speed panel.
@@ -476,11 +384,13 @@ window.addEventListener('resize', resize);
 window.addEventListener('load', resize); // fonts can change the speed panel's height
 resize();
 placeCamera(camera, controls, p, derive(p));
-if (location.hash === '#panels') ui.openTab('panels'); // a link straight to the panels
+// A link straight to the panels or the electronics opens that tab. The tab keeps the link in the
+// address bar while it's open, but a reload starts on the ride like the rest of the view.
+const reloaded = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
+if (reloaded && location.hash) history.replaceState(null, '', location.pathname + location.search);
+if (location.hash === '#panels') ui.openTab('panels');
 if (location.hash === '#electronics') ui.openTab('electronics');
 
-const night = new THREE.Color(0x05070d), dusk = new THREE.Color(0x34405c), day = new THREE.Color(0x9db8d8);
-const bg = new THREE.Color();
 let simTime = 20; // start with history so the hall firmware is already armed
 let last = performance.now();
 let lastBufferFlag = p.showBuffer;
@@ -505,7 +415,7 @@ function frame(now: number) {
   motion.configure(vTarget, d.tireRadius, surge.cruise, strokeHz, simTime, rampG * 9.81, surge.ramp);
   // The firmware's own preset change: the next look each time the lights go out, as when stopping.
   const lit = lightsOn(p, d, motion, simTime);
-  if (p.nextOnDark && wasLit && !lit) { store.next(); hooks.onPresetSelected(); }
+  if (p.cityMode && wasLit && !lit) { store.next(); hooks.onPresetSelected(); }
   wasLit = lit;
 
   // Content: live frames from a physics look (water, bouncing smiley, tumble dryer), or the converted image/animation.
@@ -527,13 +437,7 @@ function frame(now: number) {
   }
   if (p.showBuffer !== lastBufferFlag) { lastBufferFlag = p.showBuffer; drawBuffer(); }
 
-  ground.position.y = -d.tireRadius;
-  laneMarks.position.y = -d.tireRadius;
-  const a = p.ambient;
-  bg.copy(night).lerp(dusk, Math.min(1, a * 2)).lerp(day, Math.max(0, a * 2 - 1));
-  scene.background = bg;
-  hemi.intensity = a * 2.5;
-  sun.intensity = a * 2.5;
+  road.update(p.ambient, d.tireRadius);
   bloom.strength = stripBloom.strength = p.bloom;
   renderer.toneMappingExposure = Math.pow(2, p.ev);
   wheel.build(p, d);
@@ -544,7 +448,7 @@ function frame(now: number) {
   // show the same moment, motion and animation; only the camera and exposure differ.
   renderer.setScissorTest(false);
   renderer.setRenderTarget(null);
-  renderer.setClearColor(bg);
+  renderer.setClearColor(road.sky);
   renderer.clear();
   controls.update();
   drawView(p, d, anim, tileM, camera, composer, layout.main);
@@ -562,7 +466,7 @@ function frame(now: number) {
   renderer.setScissorTest(false);
 
   updateStats(d, now);
-  updateRidePanel(motion.speed(simTime));
+  ride.update(motion.speed(simTime));
 }
 requestAnimationFrame(frame);
 

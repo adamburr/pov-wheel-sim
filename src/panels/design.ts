@@ -5,11 +5,10 @@
 // spoke cross, tied at every crossing there, plus N straight radial blades from the disc to the rim,
 // one per LED strip, evenly spaced whatever the spoke pattern. Each strip is held by its own tie
 // holes, pairs on the strip's edges every few pixels (between LEDs). The blades are tied to the
-// spokes by separate hole pairs that straddle a spoke beside the strip, on a tab where the spoke
-// runs outside the blade: one pair near each tip, and more along the blade so no stretch is longer
-// than asked.
+// spokes by separate hole pairs that straddle a spoke beside the strip: one pair near each tip, and
+// more along the blade so no stretch is longer than asked, each on a tab that ends along its spoke.
 //
-// designPanels() turns the blades (all together) for the smallest tabs, places the ties, and checks
+// designPanels() turns the blades (all together) for the ties nearest them, places the ties, and checks
 // the fork, the valve and the nipples. The part is laid out as it sits on the wheel, seen from the
 // right: thin polypropylene follows the shallow dish of the spokes by flexing, so the flat part and
 // the panel on the wheel are taken to be the same shape (the dish is used only for the clearances). See docs/panels.md for the design notes.
@@ -17,9 +16,11 @@
 // Wheel dimensions other than the bore and tip radius are TYPICAL VALUES until measured.
 import {
   adiff, arcMerge, boreContour, box, type BulgePt, ccw, circlePts, clamp, cleanRing, convexHull, deg, densify, dist, filletRing, mirrorPt,
-  outlineOf, pmod, pointSegDist, pol, type Pt, rad, rectPts, Ring, rot, rotRing, sampleBulge, slotPts,
+  outlineOf, pmod, pointInRing, pointSegDist, pol, type Pt, rad, rectPts, Ring, rot, rotRing, sampleBulge, slotPts,
 } from './geom';
 import { type Material, MATERIALS } from './materials';
+import { PANEL_STRIP_RANGE } from './strips';
+import { holeSize, ledSpan, rowOffset, SPAN_DEFAULTS, STRIP_SLEEVE_T, STRIP_SLEEVE_W } from './ledSpan';
 import { type Spoke, Wheel, type WheelSpec } from './wheel';
 
 export { MATERIALS };
@@ -31,7 +32,7 @@ export interface PanelSpec {
   boreD: number;            // centre hole: worked out (the bore reaches out to just inside the strips' inner ends)
   boreMinD: number;         // the bore is never smaller than this: round the hub body outboard of the flange
   boreToStrip: number;      // the bore's edge sits this far inside the strips' inner ends
-  tipEndR: number | null;   // radius of the blade tips on the wheel; null = just inside the rim wall
+  tipEndR: number | null;   // radius of the blade tips on the wheel (measured); null = automatic, just inside the nipples
   tipClear: number;         // tip-end corners inside the rim wall
   tipSlot: 'auto' | 'none'; // a nipple under a tip: slot the tip round it, or stop every blade short of the nipples
   nippleD: number;          // nipple shank diameter (typical 14 g brass)
@@ -65,13 +66,14 @@ export interface PanelSpec {
 
 export const PANEL_DEFAULTS: PanelSpec = {
   strips: 3, material: 'pp_08',
-  // Adafruit DotStar 144 LED/m black (product 2241, SK9822): 14 mm wide × 4 mm in its weatherproof sleeve
-  stripW: 14, stripT: 4, ledPitch: 1000 / 144,
-  boreD: 38.1, boreMinD: 38.1, boreToStrip: 4, tipEndR: 298.45, tipClear: 3, tipSlot: 'auto', nippleD: 4, tipSlotClear: 1,
+  // Adafruit DotStar 144 LED/m black (product 2328, SK9822) in its weatherproof sleeve
+  stripW: STRIP_SLEEVE_W, stripT: STRIP_SLEEVE_T, ledPitch: 1000 / 144,
+  boreD: 38.1, boreMinD: 38.1, boreToStrip: 4, tipEndR: 298.45, tipClear: SPAN_DEFAULTS.tipClear, tipSlot: 'auto', nippleD: 4,
+  tipSlotClear: SPAN_DEFAULTS.tipSlotClear,
   bladeW: 0, cornerR: 2,
   // 40 lb (178 N, 3.6 × 1.27 mm) and 18 lb (80 N, 2.4 × 1.1 mm) ties both fit the 4.6 mm holes.
   tieW: 3.6, tieT: 1.27, tieHead: [6.0, 5.9, 4.3], tieClear: 1,
-  holesEvery: 2, gridEdge: 4, stripStartGap: 3, stripStartR: null, stripMaxLen: 500,
+  holesEvery: 2, gridEdge: 4, stripStartGap: SPAN_DEFAULTS.stripStartGap, stripStartR: null, stripMaxLen: SPAN_DEFAULTS.stripMaxLen,
   discCross: 0, discRadialR: 30, spokeGap: 0.5, tieSpan: 80, tipTieZone: 30, earMax: 0,
   valveD: 8, valveLen: 35, valveClear: 3,
   // Melexis US5881LUA unipolar hall switch (Adafruit 158): 4.08 × 3.00 × 1.51 mm, marked face out. It
@@ -82,8 +84,6 @@ export const PANEL_DEFAULTS: PanelSpec = {
 };
 
 export type Spec = PanelSpec & Material;
-/** Strips per side the panels are made for. */
-export const PANEL_STRIP_RANGE = [1, 2, 3, 4];
 export type HoleKind = 'strip' | 'spoke' | 'disc' | 'sensor' | 'wire';
 
 export interface Hole {
@@ -137,11 +137,7 @@ const lexCmp = (a: number[], b: number[]) => {
   return 0;
 };
 
-export const holeSize = (pp: Spec) => pp.tieW + pp.tieClear;
-/** Strip ties: hole centres on the strip's edges. */
-export const rowOffset = (pp: PanelSpec) => pp.stripW / 2;
-/** Narrowest blade: the strip ties plus gridEdge outside them. */
-export const minBladeW = (pp: Spec) => Math.ceil(2 * (rowOffset(pp) + holeSize(pp) / 2 + pp.gridEdge));
+export { holeSize };
 const HEAD_R = 2.5; // spoke heads on the flange face
 
 // ---------------------------------------------------------------- shape queries
@@ -321,8 +317,9 @@ function spokeTieCands(c: Ctx, side: number, a: number, gaps: number[]): Cand[] 
   // a tie can't go down through a hole that another spoke runs under
   const blocked = (s: Spoke, holes: Pt[]) => own.some((o) => o !== s && holes.some((q) => pointSegDist(q, o.a, o.b) < h * Math.SQRT2 + wh.p.spokeD / 2))
     || holes.some((q) => discHoles.some((dq) => dist(q, dq) < hole * Math.SQRT2 + edge));
-  // near the rim, the tab stays inside the rim wall and clear of every nipple (either side's)
-  const rimIn = wh.p.rimWallR - pp.tipClear, padR = h * Math.SQRT2 + edge, nipR = wh.nippleTipR() - padR - pp.nippleD / 2;
+  // near the rim, the tie's pad stays inside the rim wall, inside the blades' arced tips and clear of every
+  // nipple (either side's)
+  const rimIn = Math.min(wh.p.rimWallR - pp.tipClear, c.rEnd), padR = h * Math.SQRT2 + edge, nipR = wh.nippleTipR() - padR - pp.nippleD / 2;
   const nipples = wh.spokes.map((sp) => [pol(wh.nippleTipR(), sp.rimDeg), pol(wh.p.rimWallR, sp.rimDeg)] as [Pt, Pt]);
   const nearNipple = (holes: Pt[]) => holes.some((q) => Math.hypot(...q) > nipR && nipples.some(([na, nb]) => pointSegDist(q, na, nb) < padR + pp.nippleD / 2));
   for (const s of own) {
@@ -468,11 +465,58 @@ interface Features {
   sensors: Flat['sensors'];
 }
 
+/** A blade's straight edge, in the blade's own frame (x out along the strip, y across it): |y| = m x + c. */
+interface Edge { m: number; c: number }
+
+/** Where the edge y = m x + c meets the circle of radius R round the hub, outward. */
+function meetCircle({ m, c }: Edge, R: number): Pt {
+  const A = 1 + m * m, B = 2 * m * c, C = c * c - R * R, x = (-B + Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A);
+  return [x, m * x + c];
+}
+
+function wedgeRing([up, dn]: [Edge, Edge], a: number, R: number): Pt[] {
+  const meet = (e: Edge) => meetCircle(e, R);
+  const root = ({ m, c }: Edge): Pt => { // the foot of the hub's perpendicular, or where the edge crosses the centre line
+    const foot: Pt = [(-m * c) / (1 + m * m), c / (1 + m * m)];
+    return foot[1] >= 0 ? foot : [-c / m, 0];
+  };
+  const p = meet(up), q = meet(dn), ru = root(up), rd = root(dn);
+  const t0 = -Math.atan2(q[1], q[0]), t1 = Math.atan2(p[1], p[0]), n = Math.max(2, Math.ceil((t1 - t0) / rad(1)));
+  const arc = Array.from({ length: n + 1 }, (_, i): Pt => { const t = t0 + ((t1 - t0) * i) / n; return [R * Math.cos(t), R * Math.sin(t)]; });
+  return rotRing([[rd[0], -rd[1]], ...arc, ru], a);
+}
+
+/**
+ * A tab for each spoke tie: from the blade's edge (blended into it) out to a straight edge along the
+ * tie's spoke, just outside the material round its holes, as long as that material. Only the blades
+ * and their tabs, no more, leaves the least for a cross-wind to push on.
+ */
+function sideTabs(pp: Spec, arms: number[], bladeW: number, rhoEnd: number, spokeTies: SpokeTie[], spokeDir: number[]): { blade: number; ring: Pt[] }[] {
+  const around = (holeSize(pp) / 2 + pp.gridEdge) * Math.SQRT2; // the corners of a tie's square pad
+  const w = bladeW / 2 - 0.5;
+  return spokeTies.filter((t) => t.earMm > 0).map((t) => {
+    const a = arms[t.blade], sg = t.sg;
+    const pad = t.holes.flatMap((q) => circlePts(around, 16, q)).map((q) => rot(q, -a));
+    const xs = pad.map((q) => q[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
+    // the tab's outer edge, along the spoke (|y| = m x + c in the blade's frame) and just outside the pad
+    const m = sg * Math.tan(rad(spokeDir[t.spoke] - a)), e: Edge = { m, c: Math.max(...pad.map(([x, y]) => sg * y - m * x)) };
+    const xArc = meetCircle(e, rhoEnd)[0], blend = clamp(t.earMm, 4, 15);
+    const on = (x: number): Pt => { const xx = Math.min(x, xArc); return [xx, sg * (e.m * xx + e.c)]; };
+    return { blade: t.blade, ring: rotRing(convexHull([
+      [Math.max(0, x0 - blend), sg * w], [Math.min(rhoEnd - pp.cornerR, x1 + blend), sg * w], on(x1), on(x0), ...pad,
+    ]), a) };
+  });
+}
+
+/** A blade, strip-wide, out to its tip: an arc round the hub. */
+const bladeRing = (a: number, bladeW: number, rhoEnd: number) => wedgeRing([{ m: 0, c: bladeW / 2 }, { m: 0, c: bladeW / 2 }], a, rhoEnd);
+
 function outlineFrom(pp: Spec, f: Features) {
-  const blades = f.arms.map((a) => rotRing(box(0, -f.bladeW / 2, f.rhoEnd, f.bladeW / 2), a));
+  const blades = f.arms.map((a) => bladeRing(a, f.bladeW, f.rhoEnd));
   const outlinePts = ccw(cleanRing(outlineOf([circlePts(f.rhoDisc), ...blades, ...f.ears], f.slotRings)));
   const fr = filletRing(outlinePts, pp.cornerR);
-  return { outlinePts, outlineBulge: arcMerge(fr.bulge, f.rhoDisc), outline: new Ring(fr.sampled) };
+  // the disc's edge and the blades' tips as true arcs in the cut files
+  return { outlinePts, outlineBulge: arcMerge(arcMerge(fr.bulge, f.rhoDisc), f.rhoEnd), outline: new Ring(fr.sampled) };
 }
 
 /** The bore and the wire slots opening into it, as one cut. */
@@ -497,12 +541,13 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
   const under = new Set(arms.flatMap((a) => [...discTiesUnderStrip(c, side, a)]));
   const dTies = allTies.filter((_, i) => !under.has(i));
   const hole = holeSize(pp), edge = pp.gridEdge, wHalf = c.bladeW / 2, rhoEnd = c.rEnd;
+  const spokeDir = wh.spokes.map((s) => deg(Math.atan2(s.p1[1] - s.p0[1], s.p1[0] - s.p0[0])));
   const holes: HoleSpec[] = [];
   let tie = 0;
   for (const t of dTies) { const a = discTieAngle(t); holes.push(...t.holes.map((q) => ({ c: q, a, kind: 'disc' as const, tie }))); tie++; }
   const ears: Pt[][] = [], spokeTies: SpokeTie[] = [];
   let gaps = 0;
-  const nLeds = Math.floor((led.rho1 - led.rho0) / pp.ledPitch);
+  const nLeds = Math.floor((led.rho1 - led.rho0) / pp.ledPitch + 1e-9);
   arms.forEach((a, bi) => {
     const ch = chooseTies(c, side, spokeTieCands(c, side, a, freeGaps(pp, led.rho0, nLeds)));
     gaps += ch.gaps;
@@ -512,27 +557,37 @@ function sideFeatures(c: Ctx, side: number, arms: number[], led: { rho0: number;
       holes.push(...fh.map((q) => ({ c: q, a: ha, kind: 'spoke' as const, tie })));
       tie++;
       spokeTies.push({ blade: bi, r: r1(t.x), spoke: t.spoke, sg: t.sg, earMm: r1(t.ear), over: t.over, holes: fh });
-      if (t.ear <= 0) continue;
-      // the tab: the two holes with gridEdge round them, blended into the blade's edge
-      const pad = fh.flatMap((q) => squareAt(q, ha, hole + 2 * edge)).map((q) => rot(q, -a));
-      const x0 = Math.min(...pad.map((q) => q[0])), x1 = Math.max(...pad.map((q) => q[0]));
-      const blend = clamp(t.ear, 4, 15), ey = t.sg * (wHalf - 0.5);
-      const xIn = Math.max(0, x0 - blend), xOut = Math.min(rhoEnd - pp.cornerR, x1 + blend);
-      ears.push(rotRing(convexHull([...pad, [xIn, ey], [Math.max(xOut, x1), ey]]), a));
     }
   });
-  // nipple slots: a nipple (either side's) under a tip
+  // the tabs that tie the blades to the spokes, each ending along its spoke
+  const tabs = sideTabs(pp, arms, c.bladeW, rhoEnd, spokeTies, spokeDir);
+  ears.push(...tabs.map((t) => t.ring));
+  // nipple slots: a nipple (either side's) under a tip or a tab, where they reach past the nipples
   const slotRings: Pt[][] = [], slots: Features['slots'] = [];
-  if (pp.tipSlot === 'auto') {
-    const sw = pp.nippleD + 1, bottom = wh.nippleTipR() - pp.tipSlotClear;
+  const sw = pp.nippleD + 1, bottom = wh.nippleTipR() - pp.tipSlotClear;
+  if (pp.tipSlot === 'auto' && rhoEnd > bottom) {
+    const blades = arms.map((a) => bladeRing(a, c.bladeW, rhoEnd));
+    const across = pp.nippleD / 2 + 0.5;
     arms.forEach((a, bi) => {
       for (const s of wh.spokes) {
-        const e = wh.nippleTipR() * Math.sin(rad(s.rimDeg - a));
-        if (Math.cos(rad(s.rimDeg - a)) < 0 || Math.abs(e) >= wHalf + pp.nippleD / 2 + 0.5) continue;
+        const [x] = rot(pol(wh.nippleTipR(), s.rimDeg), -a);
+        if (x < 0) continue;
+        // the nipple's end and sides, out to the tip: under the blade or one of its tabs
+        const under = [wh.nippleTipR(), (wh.nippleTipR() + rhoEnd) / 2, rhoEnd - 0.1].some((r) => [-across, 0, across].some((k) => {
+          const q = rot([r, k], s.rimDeg);
+          return pointInRing(q, blades[bi]) || tabs.some((t) => t.blade === bi && pointInRing(q, t.ring));
+        }));
+        if (!under) continue;
         slotRings.push(rotRing(box(bottom, -sw / 2, rhoEnd + 10, sw / 2), s.rimDeg));
         slots.push({ blade: bi, rimHole: s.i });
       }
     });
+  }
+  // every other nipple keeps the panel clear of it: a tab running out along its spoke can come close. The
+  // ties' pads are placed farther off still, so this only trims a tab's corner.
+  const slotted = new Set(slots.map((x) => x.rimHole));
+  for (const s of wh.spokes) {
+    if (!slotted.has(s.i)) slotRings.push(rotRing(box(wh.nippleTipR() - 0.5, -sw / 2, wh.p.rimWallR + 5, sw / 2), s.rimDeg));
   }
   // hall switches: one per strip, on the bisector half a blade spacing on from it, marked face out,
   // leads toward the hub, all at one radius so they repeat with the strips: as far out on the disc as
@@ -805,7 +860,6 @@ export interface PanelDesign {
   identical: boolean;
   tipSlot: { widthMm: number; depthMm: number; nippleInnerEndR: number; slotBottomROnWheel: number } | null;
   sides: { LEFT: SideResult; RIGHT: SideResult };
-  sim: { stripCount: number; ledDensity: number; stripStartMm: number; stripLengthMm: number; ledEndR: number; evenlySpaced: boolean };
   warnings: string[];
 }
 
@@ -817,30 +871,17 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   if (!material) throw new Error(`Unknown material ${mat}.`);
   const pp: Spec = { ...PANEL_DEFAULTS, ...material, ...panelIn };
   if (pp.strips < 1) throw new Error('The panels need at least one strip.');
-  const bladeW = Math.max(pp.bladeW, minBladeW(pp));
   let wh = new Wheel(wp);
-  let rimNote = '', rEnd: number;
-  if (pp.tipEndR) { // measured tip position: make sure the modelled rim sits outside it
-    const need = Math.hypot(pp.tipEndR, bladeW / 2) + pp.tipClear;
-    if (wh.p.rimWallR < need) {
-      wh = new Wheel({ ...wp, rimWallR: need, erd: 2 * (need + 4) });
-      rimNote = `Rim wall assumed at r = ${need.toFixed(1)} mm, just outside the tip. Measure the rim to confirm.`;
-    }
-    rEnd = pp.tipEndR;
-  } else {
-    rEnd = Math.sqrt((wh.p.rimWallR - pp.tipClear) ** 2 - (bladeW / 2) ** 2);
-  }
-  if (pp.tipSlot === 'none') rEnd = Math.min(rEnd, wh.nippleTipR() - pp.tipSlotClear);
+  // where the LEDs sit: the same rule the simulator uses (ledSpan.ts)
+  const span = ledSpan({ ...pp, rimWallR: wh.p.rimWallR, nippleExposed: wh.p.nippleExposed });
+  const { bladeW, rEnd, rimNote, ledStart } = span;
+  if (span.rimWallR > wh.p.rimWallR) wh = new Wheel({ ...wp, rimWallR: span.rimWallR, erd: 2 * (span.rimWallR + 4) });
   if (pp.earMax <= 0) { // a tab on each edge, as long as it takes: up to a whole gap between one side's
     // spokes, so an edge whose nearest spoke runs under the strip can reach the next one
     const far = rEnd * rad(720 / wh.p.spokes), h = holeSize(pp) / 2;
     pp.earMax = Math.ceil(far + wh.p.spokeD / 2 + pp.spokeGap + 2 * h * Math.SQRT2 + pp.gridEdge - bladeW / 2 + 2);
   }
-  // the strips are laid from the tip in, so the outermost LED sits as far out as it can and the image
-  // is as large as it can be: whole pixels, no closer to the axle than the hub or the panels' own
-  // limit, and one half-metre strip at most. Only a nipple slot may shorten them later, at the tip.
-  const stripMin = Math.max(pp.boreMinD / 2 + pp.stripStartGap, pp.stripStartR ?? 0, rEnd - 2 - pp.stripMaxLen);
-  const ledStart = rEnd - 2 - Math.floor((rEnd - 2 - stripMin) / pp.ledPitch + 1e-9) * pp.ledPitch;
+  // Only a nipple slot may shorten the strips later, at the tip.
   // the bore then reaches out to just inside the strips' inner ends: no material the strips don't need
   pp.boreD = 2 * Math.max(pp.boreMinD / 2, ledStart - pp.boreToStrip);
   const rBore = pp.boreD / 2;
@@ -862,7 +903,7 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   // the pixel gaps (where ties over a strip go) are known before the blades turn
   const searchGaps: Record<number, number[]> = {};
   for (const side of [-1, 1]) {
-    searchGaps[side] = freeGaps(pp, ledStart, Math.round((rEnd - 2 - ledStart) / pp.ledPitch));
+    searchGaps[side] = freeGaps(pp, ledStart, span.ledsPerStrip);
   }
 
   // Turn all the blades together (they stay evenly spaced) for: every stretch tied, the valve clear,
@@ -878,7 +919,10 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     let v = cache.get(key);
     if (!v) {
       const { ties, gaps } = chooseTies(c, side, spokeTieCands(c, side, a, searchGaps[side]));
-      v = { gaps, n: ties.length, over: ties.filter((t) => t.over).length, maxEar: Math.max(0, ...ties.map((t) => t.ear)), sumEar: ties.reduce((s, t) => s + t.ear, 0), under: discTiesUnderStrip(c, side, a) };
+      v = {
+        gaps, n: ties.length, over: ties.filter((t) => t.over).length, maxEar: Math.max(0, ...ties.map((t) => t.ear)),
+        sumEar: ties.reduce((s, t) => s + t.ear, 0), under: discTiesUnderStrip(c, side, a),
+      };
       cache.set(key, v);
     }
     return v;
@@ -909,20 +953,21 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
   const axis = symmetric(best!.t0), mirrored = axis !== null;
 
   // the strips: all the same, from their start to the tip or a nipple slot
-  let rho1 = rEnd - 2;
-  let tipSlot: PanelDesign['tipSlot'] = null;
-  if (pp.tipSlot === 'auto') {
-    const sw = pp.nippleD + 1, bottomR = wh.nippleTipR() - pp.tipSlotClear;
+  let rho1 = rEnd - SPAN_DEFAULTS.tipToLed;
+  // a nipple slot, where the tips reach past the nipples (the panels say where they cut one)
+  const bottomR = wh.nippleTipR() - pp.tipSlotClear, sw = pp.nippleD + 1;
+  const tipSlot = { widthMm: r2(sw), depthMm: r2(rEnd - bottomR), nippleInnerEndR: r1(wh.nippleTipR()), slotBottomROnWheel: r1(bottomR) };
+  if (pp.tipSlot === 'auto' && rEnd > bottomR) {
     for (const a of arms) {
       for (const s of wh.spokes) {
         const e = wh.nippleTipR() * Math.sin(rad(s.rimDeg - a));
-        if (Math.cos(rad(s.rimDeg - a)) < 0 || Math.abs(e) >= bladeW / 2 + pp.nippleD / 2 + 0.5) continue;
-        tipSlot = { widthMm: r2(sw), depthMm: r2(rEnd - bottomR), nippleInnerEndR: r1(wh.nippleTipR()), slotBottomROnWheel: r1(bottomR) };
-        if (Math.abs(e) < pp.stripW / 2 + sw / 2) rho1 = Math.min(rho1, bottomR - 1); // the slot cuts into the strip's lane
+        if (Math.cos(rad(s.rimDeg - a)) > 0 && Math.abs(e) < pp.stripW / 2 + sw / 2) rho1 = Math.min(rho1, bottomR - 1); // the slot cuts into the strip's lane
       }
     }
   }
   const led = { rho0: ledStart, rho1 };
+  // a slot across a strip's lane ends it short: the simulator, which doesn't know the blades' angles, still shows it full length
+  const slotShort = span.ledsPerStrip - Math.floor((rho1 - ledStart) / pp.ledPitch + 1e-9);
 
   const fL = sideFeatures(c, -1, arms, led, rhoDisc);
   const fR = axis !== null ? mirrorFeatures(wh, fL, axis) : sideFeatures(c, 1, arms, led, rhoDisc);
@@ -991,15 +1036,20 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     if (sm.tieGaps) {
       const fit = PANEL_STRIP_RANGE.filter((n) => wh.p.spokes % n === 0);
       out.push(`${sm.tieGaps} stretch${sm.tieGaps > 1 ? 'es' : ''} of blade edge can't be tied to a spoke within ${pp.earMax} mm of the blade (tips: within ${pp.tipTieZone} mm of the end). `
-        + `Each blade tip has to sit over a spoke or midway between two, which every blade can only do when the strips divide the spoke count: ${fit.join(', ')} strips on ${wh.p.spokes} spokes. Or allow longer tabs.`);
+        + `Each blade tip has to sit over a spoke or midway between two, which every blade can only do when the strips divide the spoke `
+          + `count: ${fit.join(', ')} strips on ${wh.p.spokes} spokes. Or allow a longer tie reach.`);
     }
     else if (sm.longestSpanMm > pp.tieSpan) out.push(`the longest stretch between ties is ${sm.longestSpanMm} mm, over the ${pp.tieSpan} mm asked.`);
-    if (sm.valveClearMm < pp.valveClear) out.push(`the valve (${pp.valveD} mm with its nut, ${pp.valveLen} mm inside the rim) ${sm.valveClearMm < 0 ? 'hits the panel' : `clears the panel by only ${sm.valveClearMm} mm`}.`);
-    if (sm.nippleHits.length) out.push(`${sm.nippleHits.length} nipple${sm.nippleHits.length > 1 ? 's' : ''} (rim hole ${sm.nippleHits.join(', ')}) under the panel. Slot the tips (Nipple slot) or shorten the blades.`);
-    if (sm.sensorFieldUT !== null && sm.sensorFieldUT > 100 * pp.sensorReleaseMT) out.push(`the strip's stray field at a hall sensor is up to ${sm.sensorFieldUT} µT at full white, within 10× of the switch's ${pp.sensorReleaseMT} mT release point.`);
+    if (sm.valveClearMm < pp.valveClear) out.push(`the valve (${pp.valveD} mm with its nut, ${pp.valveLen} mm inside the rim) `
+      + `${sm.valveClearMm < 0 ? 'hits the panel' : `clears the panel by only ${sm.valveClearMm} mm`}.`);
+    if (sm.nippleHits.length) out.push(`${sm.nippleHits.length} nipple${sm.nippleHits.length > 1 ? 's' : ''} (rim hole `
+      + `${sm.nippleHits.join(', ')}) under the panel. Slot the tips (Nipple slot) or shorten the blades.`);
+    if (sm.sensorFieldUT !== null && sm.sensorFieldUT > 100 * pp.sensorReleaseMT) out.push(`the strip's stray field at a hall sensor is up `
+      + `to ${sm.sensorFieldUT} µT at full white, within 10× of the switch's ${pp.sensorReleaseMT} mT release point.`);
     if (pp.wireHoleD > 0 && sm.holes.wire < s.g.arms.length) out.push(`no room for a wire hole by ${s.g.arms.length - sm.holes.wire} of the strips.`);
     if (pp.sensor && s.g.sensors.length < s.g.arms.length) out.push('no room for the hall sensors between the strips, clear of the disc ties.');
-    if (sm.closeTies.length) out.push(`${sm.closeTies.length} pairs of ties are closer than ${pp.gridEdge} mm (tightest ${Math.min(...sm.closeTies.map((x) => x.gapMm))} mm at r ${sm.closeTies[0].r} mm).`);
+    if (sm.closeTies.length) out.push(`${sm.closeTies.length} pairs of ties are closer than ${pp.gridEdge} mm (tightest `
+      + `${Math.min(...sm.closeTies.map((x) => x.gapMm))} mm at r ${sm.closeTies[0].r} mm).`);
     if (!sm.discTies) {
       out.push(sm.discTiesUnderStrips ? 'every tie for the disc is under a strip: the disc isn\'t tied. Try another spoke cross.'
         : 'no room for the disc\'s ties clear of the bore: only the blades are tied. Try another spoke cross.');
@@ -1022,15 +1072,18 @@ export function designPanels(wheelIn: WheelInput, panelIn: Partial<PanelSpec>): 
     made.push(`the part (${L.summary.partSizeIn.join(' × ')} in) is larger than ${pp.maxPartIn.join(' × ')} in, the largest the cutter takes in ${pp.label}.`);
   }
   // one warning for both panels when they say the same
+  if (wh.p.crosses > Math.floor(wh.p.spokes / 8)) {
+    made.push(`${wh.p.crosses} crosses on ${wh.p.spokes} spokes can't be laced: the spokes would leave the flange past its tangent. `
+      + `At most ${Math.floor(wh.p.spokes / 8)}.`);
+  }
+  if (slotShort > 0) {
+    made.push(`a nipple slot crosses a strip's lane, so the strips end ${slotShort} LED${slotShort > 1 ? 's' : ''} short of the tip `
+      + '(the simulator shows them full length). Set a tip radius just inside the nipples, or Nipple slot: Stop short.');
+  }
   const warnings = [...made, ...wl.map((w) => (wr.includes(w) ? `Both panels: ${w}` : `LEFT: ${w}`)), ...wr.filter((w) => !wl.includes(w)).map((w) => `RIGHT: ${w}`)];
   return {
     name, spec: pp, wheel: wh, material: `${pp.label} (${pp.role})`, rimNote, arms, armSpacing: r3(period),
     identical: mirrored, tipSlot: L.g.slots.length ? tipSlot : null, sides: { LEFT: L, RIGHT: R },
-    sim: {
-      stripCount: N, ledDensity: Math.round(1000 / pp.ledPitch),
-      stripStartMm: Math.round(R.summary.ledStartR), stripLengthMm: Math.round(R.summary.ledEndR - R.summary.ledStartR),
-      ledEndR: R.summary.ledEndR, evenlySpaced: true,
-    },
     warnings,
   };
 }
@@ -1045,7 +1098,7 @@ export function designReport(d: PanelDesign) {
   return {
     name: d.name, material: d.material, rimNote: d.rimNote, wheelTypical: d.wheel.p, wheelCheck: d.wheel.check(), panel: d.spec,
     armAnglesDeg: d.arms.map(r3), armSpacingDeg: d.armSpacing, valveDeg: d.wheel.valveDeg(), tipSlot: d.tipSlot,
-    identicalParts: d.identical, sides: { LEFT: side(d.sides.LEFT), RIGHT: side(d.sides.RIGHT) }, simSettings: d.sim, warnings: d.warnings,
+    identicalParts: d.identical, sides: { LEFT: side(d.sides.LEFT), RIGHT: side(d.sides.RIGHT) }, warnings: d.warnings,
   };
 }
 

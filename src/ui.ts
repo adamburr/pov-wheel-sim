@@ -1,7 +1,7 @@
 import GUI, { type Controller } from 'lil-gui';
 import {
-  BRIGHTNESS_STEPS, defaultParams, DEVICE_KEYS, FLUIDS, LED, PACKAGES, type Params, PATTERN_LABELS, type PatternName,
-  PATTERNS, PRESET_KEYS, SHUTTERS, showPicture, WHEELS,
+  applyFirmware, applyHub, applyWheelSize, BRIGHTNESS_STEPS, CUSTOM_HUB, defaultParams, DEVICE_KEYS, FLUIDS, HUBS, normalizeDevice,
+  type Params, PATTERN_LABELS, type PatternName, PATTERNS, PRESET_KEYS, SHUTTERS, showPicture, WHEELS,
 } from './params';
 import type { PresetStore } from './presets';
 import { defaultDevice } from './defaults';
@@ -139,7 +139,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     'Arches': 'arches', 'Rainbow arches': 'rainbow', 'Scallops': 'scallops', 'Beads': 'beads', 'Truss bridge': 'bridge',
     'Picture (full height)': 'picture',
   }).name('Lower half');
-  const spinCtl = pg.add(p, 'spinSeconds', -60, 60, 0.1).name('Spin (s per turn, 0 = still)');
+  const spinCtl = pg.add(p, 'spinSeconds', -60, 60, 0.1).name('Spin (s/turn, 0 = still)');
   pg.add(p, 'globalBrightness', 1, 31, 1).name('Brightness');
 
   const smiley = pg.addFolder('Bouncing smiley');
@@ -152,7 +152,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   dryer.add(p, 'dryerDrumTurn', 0, 1, 0.05).name('Drum turn (× wheel)');
   dryer.add(p, 'dryerGrip', 0, 1, 0.05).name('Drum grip');
   dryer.add(p, 'dryerGain', 0, 5, 0.1).name('Push ×');
-  dryer.add(p, 'dryerShuffle', 0, 3, 0.1).name('Layer shuffle (per s)');
+  dryer.add(p, 'dryerShuffle', 0, 3, 0.1).name('Layer shuffle (/s)');
 
   const water = pg.addFolder('Water');
   water.add(p, 'fluid', Object.keys(FLUIDS)).name('Fluid').onChange((k: string) => {
@@ -173,7 +173,6 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   const revsCtl = anim.add(p, 'revsPerFrame', 0.01, 16, 0.01).name('Turns / frame');
 
   const picture = pg.addFolder('Picture details').close();
-  picture.add(p, 'mapping', { 'Picture (polar)': 'polar', 'Adafruit columns': 'columns' }).name('Layout');
   const fillCtl = picture.add(p, 'pictureFill', { 'Crop to fill': 'crop', 'Whole picture': 'whole' }).name('Fill');
   const zoomCtl = picture.add(p, 'pictureZoom', 0.25, 4, 0.05).name('Zoom');
   const moveXCtl = picture.add(p, 'pictureX', -1, 1, 0.01).name('Move right');
@@ -189,71 +188,65 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
 
   // ---------- Hardware tab: the build, each section with its details tucked away ----------
   const hg = tabGui('hardware');
-  hg.add(p, 'setupName').name('Setup name');
+  hg.add(p, 'stripCount', 1, 4, 1).name('Strips per side');
 
+  // Everything about the wheel itself. A size brings typical values for the rest of it: measure yours.
   const wheel = hg.addFolder('Wheel');
-  wheel.add(p, 'wheelPreset', Object.keys(WHEELS)).name('Size').onChange((k: string) => {
-    const w = WHEELS[k];
-    p.bsdMm = w.bsdMm; p.tireMm = w.tireMm; p.spokes = w.spokes;
-  });
-  const wheelMore = wheel.addFolder('Details').close();
-  wheelMore.add(p, 'bsdMm', 150, 700, 1).name('Rim BSD (mm)');
-  wheelMore.add(p, 'tireMm', 18, 120, 1).name('Tire width (mm)');
-  wheelMore.add(p, 'rimDepthMm', 10, 60, 1).name('Rim depth (mm)');
-  wheelMore.add(p, 'spokes', 12, 48, 2).name('Spokes');
+  wheel.add(p, 'wheelPreset', Object.keys(WHEELS)).name('Size').onChange((k: string) => applyWheelSize(p, k));
+  const rim = wheel.addFolder('Rim').close();
+  rim.add(p, 'bsdMm', 150, 700, 1).name('Rim BSD (mm)');
+  rim.add(p, 'tireMm', 18, 120, 1).name('Tire width (mm)');
+  rim.add(p, 'rimDepthMm', 5, 60, 1).name('Rim depth (mm)');
+  rim.add(p, 'spokes', 12, 48, 2).name('Spokes');
+  rim.add(p, 'spokeCrosses', 0, 6, 1).name('Spoke crosses');
+  const hub = wheel.addFolder('Hub').close();
+  hub.add(p, 'hubPreset', [...Object.keys(HUBS), CUSTOM_HUB]).name('Type').onChange((k: string) => applyHub(p, k));
+  hub.add(p, 'hubOldMm', 90, 150, 1).name('Over-locknut (mm)');
+  hub.add(p, 'hubFlangePcdMm', 30, 80, 0.5).name('Flange holes Ø (mm)');
+  hub.add(p, 'hubFlangeOffsetMm', 15, 50, 0.5).name('Centre to flange (mm)');
+  hub.add(p, 'hubShellMm', 15, 60, 0.5).name('Shell Ø (mm)');
+  hub.add(p, 'panelBoreMm', 10, 80, 0.1).name('Hub body Ø (mm)');
+  const fork = wheel.addFolder('Fork').close();
+  fork.add(p, 'forkCrownRadiusMm', 120, 450, 1).name('Crown radius (mm)');
+  fork.add(p, 'forkCrownHalfMm', 10, 40, 0.5).name('Crown half-width (mm)');
 
-  const leds = hg.addFolder('LEDs');
-  leds.add(p, 'stripCount', 1, 4, 1).name('Strips per side');
-  leds.add(p, 'doubleSided').name('Both sides');
-  const ledMore = leds.addFolder('Details').close();
-  ledMore.add(p, 'ledDensity', 10, 250, 1).name('LEDs / m');
-  ledMore.add(p, 'ledPackage', Object.keys(PACKAGES)).name('Package').onChange((k: string) => { p.dieMm = PACKAGES[k]; });
-  ledMore.add(p, 'dieMm', 0.5, 6, 0.1).name('Emitter size (mm)');
-  ledMore.add(p, 'diffusionMm', 0, 6, 0.1).name('Diffuser spread (mm)');
-  ledMore.add(p, 'stripStartMm', 15, 150, 1).name('Start radius (mm)');
-  ledMore.add(p, 'autoLength').name('Fill to rim');
-  const lengthCtl = ledMore.add(p, 'stripLengthMm', 20, 400, 1).name('Strip length (mm)');
-  const backCtl = ledMore.add(p, 'backData', { 'Own data (reads right)': 'independent', 'Shared (mirrored)': 'same' }).name('Back strips');
-  ledMore.add(p, 'radialStagger').name('Radial stagger');
-  ledMore.add(p, 'gamma', 1, 3, 0.05).name('Gamma');
-  ledMore.add(p, 'colorBits', 1, 8, 1).name('Bits / channel');
-  ledMore.add(p, 'radialCompensation').name('Dim inner LEDs');
+  // The standard strip on both sides, each strip on its own data lane; where the LEDs sit follows the panels' rule.
+  const leds = hg.addFolder('LEDs').close();
+  leds.add(p, 'panelTipRadiusMm', 0, 400, 0.05).name('Tip radius (mm, 0 = auto)');
+  leds.add(p, 'panelStripMinMm', 15, 120, 1).name('Min strip radius (mm)');
+  leds.add(p, 'diffusionMm', 0, 6, 0.1).name('Diffuser (mm)');
+  leds.add(p, 'pwmHz', 100, 40000, 10).name('LED PWM (Hz)'); // datasheets disagree
+  leds.add(p, 'gamma', 1, 3, 0.05).name('Gamma');
+  leds.add(p, 'radialCompensation').name('Dim inner LEDs');
 
   const ctl = hg.addFolder('Controller');
-  const perStripCtl = ctl.add(p, 'hallPerStrip').name('Sensor per strip');
-  ctl.add(p, 'nextOnDark').name('Next preset when lights go out');
-  const elecMore = ctl.addFolder('Electronics details').close();
-  const clockCtl = elecMore.add(p, 'clockMHz', 0.1, 40, 0.1).name('LED clock (MHz)');
-  elecMore.add(p, 'overheadUs', 0, 2000, 1).name('Overhead / column (µs)');
-  elecMore.add(p, 'pwmHz', 100, 40000, 10).name('LED PWM (Hz)');
-  const gbCtl = elecMore.add(p, 'gbPwmHz', 0, 5000, 10).name('Brightness PWM (Hz)');
   const fwMore = ctl.addFolder('Firmware details').close();
-  fwMore.add(p, 'syncMode', { 'Hall sensor': 'hall', 'Ideal (encoder)': 'ideal', 'Free-running': 'free' }).name('Sync');
+  fwMore.add(p, 'syncMode', { 'Hall sensors': 'hall', 'Ideal (encoder)': 'ideal' }).name('Sync');
   fwMore.add(p, 'columnsPerRev', 16, 1024, 1).name('Columns / turn');
-  fwMore.add(p, 'minLinesPerSec', 0, 1000, 10).name('Min lines/s (0 = off)');
-  const pollCtl = fwMore.add(p, 'hallPollMs', 0, 20, 0.5).name('Hall poll (ms)');
   const debounceCtl = fwMore.add(p, 'debounceMs', 0, 300, 5).name('Hall debounce (ms)');
-  fwMore.add(p, 'overflow', { 'Wrap around': 'wrap', 'Blank': 'blank' }).name('After last column');
-  fwMore.add(p, 'predictMotion').name('Banner: predict motion');
-  const freeCtl = fwMore.add(p, 'freeRunColsPerSec', 50, 20000, 10).name('Free-run cols/s');
-  fwMore.add(p, 'maxFrames', 1, 120, 1).name('Max frames (import)');
-  fwMore.add(p, 'videoFps', 1, 30, 1).name('Video sample fps');
+  fwMore.add(p, 'maxFrames', 1, 120, 1).name('Max frames');
+  fwMore.add(p, 'videoFps', 1, 30, 1).name('Video fps');
   // How hard the firmware's physics looks (water, bouncing smiley, tumble dryer) work: the same for every look.
   const waterSim = ctl.addFolder('Physics simulation').close();
-  waterSim.add(p, 'waterGrid', 12, 64, 2).name('Water grid (cells across)');
+  waterSim.add(p, 'waterGrid', 12, 64, 2).name('Water grid (cells)');
   waterSim.add(p, 'waterHz', 10, 60, 5).name('Sim rate (Hz)');
-  waterSim.add(p, 'waterIters', 5, 60, 1).name('Water pressure iterations');
+  waterSim.add(p, 'waterIters', 5, 60, 1).name('Water iterations');
   waterSim.add(p, 'accelSmoothMs', 0, 1000, 10).name('Accel smoothing (ms)');
 
   const reset = { click: () => {} };
   const resetCtl = hg.add(reset, 'click').name('↺ Reset hardware');
   reset.click = confirmController(resetCtl, 'Click again to reset the hardware', () => {
     Object.assign(p, defaultDevice());
+    normalizeDevice(p);
     hooks.onDeviceEdit();
     refresh();
     hooks.onViewChange();
   });
-  hg.onChange((e) => queueMicrotask(() => { hooks.onDeviceEdit(e.property); refresh(); }));
+  hg.onChange((e) => queueMicrotask(() => {
+    normalizeDevice(p); // the hub type its values match; no more crosses than the spokes can lace
+    hooks.onDeviceEdit(e.property);
+    refresh();
+  }));
 
   // ---------- Simulator tab: how the simulation looks and rides (never sent to the wheel) ----------
   const sg = tabGui('simulator');
@@ -282,6 +275,12 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   rideMore.add(p, 'speedRampG', 0, 1, 0.05).name('Acceleration (g)');
   rideMore.add(p, 'brakeG', 0.1, 1, 0.05).name('Braking (g)');
 
+  // Not the standard build: Adafruit's CircuitPython firmware from its bike-wheel guide, to compare against.
+  const compare = sg.addFolder('Firmware').close();
+  const compareCtl = compare.add(p, 'compareAdafruit').name('Compare with Adafruit').onChange(() => applyFirmware(p));
+  compareCtl.domElement.title = 'The picture\'s columns as angles, a 400 lines/s floor, back strips sharing the front\'s data, a 4 MHz clock, '
+    + 'the magnet polled every 4 ms (an assumed loop time) and no banner motion prediction. Not saved.';
+
   const render = sg.addFolder('Render').close();
   render.add(p, 'ambient', 0, 1, 0.01).name('Daylight');
   render.add(p, 'bloom', 0, 2, 0.01).name('Glow');
@@ -295,10 +294,11 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
       const d = defaultParams() as Record<string, unknown>;
       const saved = new Set<string>([...PRESET_KEYS, ...DEVICE_KEYS, ...KEEP_ON_SIM_RESET]);
       for (const k of Object.keys(d)) if (!saved.has(k)) (p as Record<string, unknown>)[k] = d[k];
+      normalizeDevice(p); // the hub type follows the hub's saved values
       refresh();
       hooks.onLayout();
     },
-  }, 'reset').name('↺ Reset simulator settings');
+  }, 'reset').name('↺ Reset simulator');
   sg.onChange(() => queueMicrotask(refresh));
 
   // ---------- Panels tab: the flat-cut LED supports, drawn in the main area while this tab is open ----------
@@ -334,15 +334,8 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
     anim.show(!live && animated);
     revsCtl.show(p.frameAdvance === 'revolution');
     picture.show(!live);
-    backSideCtl.show(p.doubleSided && p.backData === 'independent');
-    lengthCtl.show(!p.autoLength);
-    backCtl.show(p.doubleSided);
-    clockCtl.show(LED.protocol === 'clocked');
-    gbCtl.show(LED.gbMode === 'pwm');
-    pollCtl.show(p.syncMode === 'hall');
+    backSideCtl.show(p.backData === 'independent');
     debounceCtl.show(p.syncMode === 'hall');
-    perStripCtl.show(p.syncMode === 'hall');
-    freeCtl.show(p.syncMode === 'free');
     shutterCtl.show(p.exposureModel === 'camera');
     stripShutterCtl.show(p.strip !== 'off');
     eyeCtl.show(p.exposureModel === 'eye');
@@ -462,6 +455,9 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
   confirmButton($('setup-reset'), 'Reset all?', hooks.onResetSetup);
   $('setup-open').onclick = () => setupInput.click();
   $('setup-save').onclick = hooks.onSaveSetup;
+  // the setup's name, which names its file, beside the buttons that load and save it
+  const setupName = $<HTMLInputElement>('setup-name');
+  setupName.oninput = () => { p.setupName = setupName.value.slice(0, 60); hooks.onDeviceEdit('setupName'); };
   sheetQuery.addEventListener('change', hooks.onLayout);
   openTab('presets');
   setOpen(false);
@@ -477,6 +473,7 @@ export function buildUi(p: Params, hooks: UiHooks): Ui {
 
   function refresh() {
     fileCtl.name(fileLabel());
+    if (document.activeElement !== setupName) setupName.value = p.setupName;
     for (const g of guis) {
       for (const c of g.controllersRecursive() as Controller[]) {
         // Don't overwrite a field while someone is typing in it.

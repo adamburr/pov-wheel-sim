@@ -36,8 +36,8 @@ export class WaterSource {
   sync(p: Params, d: Derived, motion: WheelMotion, t: number): number[] {
     const changed: number[] = [];
     const simKey = [p.waterGrid, p.waterFill, d.rEnd].join('|');
-    const lutKey = [simKey, p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided,
-      p.backData, p.radialStagger, p.imageRotationDeg].join('|');
+    const lutKey = [simKey, p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.backData,
+      p.imageRotationDeg].join('|');
     let fresh = false;
     if (simKey !== this.simKey) {
       this.simKey = simKey;

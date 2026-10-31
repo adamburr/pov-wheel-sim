@@ -17,6 +17,7 @@
 //
 // Dimensions are TYPICAL VALUES, not measurements.
 import { type Pt, rad, segIntersect } from './geom';
+import { SPAN_DEFAULTS } from './ledSpan';
 
 export interface WheelSpec {
   spokes: number;
@@ -38,7 +39,7 @@ export interface WheelSpec {
 }
 
 export const TYPICAL_FRONT: WheelSpec = {
-  spokes: 32, crosses: 3, erd: 600, rimWallR: 296, nippleExposed: 6, rimOffset: 0, offsetDrill: 0,
+  spokes: 32, crosses: 3, erd: 600, rimWallR: 296, nippleExposed: SPAN_DEFAULTS.nippleExposed, rimOffset: 0, offsetDrill: 0,
   pcdLeft: 44, pcdRight: 44, c2fLeft: 35, c2fRight: 35, flangeT: 2.8, flangeOuterExtra: 4.5, holeD: 2.6,
   spokeD: 2, headH: 2, old: 100, interlaceLen: 35,
 };

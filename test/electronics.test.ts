@@ -4,7 +4,7 @@ import { bomCsv, designElectronics } from '../src/electronics/design';
 import { drawSheet, SHEETS } from '../src/electronics/sheets';
 
 describe('electronics', () => {
-  const p = defaultParams();
+  const p = { ...defaultParams(), stripCount: 4 }; // the full build: four strips a side, every lane in use
   const e = designElectronics(p);
 
   it('gives every strip its own lane on GP0–7 (header pins), and each side a clock', () => {
@@ -54,10 +54,10 @@ describe('electronics', () => {
     expect(f.connector[8].net).toBe('GND');
   });
 
-  it('feeds the right buffers from the left lanes when the back strips share data', () => {
+  it('wires the standard build even while the simulator compares it with shared back data', () => {
     const f = designElectronics({ ...p, backData: 'same' });
-    expect(f.lanes).toHaveLength(4);
-    expect(f.shifters.flatMap((u) => u.ch).find((c) => c.y === 'R1_5')!.a).toBe('L1');
+    expect(f.lanes).toHaveLength(8);
+    expect(f.shifters.flatMap((u) => u.ch).find((c) => c.y === 'R1_5')!.a).toBe('R1');
   });
 
   it('stacks the module on one side of the shell, between the spoke cones', () => {
@@ -98,12 +98,12 @@ describe('electronics', () => {
     expect(designElectronics({ ...p, ledCapA: 7 }).warnings.join(' ')).toMatch(/boost/);
   });
 
-  it('buys a half-metre strip per blade, and warns when a strip needs more', () => {
+  it('buys a half-metre strip per blade, which even the largest wheel never outgrows', () => {
     const strips = (q: typeof p) => designElectronics(q).bom.find((b) => b.part === '2328')!.qty;
     expect(e.leds).toBe(38);
     expect(strips(p)).toBe(8);
     expect(strips({ ...p, stripCount: 3 })).toBe(6);
-    expect(designElectronics({ ...p, bsdMm: 1300, stripStartMm: 15, stripLengthMm: 600 }).warnings.join(' ')).toMatch(/half-metre/);
+    expect(designElectronics({ ...p, bsdMm: 1300, panelTipRadiusMm: 0, panelStripMinMm: 15 }).leds).toBe(72);
   });
 
   it('lists the carrier board\'s parts from its own layout, every one through-hole', () => {

@@ -11,7 +11,7 @@
 // Feather's headers (TX, RX, SDA, SCL, D12, D5, D6, D13), and side-sets the two clocks on GPIO10/11.
 // Everything is wired from the headers, so no ribbon cable to the HSTX port (whose pins, GPIO12–19,
 // stay unused). It costs the UART and I2C (STEMMA QT) pins: debug goes over USB.
-import { LED, type Params } from '../params';
+import type { Params } from '../params';
 import { CARRIER, carrierLayout } from './carrier';
 import { hallSensors } from '../sim/firmware';
 import { derive } from '../sim/timing';
@@ -35,9 +35,7 @@ export interface Mass { name: string; massG: number; r: number; angleDeg: number
 
 export interface Electronics {
   n: number;               // strips per side
-  sides: number;           // 1 or 2 panels lit
   cells: number;
-  shared: boolean;         // right strips mirror the left's data
   leds: number;            // LEDs per strip
   totalLeds: number;
   lanes: { net: string; gpio: number; side: SideId; strip: number }[];
@@ -89,10 +87,9 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 export function designElectronics(p: Params): Electronics {
   const d = derive(p);
   const n = p.stripCount;
-  const sides = p.doubleSided ? 2 : 1;
-  const shared = sides === 2 && p.backData === 'same';
+  // the standard build, whatever the simulator compares it with: both panels lit, every strip on its own lane
   const L = d.ledsPerStrip;
-  const totalLeds = n * sides * L;
+  const totalLeds = n * 2 * L;
   const halls = hallSensors(p);
   const warnings: string[] = [];
   const notes: string[] = [];
@@ -100,12 +97,11 @@ export function designElectronics(p: Params): Electronics {
   // ---- Lanes: left strips on GPIO0.., right on GPIO4.. (one PIO program, eight pins in a row) ----
   const lanes: Electronics['lanes'] = [];
   for (let i = 0; i < n; i++) lanes.push({ net: `L${i + 1}`, gpio: i, side: 'L', strip: i + 1 });
-  if (sides === 2 && !shared) for (let i = 0; i < n; i++) lanes.push({ net: `R${i + 1}`, gpio: 4 + i, side: 'R', strip: i + 1 });
-  const rightNet = (i: number) => (shared ? `L${i + 1}` : `R${i + 1}`);
+  for (let i = 0; i < n; i++) lanes.push({ net: `R${i + 1}`, gpio: 4 + i, side: 'R', strip: i + 1 });
 
   const pins: PinUse[] = [
     { pin: 'D10', gpio: 10, net: 'CLK_L', use: 'left strips\' clock (PIO side-set)' },
-    ...(sides === 2 ? [{ pin: 'D11', gpio: 11, net: 'CLK_R', use: 'right strips\' clock (PIO side-set)' }] : []),
+    { pin: 'D11', gpio: 11, net: 'CLK_R', use: 'right strips\' clock (PIO side-set)' },
     ...lanes.map((l) => ({ pin: LANE_PIN[l.gpio], gpio: l.gpio, net: l.net, use: `${l.side === 'L' ? 'left' : 'right'} strip ${l.strip} data (PIO)` })),
     ...HALL_PINS.slice(0, halls).map(([pin, gpio], i) => ({ pin, gpio, net: `HALL${i + 1}`, use: `hall sensor ${i + 1} (falling edge interrupt)` })),
     { pin: 'A0', gpio: 26, net: 'VBAT/2', use: 'battery voltage through a 100k/100k divider' },
@@ -117,19 +113,27 @@ export function designElectronics(p: Params): Electronics {
     { pin: '3V', net: '3V3', use: 'pull-ups for the hall sensors' },
     { pin: 'GND', net: 'GND', use: '' },
   ];
-  notes.push('Controls on the hub package: two sealed buttons in the electronics box\'s lid, its outer face. The panels\' discs cover the box from the sides, so reach them through the spokes beyond the discs\' edge (raised caps help). Preset: a click for the next preset, a double click to turn Auto on or off (the next preset each time the lights go out). Brightness: cycles 100, 50, 25, 12 % (the firmware scales its LED current limit), and keeps the level when switched off; a double click turns the wheel on or off. It is wired into the power latch: off, a press powers the Feather, which stays on only if a second press follows. The preset button has a 10k pull-up, 1k in series and 100 nF; the brightness button sits on the latch\'s 100k pull-up.');
-  notes.push('Power: the boost runs straight off the cells (through the protection board and fuse) and LED_EN turns it on; a 4.7 kΩ pull-down holds it off while the logic is off. The brightness button and HOLD latch only the logic\'s supply, so the off drain is a few tens of µA.');
-  notes.push('Charging: with the right panel unplugged, a lead from a USB-C charger into J1 feeds 5 V back up +5V_R to the charger. The SB540 diode (D3) between the two sides keeps it off the left strips, and the charger only runs while the logic is off.');
-  notes.push('Data on GPIO0–7, all on the headers: the UART (TX/RX) and I2C (SDA/SCL, the STEMMA QT socket) go to the strips, so debug over USB. GPIO7 is also the red LED: it flickers with right strip 4\'s data. GPIO8 is the PSRAM\'s chip select: leave it alone. A1 and A3 are spare.');
+  notes.push('Controls on the hub package: two sealed buttons in the electronics box\'s lid, its outer face. The panels\' discs cover the '
+    + 'box from the sides, so reach them through the spokes beyond the discs\' edge (raised caps help). Preset: a click for the next '
+    + 'preset, a double click to turn Auto on or off (the next preset each time the lights go out). Brightness: cycles 100, 50, 25, 12 % '
+    + '(the firmware scales its LED current limit), and keeps the level when switched off; a double click turns the wheel on or off. It is '
+    + 'wired into the power latch: off, a press powers the Feather, which stays on only if a second press follows. The preset button has a '
+    + '10k pull-up, 1k in series and 100 nF; the brightness button sits on the latch\'s 100k pull-up.');
+  notes.push('Power: the boost runs straight off the cells (through the protection board and fuse) and LED_EN turns it on; a 4.7 kΩ '
+    + 'pull-down holds it off while the logic is off. The brightness button and HOLD latch only the logic\'s supply, so the off drain is a few tens of µA.');
+  notes.push('Charging: with the right panel unplugged, a lead from a USB-C charger into J1 feeds 5 V back up +5V_R to the charger. The '
+    + 'SB540 diode (D3) between the two sides keeps it off the left strips, and the charger only runs while the logic is off.');
+  notes.push(`Data on GPIO${lanes.map((l) => l.gpio).join(', ')}, all on the headers: the UART (TX/RX) and I2C (SDA${n > 3 ? '/SCL' : ''}, `
+    + 'the STEMMA QT socket) go to the strips, so debug over USB. '
+    + (n > 3 ? 'GPIO7 is also the red LED: it flickers with right strip 4\'s data. ' : '')
+    + 'GPIO8 is the PSRAM\'s chip select: leave it alone. A1 and A3 are spare.');
 
   // ---- Level shifters: every lane and clock through a 74AHCT125 at 5 V (3.3 V in reads as high) ----
   const chans: { a: string; y: string }[] = [];
   chans.push({ a: 'CLK_L', y: 'CLK_L5' });
   for (let i = 0; i < n; i++) chans.push({ a: `L${i + 1}`, y: `L${i + 1}_5` });
-  if (sides === 2) {
-    chans.push({ a: 'CLK_R', y: 'CLK_R5' });
-    for (let i = 0; i < n; i++) chans.push({ a: rightNet(i), y: `R${i + 1}_5` });
-  }
+  chans.push({ a: 'CLK_R', y: 'CLK_R5' });
+  for (let i = 0; i < n; i++) chans.push({ a: `R${i + 1}`, y: `R${i + 1}_5` });
   const shifters: Shifter[] = [];
   for (let i = 0; i < chans.length; i += 4) shifters.push({ ref: `U${shifters.length + 1}`, ch: chans.slice(i, i + 4) });
 
@@ -142,7 +146,7 @@ export function designElectronics(p: Params): Electronics {
     { n: 5, net: 'CLK_R5', use: 'clock to every right strip' },
   ];
   for (let i = 0; i < 4; i++) {
-    connector.push(sides === 2 && i < n
+    connector.push(i < n
       ? { n: 6 + i, net: `R${i + 1}_5`, use: `right strip ${i + 1} data` }
       : { n: 6 + i, net: 'GND', use: 'spare (ground)' });
   }
@@ -157,12 +161,12 @@ export function designElectronics(p: Params): Electronics {
     { net: 'HALL_GND', colour: 'black/white', awg: 26, use: 'hall sensors\' ground (kept off the strip ground)' },
     ...Array.from({ length: halls }, (_, i) => ({ net: `HALL${i + 1}`, colour: HALL_COLOURS[i], awg: 26, use: `hall sensor ${i + 1} output` })),
   ];
-  const rightHarness: Wire[] = sides === 2 ? [
+  const rightHarness: Wire[] = [
     { net: '+5V_R', colour: 'red', awg: 22, use: '5 V (J1 pins 1–2)' },
     { net: 'GND', colour: 'black', awg: 22, use: 'ground (J1 pins 3–4)' },
     { net: 'CLK_R5', colour: 'yellow', awg: 26, use: 'clock (J1 pin 5)' },
     ...Array.from({ length: n }, (_, i) => ({ net: `R${i + 1}_5`, colour: WIRE_COLOURS[i], awg: 26, use: `strip ${i + 1} data (J1 pin ${6 + i})` })),
-  ] : [];
+  ];
 
   // ---- Power ----
   const peakA = (totalLeds * LED_MA) / 1000;
@@ -171,7 +175,7 @@ export function designElectronics(p: Params): Electronics {
   const logicA = 0.06 + 0.004 * halls;
   const battA = (capA * 5) / (BOOST_EFF * CELL_V) + logicA;
   const ah = (p.cells * p.cellMah) / 1000;
-  const perSideA = capA / sides;
+  const perSideA = capA / 2;
   const chargeA = 1;
   const power = {
     peakA: r1(peakA), capA: r2(capA), boostMaxA: r1(boostMaxA), battA: r1(battA), perCellA: r1(battA / p.cells), ah: r1(ah),
@@ -180,9 +184,9 @@ export function designElectronics(p: Params): Electronics {
   };
   if (capA > boostMaxA) warnings.push(`The ${capA} A LED limit is more than the boost gives from a ${CELL_V} V cell (about ${power.boostMaxA} A): lower it, or use a second boost per side.`);
   if (battA / p.cells > 10) warnings.push(`Each cell gives ${power.perCellA} A at the LED limit: add a cell or lower the limit (keep high-drain cells under ~10 A).`);
-  if (sides === 2 && perSideA / 2 > PIN_A) warnings.push(`The right side draws ${power.perSideA} A over two 5 V contacts, more than the connector's ${PIN_A} A each.`);
-  notes.push(`Full white on every LED would need ${power.peakA} A. The firmware scales each column so the strips never draw more than ${power.capA} A in all (most pictures need far less: see Stats).`);
-  if (shared) notes.push('Back strips share the front\'s data (Hardware → LEDs → Back strips), so the right side gets copies of the left lanes through its own buffers.');
+  if (perSideA / 2 > PIN_A) warnings.push(`The right side draws ${power.perSideA} A over two 5 V contacts, more than the connector's ${PIN_A} A each.`);
+  notes.push(`Full white on every LED would need ${power.peakA} A. The firmware scales each column so the strips never draw more than `
+    + `${power.capA} A in all (most pictures need far less: see Stats).`);
 
   // ---- Hub module: one stack on one side of the shell, balanced by a weight on the rim ----
   const shellR = p.hubShellMm / 2;
@@ -220,10 +224,12 @@ export function designElectronics(p: Params): Electronics {
   const extraG = bracket.massG + 6; // + strap, ties and the plug between pack and box
   const moduleG = layers.reduce((m, l) => m + l.massG, 0) + extraG;
   const moduleR = (layers.reduce((m, l) => m + l.massG * (l.r0 + l.radial / 2), 0) + extraG * (shellR + bracket.railTo) / 2) / moduleG;
-  if (2 * flangeZ - 6 < bracket.axial) warnings.push(`The bracket (${Math.round(bracket.axial)} mm) is wider than the gap between the flanges (about ${Math.round(2 * flangeZ - 6)} mm): check the flange spacing.`);
+  if (2 * flangeZ - 6 < bracket.axial) warnings.push(`The bracket (${Math.round(bracket.axial)} mm) is wider than the gap between the `
+    + `flanges (about ${Math.round(2 * flangeZ - 6)} mm): check the flange spacing.`);
   for (const l of layers) {
     const outer = Math.hypot(l.r0 + l.radial, l.tangential / 2);
-    if (l.axial > freeAxialAt(outer)) warnings.push(`The ${l.name.toLowerCase()} (${l.axial} mm along the axle) doesn't fit between the spoke cones at r ${Math.round(outer)} mm (${Math.round(freeAxialAt(outer))} mm free). Check the hub and flange settings.`);
+    if (l.axial > freeAxialAt(outer)) warnings.push(`The ${l.name.toLowerCase()} (${l.axial} mm along the axle) doesn't fit between the `
+      + `spoke cones at r ${Math.round(outer)} mm (${Math.round(freeAxialAt(outer))} mm free). Check the hub and flange settings.`);
   }
   // Balance: put the module opposite the valve and the connector on the far side too; the weight
   // makes up the rest, on the rim's inner face (spoke bed), in the wheel's mid-plane like the module.
@@ -240,7 +246,7 @@ export function designElectronics(p: Params): Electronics {
   ];
   const sum = (ms: Mass[]) => ms.reduce((m, q) => m + q.massG * q.r * Math.cos((q.angleDeg * Math.PI) / 180), 0);
   // J1 goes on whichever side is light, so it takes the place of some of the rim weight
-  if (sides === 2) masses.splice(masses.length - 1, 0, { name: 'J1 connector pair', massG: 20, r: 70, angleDeg: sum(masses) >= 0 ? 180 : 0 });
+  masses.splice(masses.length - 1, 0, { name: 'J1 connector pair', massG: 20, r: 70, angleDeg: sum(masses) >= 0 ? 180 : 0 });
   const net = sum(masses);
   const cwR = rimR - p.rimDepthMm;
   const counterweight: Mass = { name: 'Rim weight', massG: Math.ceil((Math.abs(net) / cwR) * 2) / 2, r: cwR, angleDeg: net >= 0 ? 180 : 0 };
@@ -249,22 +255,29 @@ export function designElectronics(p: Params): Electronics {
     { name: 'Battery pack', opening: [Math.round(pack.axial), Math.round(pack.radial)] },
     { name: 'Electronics box', opening: [Math.round(pwrL.axial), Math.round(pwrL.radial + logic.radial)] },
   ];
-  notes.push(`The hub module is one stack on one side of the shell. A 3D-printed bracket stays tied to the shell (three zip ties, or through the flange windows on a cut-out track hub); the battery pack and the electronics box sit in it, joined by an XT30, under a hook-and-loop strap. To take the electronics off: undo the strap, unplug J1 (the left panel comes with them).`);
+  notes.push(`The hub module is one stack on one side of the shell. A 3D-printed bracket stays tied to the shell (three zip ties, or `
+    + `through the flange windows on a cut-out track hub); the battery pack and the electronics box sit in it, joined by an XT30, under a `
+    + `hook-and-loop strap. To take the electronics off: undo the strap, unplug J1 (the left panel comes with them).`);
   const cwSide = counterweight.angleDeg === 180 ? 'opposite the module' : 'on the module\'s side';
   if (n === 1) {
     const j1 = masses.find((q) => q.name.startsWith('J1'));
-    notes.push(`Balance: one blade a side puts both blades and strips (about ${oneBlade[0].massG} g) on one side of the wheel. Fit the module opposite them, the valve on their side${j1 ? `, J1 ${j1.angleDeg ? 'on their side' : 'on the module\'s side'}` : ''}, and stick ${counterweight.massG} g on the rim's inner face ${cwSide}. The blade and strip masses are estimates: weigh them, and check by spinning the wheel in the stand.`);
+    notes.push(`Balance: one blade a side puts both blades and strips (about ${oneBlade[0].massG} g) on one side of the wheel. Fit the `
+      + `module opposite them, the valve on their side${j1 ? `, J1 ${j1.angleDeg ? 'on their side' : 'on the module\'s side'}` : ''}, and `
+      + `stick ${counterweight.massG} g on the rim's inner face ${cwSide}. The blade and strip masses are estimates: weigh them, and check `
+      + `by spinning the wheel in the stand.`);
   } else {
-    notes.push(`Balance: ${Math.round(moduleG)} g with its centre ${Math.round(moduleR)} mm out. Fit it opposite the valve, tie J1 on the far side too, and stick ${counterweight.massG} g on the rim's inner face ${cwSide}. Take the weight off with the module.`);
+    notes.push(`Balance: ${Math.round(moduleG)} g with its centre ${Math.round(moduleR)} mm out. Fit it opposite the valve, tie J1 on the `
+      + `far side too, and stick ${counterweight.massG} g on the rim's inner face ${cwSide}. Take the weight off with the module.`);
   }
-  notes.push(`Each piece goes in through the spokes on its own, end first: the bracket needs a gap of about ${pieces[0].opening.join(' × ')} mm, the battery pack ${pieces[1].opening.join(' × ')} mm, the electronics box ${pieces[2].opening.join(' × ')} mm. Check your wheel's gaps.`);
+  notes.push(`Each piece goes in through the spokes on its own, end first: the bracket needs a gap of about ${pieces[0].opening.join(' '
+    + '× ')} mm, the battery pack ${pieces[1].opening.join(' × ')} mm, the electronics box ${pieces[2].opening.join(' × ')} mm. Check your wheel's gaps.`);
 
   // ---- Shopping list ----
-  const stripsNeeded = n * sides;
+  const stripsNeeded = n * 2;
   // One half-metre strip (72 LEDs) per blade, cut to length from its input end; the rest is spare.
-  const HALF = 72;
-  if (L > HALF) warnings.push(`${L} LEDs per strip is more than a half-metre strip holds (${HALF}): shorten the strips (Hardware → LEDs → Details).`);
-  notes.push(`One half-metre strip per blade (${stripsNeeded} in all): each is cut to ${Math.min(L, HALF)} of its ${HALF} LEDs, from the tip in, stopping short of the hub flange; the offcuts are spares.`);
+  const HALF = 72; // the panels never lay more than one half-metre strip a blade (ledSpan.ts)
+  notes.push(`One half-metre strip per blade (${stripsNeeded} in all): each is cut to ${L} of its ${HALF} LEDs, from the `
+    + `tip in, stopping short of the hub flange; the offcuts are spares.`);
   notes.push('Buy half metres, not 1 m strips: a 1 m strip is two halves soldered together, with a 2–3 mm pitch error at the joint.');
   // the carrier's parts, counted from its layout: all through-hole, soldered by hand
   const KIND: Record<string, string> = {
@@ -286,30 +299,43 @@ export function designElectronics(p: Params): Electronics {
     ...(pkg === 'DIP-14' ? { url: 'https://www.adafruit.com/product/1787', each: 1.5 } : {}),
   }));
   const bom: BomLine[] = [
-    { group: 'Wheel', qty: stripsNeeded, item: 'DotStar LED strip, 144/m, black, 0.5 m (SK9822)', part: '2328', source: 'Adafruit', url: 'https://www.adafruit.com/product/2328', each: 24.95, note: `one per blade, cut to ${Math.min(L, HALF)} LEDs` },
+    { group: 'Wheel', qty: stripsNeeded, item: 'DotStar LED strip, 144/m, black, 0.5 m '
+      + '(SK9822)', part: '2328', source: 'Adafruit', url: 'https://www.adafruit.com/product/2328', each: 24.95, note: `one per blade, cut `
+      + `to ${L} LEDs` },
     { group: 'Wheel', qty: 1, item: 'Feather RP2350 with HSTX port and 8 MB PSRAM', part: '6130', source: 'Adafruit', url: 'https://www.adafruit.com/product/6130', each: 15.5 },
-    { group: 'Wheel', qty: halls, item: 'Hall effect sensor US5881LUA (unipolar switch)', part: '158', source: 'Adafruit', url: 'https://www.adafruit.com/product/158', each: 2, note: 'left panel, one per strip' },
-    { group: 'Wheel', qty: 1, item: 'Rare-earth magnet, 12 mm (fork magnet for the hall sensors)', part: '9', source: 'Adafruit', url: 'https://www.adafruit.com/product/9', each: 2.5, note: 'south pole toward the sensors\' marked faces' },
-    { group: 'Wheel', qty: 2, item: 'Momentary pushbutton, 12 mm, IP67, normally open, raised cap (preset, brightness)', part: 'e.g. 12 mm IP67 metal pushbutton', source: 'any', note: 'in the electronics box\'s lid' },
+    { group: 'Wheel', qty: halls, item: 'Hall effect sensor US5881LUA (unipolar '
+      + 'switch)', part: '158', source: 'Adafruit', url: 'https://www.adafruit.com/product/158', each: 2, note: 'left panel, one per strip' },
+    { group: 'Wheel', qty: 1, item: 'Rare-earth magnet, 12 mm (fork magnet for the hall '
+      + 'sensors)', part: '9', source: 'Adafruit', url: 'https://www.adafruit.com/product/9', each: 2.5, note: 'south pole toward the sensors\' marked faces' },
+    { group: 'Wheel', qty: 2, item: 'Momentary pushbutton, 12 mm, IP67, normally open, raised cap (preset, brightness)', part: 'e.g. 12 mm '
+      + 'IP67 metal pushbutton', source: 'any', note: 'in the electronics box\'s lid' },
     { group: 'Wheel', qty: 1, item: '5 V step-up regulator U3V70F5 (true shutdown on EN)', part: '2891', source: 'Pololu', url: 'https://www.pololu.com/product/2891', each: 25.95 },
-    { group: 'Wheel', qty: 1, item: 'bq24074 Li-ion charger breakout (1 A, 1.5 A by jumper)', part: '4755', source: 'Adafruit', url: 'https://www.adafruit.com/product/4755', each: 14.95, note: 'its CE pin turns charging off while running' },
-    { group: 'Wheel', qty: p.cells, item: `18650 Li-ion cell, high-drain (≥ 10 A), ${p.cellMah} mAh, tabbed`, part: 'e.g. Samsung 30Q, Molicel P28A', source: 'battery supplier', note: 'tabbed, so nothing is soldered to the cell' },
+    { group: 'Wheel', qty: 1, item: 'bq24074 Li-ion charger breakout (1 A, 1.5 A by '
+      + 'jumper)', part: '4755', source: 'Adafruit', url: 'https://www.adafruit.com/product/4755', each: 14.95, note: 'its CE pin turns '
+      + 'charging off while running' },
+    { group: 'Wheel', qty: p.cells, item: `18650 Li-ion cell, high-drain (≥ 10 A), ${p.cellMah} mAh, tabbed`, part: 'e.g. Samsung 30Q, '
+      + 'Molicel P28A', source: 'battery supplier', note: 'tabbed, so nothing is soldered to the cell' },
     { group: 'Wheel', qty: 1, item: '1S Li-ion protection board, ≥ 10 A continuous', part: '1S BMS', source: 'any' },
     { group: 'Wheel', qty: 1, item: '10 A fuse in a sealed inline holder (mini blade)', part: 'ATM 10 A', source: 'any' },
     { group: 'Wheel', qty: 1, item: 'XT30 plug and socket (battery pack to electronics box)', part: 'XT30', source: 'any' },
-    { group: 'Wheel', qty: 1, item: `Adhesive balancing weight, ${counterweight.massG} g (5 g segments, trimmed)`, part: 'stick-on wheel weights', source: 'any', note: `on the rim's inner face, ${counterweight.angleDeg === 180 ? 'opposite the module' : 'on the module\'s side'}` },
-    { group: 'Wheel', qty: 1, item: `Hub bracket, 3D-printed: saddle for a Ø${p.hubShellMm} mm shell, ${Math.round(bracket.axial)} × ${Math.round(bracket.tangential)} mm, tie slots`, part: 'PETG or ASA', source: 'print', note: 'stays on the hub' },
-    { group: 'Wheel', qty: 2, item: 'Shells for the battery pack and the electronics box, 3D-printed, sizes on the Hub module sheet', part: 'PETG or ASA', source: 'print', note: 'O-ring or silicone gasket on each lid' },
+    { group: 'Wheel', qty: 1, item: `Adhesive balancing weight, ${counterweight.massG} g (5 g segments, trimmed)`, part: 'stick-on wheel '
+      + 'weights', source: 'any', note: `on the rim's inner face, ${counterweight.angleDeg === 180 ? 'opposite the module' : 'on the module\'s side'}` },
+    { group: 'Wheel', qty: 1, item: `Hub bracket, 3D-printed: saddle for a Ø${p.hubShellMm} mm shell, ${Math.round(bracket.axial)} × `
+      + `${Math.round(bracket.tangential)} mm, tie slots`, part: 'PETG or ASA', source: 'print', note: 'stays on the hub' },
+    { group: 'Wheel', qty: 2, item: 'Shells for the battery pack and the electronics box, 3D-printed, sizes on the Hub module '
+      + 'sheet', part: 'PETG or ASA', source: 'print', note: 'O-ring or silicone gasket on each lid' },
     { group: 'Wheel', qty: 1, item: 'Hook-and-loop strap, 20 mm, with buckle (holds the pack and box in the bracket)', part: '—', source: 'any' },
-    { group: 'Wheel', qty: 1, item: 'Waterproof circular connector, 9-pin, IP68, inline socket (female)', part: 'Weipu SP1311/S9', source: 'Digi-Key, Mouser', note: 'module side: live pins stay shrouded' },
+    { group: 'Wheel', qty: 1, item: 'Waterproof circular connector, 9-pin, IP68, inline socket (female)', part: 'Weipu '
+      + 'SP1311/S9', source: 'Digi-Key, Mouser', note: 'module side: live pins stay shrouded' },
     { group: 'Wheel', qty: 2, item: 'Waterproof circular connector, 9-pin, IP68, cable plug (male)', part: 'Weipu SP1310/P9', source: 'Digi-Key, Mouser', note: 'right panel + charging lead' },
     { group: 'Wheel', qty: 1, item: 'SP13 dust cap for the socket (riding without the right panel)', part: 'Weipu SP13 cap', source: 'Digi-Key, Mouser' },
     { group: 'Wheel', qty: 1, item: 'USB-C sink breakout with 5.1 kΩ CC resistors (charging lead)', part: 'any USB-C breakout', source: 'any' },
-    { group: 'Carrier board', qty: 1, item: `Carrier PCB, ${CARRIER.w} × ${CARRIER.h} mm, 2-layer, through-hole (from the Board sheet)`, part: '—', source: 'PCB fab (OSH Park, JLCPCB, PCBWay)', note: 'bare board: every part below is through-hole, soldered by hand' },
+    { group: 'Carrier board', qty: 1, item: `Carrier PCB, ${CARRIER.w} × ${CARRIER.h} mm, 2-layer, through-hole (from the Board `
+      + `sheet)`, part: '—', source: 'PCB fab (OSH Park, JLCPCB, PCBWay)', note: 'bare board: every part below is through-hole, soldered by hand' },
     ...carrierBom,
     { group: 'Carrier board', qty: 1, item: 'Feather female headers, 16 + 12 pin', part: '2886', source: 'Adafruit', url: 'https://www.adafruit.com/product/2886', each: 0.95 },
     { group: 'Sealing and wiring', qty: halls, item: '100 nF capacitor across each hall sensor\'s leads', part: '—', source: 'any' },
-    { group: 'Sealing and wiring', qty: sides, item: '470 µF 6.3 V low-ESR capacitor at each panel\'s 5 V star', part: '—', source: 'any' },
+    { group: 'Sealing and wiring', qty: 2, item: '470 µF 6.3 V low-ESR capacitor at each panel\'s 5 V star', part: '—', source: 'any' },
     { group: 'Sealing and wiring', qty: 1, item: 'Silicone wire, 22 AWG, red and black (power)', part: '—', source: 'any', note: '~2 m each' },
     { group: 'Sealing and wiring', qty: 1, item: 'Silicone wire, 26 AWG, 10 colours (signals)', part: '—', source: 'any', note: '~1 m each' },
     { group: 'Sealing and wiring', qty: 1, item: 'Silicone wire, 18 AWG, red and black (cells, pack to box)', part: '—', source: 'any', note: '~0.5 m each' },
@@ -318,17 +344,18 @@ export function designElectronics(p: Params): Electronics {
     { group: 'Sealing and wiring', qty: 1, item: 'Neutral-cure silicone RTV (strip ends, cable exits)', part: '—', source: 'any', note: 'not acetic-cure: it corrodes copper' },
     { group: 'Sealing and wiring', qty: stripsNeeded * 2, item: 'Silicone end caps for the strips\' sleeves', part: '—', source: 'any' },
     { group: 'Sealing and wiring', qty: 1, item: 'UV-resistant zip ties, 2.5 and 3.6 mm', part: '—', source: 'any' },
-    { group: 'Bench prototype (optional)', qty: 1, item: 'FeatherWing Doubler (50.9 × 47 mm): the Feather beside a prototyping area for the shifters and latch', part: '2890', source: 'Adafruit', url: 'https://www.adafruit.com/product/2890', each: 7.5 },
+    { group: 'Bench prototype (optional)', qty: 1, item: 'FeatherWing Doubler (50.9 × 47 mm): the Feather beside a prototyping area for the '
+      + 'shifters and latch', part: '2890', source: 'Adafruit', url: 'https://www.adafruit.com/product/2890', each: 7.5 },
   ];
   const knownCost = Math.round(bom.filter((b) => b.group !== 'Bench prototype (optional)' && b.each).reduce((s, b) => s + b.qty * b.each!, 0) * 100) / 100;
-  notes.push('Carrier board: every part is through-hole for a DIY build (DIP shifters, resistor packs, TO-92 transistors, standing resistors and diodes), on an etched 90 × 32 mm board with the Feather plugged in at one end. To try the circuit first, the same parts fit a breadboard or a FeatherWing Doubler.');
+  notes.push('Carrier board: every part is through-hole for a DIY build (DIP shifters, resistor packs, TO-92 transistors, standing '
+    + 'resistors and diodes), on an etched 90 × 32 mm board with the Feather plugged in at one end. To try the circuit first, the same '
+    + 'parts fit a breadboard or a FeatherWing Doubler.');
   notes.push('Firmware updates: the Feather\'s USB-C is inside the logic box. Leave a removable boot over it in the box\'s end, or plan to reopen the box.');
 
-  if (LED.protocol !== 'clocked') warnings.push('The level shifters and lanes assume clocked LEDs (DotStar).');
-  if (p.clockMHz > 15) warnings.push(`A ${p.clockMHz} MHz LED clock is past what the SK9822 and ~30 cm of wire and connector carry reliably: 12 MHz keeps a margin.`);
 
   return {
-    n, sides, cells: p.cells, shared, leds: L, totalLeds, lanes, halls, pins, shifters, connector, leftHarness, rightHarness, power,
+    n, cells: p.cells, leds: L, totalLeds, lanes, halls, pins, shifters, connector, leftHarness, rightHarness, power,
     hub: { shellR, flangeR, flangeZ, oldHalf: p.hubOldMm / 2, rimR, layers, bracket, freeAxialAt, moduleG: Math.round(moduleG), moduleR: r1(moduleR), masses, counterweight, pieces },
     bom, knownCost, notes, warnings,
   };

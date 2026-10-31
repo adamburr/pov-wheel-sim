@@ -153,9 +153,9 @@ export interface Segment {
 /** A magnet pass as the firmware registers it: when it knew (at), and when it puts the pass (ref). */
 export interface Detection { at: number; ref: number }
 
-/** Magnet passes per turn: one hall sensor, or one beside each strip (evenly spaced). */
+/** Magnet passes per turn: a hall sensor beside each strip, evenly spaced. */
 export function hallSensors(p: Params): number {
-  return p.hallPerStrip ? Math.max(1, p.stripCount) : 1;
+  return Math.max(1, p.stripCount);
 }
 
 /**
@@ -209,12 +209,10 @@ export function hallDetections(p: Params, motion: WheelMotion, t0: number, t1: n
 /**
  * Road acceleration as the firmware can estimate it at time t (m/s², forward positive).
  * Hall mode only sees whole revolutions: the change between the last two revolution rates,
- * held until the next pass, so it lags by about a revolution. Ideal mode reads the truth;
- * free-running firmware has no sensor at all.
+ * held until the next pass, so it lags by about a revolution. Ideal mode reads the truth.
  */
 export function magnetAccel(p: Params, motion: WheelMotion, t: number): number {
   if (p.syncMode === 'ideal') return motion.accel(t);
-  if (p.syncMode === 'free') return 0;
   const det = hallDetections(p, motion, t - 5, t);
   if (det.length < 3) return 0;
   const [a, b, c] = det.slice(-3).map((x) => x.ref);
@@ -226,12 +224,10 @@ export function magnetAccel(p: Params, motion: WheelMotion, t: number): number {
 
 /**
  * Wheel spin rate as the firmware knows it at time t (rad/s): one revolution per magnet pass
- * in hall mode (0 until armed or after the timeout), the truth when encoder-locked, nothing
- * when free-running.
+ * in hall mode (0 until armed or after the timeout), the truth when encoder-locked.
  */
 export function magnetOmega(p: Params, motion: WheelMotion, t: number): number {
   if (p.syncMode === 'ideal') return motion.speed(t) / motion.radius;
-  if (p.syncMode === 'free') return 0;
   const det = hallDetections(p, motion, t - 5, t);
   if (det.length < 2) return 0;
   const T = (det[det.length - 1].ref - det[det.length - 2].ref) * hallSensors(p);
@@ -240,8 +236,8 @@ export function magnetOmega(p: Params, motion: WheelMotion, t: number): number {
 }
 
 /**
- * Whether the firmware has the LEDs lit at time t: armed and not timed out (hall), the wheel
- * turning (ideal), or always (free-running, which has no sensor to tell it the wheel stopped).
+ * Whether the firmware has the LEDs lit at time t: armed and not timed out (hall), or the wheel
+ * turning (ideal).
  */
 export function lightsOn(p: Params, d: Derived, motion: WheelMotion, t: number): boolean {
   const seg = segmentsFor(p, d, motion, t, t).find((s) => t >= s.start && t < s.end);
@@ -249,18 +245,8 @@ export function lightsOn(p: Params, d: Derived, motion: WheelMotion, t: number):
 }
 
 export function segmentsFor(p: Params, d: Derived, motion: WheelMotion, tA: number, tB: number): Segment[] {
-  // Banner mode needs a position estimate, which a free-running clock doesn't have.
-  if (p.syncMode === 'hall' || (p.syncMode === 'free' && p.displayMode === 'banner')) {
-    return hallSegments(p, d, motion, tA, tB);
-  }
-  if (p.syncMode === 'ideal') {
-    return [{ start: -Infinity, end: Infinity, m: 0, P: -1, enabled: motion.speed(tB) > 0.05 }];
-  }
-  // Free-running: fixed column rate with no sensor. Anchor m at a multiple of a full image so
-  // the shader only ever sees small relative times.
-  const P = Math.max(1 / Math.max(1, p.freeRunColsPerSec), d.columnTimeS);
-  const frame = P * p.columnsPerRev;
-  return [{ start: -Infinity, end: Infinity, m: Math.floor(tA / frame) * frame, P, enabled: true }];
+  if (p.syncMode === 'hall') return hallSegments(p, d, motion, tA, tB);
+  return [{ start: -Infinity, end: Infinity, m: 0, P: -1, enabled: motion.speed(tB) > 0.05 }];
 }
 
 export interface Slice {
@@ -389,7 +375,7 @@ function frameAt(p: Params, anim: AnimSpec, motion: WheelMotion, seg: Segment | 
 
 /**
  * How many revsPerFrame steps the firmware has counted by time t. Whole turns count at its sync point:
- * the magnet detection, the true pass (ideal), or a full image cycle (free-running). Between them it
+ * the magnet detection, or the true pass (ideal). Between them it
  * counts columns sent (or true angle when encoder-locked), so under one turn per frame the frame
  * changes between two columns, partway round.
  */

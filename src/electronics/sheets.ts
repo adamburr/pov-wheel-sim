@@ -39,14 +39,17 @@ class Pen {
   out: string[] = [];
   text(x: number, y: number, s: string, o: { size?: number; fill?: string; anchor?: 'start' | 'middle' | 'end'; weight?: number; rot?: number } = {}) {
     const tr = o.rot ? ` transform="rotate(${o.rot} ${x} ${y})"` : '';
-    this.out.push(`<text x="${x}" y="${y}" font-size="${o.size ?? 12}" fill="${o.fill ?? C.ink}" text-anchor="${o.anchor ?? 'start'}"${o.weight ? ` font-weight="${o.weight}"` : ''}${tr}>${esc(s)}</text>`);
+    this.out.push(`<text x="${x}" y="${y}" font-size="${o.size ?? 12}" fill="${o.fill ?? C.ink}" `
+      + `text-anchor="${o.anchor ?? 'start'}"${o.weight ? ` font-weight="${o.weight}"` : ''}${tr}>${esc(s)}</text>`);
   }
   line(pts: number[][], o: { stroke?: string; w?: number; dash?: string } = {}) {
-    this.out.push(`<polyline points="${pts.map((q) => q.join(',')).join(' ')}" fill="none" stroke="${o.stroke ?? C.muted}" stroke-width="${o.w ?? 1.5}"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''} stroke-linejoin="round" stroke-linecap="round"/>`);
+    this.out.push(`<polyline points="${pts.map((q) => q.join(',')).join(' ')}" fill="none" stroke="${o.stroke ?? C.muted}" `
+      + `stroke-width="${o.w ?? 1.5}"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''} stroke-linejoin="round" stroke-linecap="round"/>`);
   }
   rect(x: number, y: number, w: number, h: number, o: { fill?: string; stroke?: string; w?: number; r?: number; dash?: string; rot?: [number, number, number] } = {}) {
     const tr = o.rot ? ` transform="rotate(${o.rot.join(' ')})"` : '';
-    this.out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${o.r ?? 0}" fill="${o.fill ?? 'none'}" stroke="${o.stroke ?? 'none'}" stroke-width="${o.w ?? 1}"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''}${tr}/>`);
+    this.out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${o.r ?? 0}" fill="${o.fill ?? 'none'}" `
+      + `stroke="${o.stroke ?? 'none'}" stroke-width="${o.w ?? 1}"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''}${tr}/>`);
   }
   circle(x: number, y: number, r: number, o: { fill?: string; stroke?: string; w?: number; dash?: string } = {}) {
     this.out.push(`<circle cx="${x}" cy="${y}" r="${r}" fill="${o.fill ?? 'none'}" stroke="${o.stroke ?? 'none'}" stroke-width="${o.w ?? 1}"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''}/>`);
@@ -302,7 +305,7 @@ function circuit(e: Electronics): Sheet {
     g.dot(x, hy + 66, C.hall);
     g.net(x, hy + 88, `HALL${i + 1}`, 'start');
   }
-  // buttons: pull-up, 1k in series, 100 nF at the pin; the button to the pod's ground
+  // the preset button: pull-up, 1k in series, 100 nF at the pin; the button to ground
   const by = hy + 130;
   g.heading(fx - 60, by - 14, 'PRESET BUTTON (lid; brightness is S1 on the latch)');
   [['BTN_PRESET', 'preset']].forEach(([net, label], i) => {
@@ -348,14 +351,13 @@ function circuit(e: Electronics): Sheet {
   g.text(cx, y + 16, `Hall H1–H${e.halls}: VDD ← HALL_V, GND ← HALL_GND, OUT → HALL#`, { size: 11, fill: C.muted });
   g.text(cx, y + 32, '100 nF across each sensor; 470 µF at the 5 V star', { size: 11, fill: C.muted });
   y += 66;
-  if (e.sides === 2) {
-    g.heading(cx, y, 'RIGHT PANEL (J1, Weipu SP13 9-pin)');
-    g.block(cx + 40, y + 20, 150, 'J1  socket', 'module side, female', e.connector.map((q) => [`pin ${q.n}`, q.net]), [], { stub: 30, pitch: 20 });
-    y += 20 + 44 + e.connector.length * 20 + 20;
-    g.text(cx, y, `Strips 1–${e.n}: 5V ← +5V_R, GND, CI ← CLK_R5, DI ← R#_5`, { size: 11, fill: C.muted });
-    g.text(cx, y + 16, 'Charging lead: USB-C VBUS → pins 1–2, GND → pins 3–4', { size: 11, fill: C.muted });
-    y += 40;
-  }
+  // the right panel
+  g.heading(cx, y, 'RIGHT PANEL (J1, Weipu SP13 9-pin)');
+  g.block(cx + 40, y + 20, 150, 'J1  socket', 'module side, female', e.connector.map((q) => [`pin ${q.n}`, q.net]), [], { stub: 30, pitch: 20 });
+  y += 20 + 44 + e.connector.length * 20 + 20;
+  g.text(cx, y, `Strips 1–${e.n}: 5V ← +5V_R, GND, CI ← CLK_R5, DI ← R#_5`, { size: 11, fill: C.muted });
+  g.text(cx, y + 16, 'Charging lead: USB-C VBUS → pins 1–2, GND → pins 3–4', { size: 11, fill: C.muted });
+  y += 40;
   const H = Math.max(powerBottom, y + 40, by + 150);
   return { svg: g.svg(W, H), w: W, h: H };
 }
@@ -395,7 +397,8 @@ function wiring(e: Electronics): Sheet {
   // the stack, outermost first: logic, power, battery pack, then the bracket on the shell
   g.rect(580, 80, 160, 170, { fill: C.box, stroke: C.data, r: 6 });
   g.text(660, 102, 'Logic (top of the box)', { anchor: 'middle', weight: 700 });
-  for (const [i, s] of ['Feather RP2350', 'on the carrier board:', `${e.shifters.length} × 74AHCT125`, 'latch, Q3, pull-ups', 'all from the headers'].entries()) g.text(660, 124 + i * 18, s, { anchor: 'middle', size: 11, fill: C.muted });
+  for (const [i, s] of ['Feather RP2350', 'on the carrier board:', `${e.shifters.length} × 74AHCT125`, 'latch, D3, pull-ups', 'all from the '
+    + 'headers'].entries()) g.text(660, 124 + i * 18, s, { anchor: 'middle', size: 11, fill: C.muted });
   // the box's lid, its outer face: the two buttons
   g.circle(752, 92, 7, { stroke: C.ink, w: 1.5 }); g.circle(752, 114, 7, { stroke: C.ink, w: 1.5 });
   g.text(764, 96, 'preset', { size: 10, fill: C.muted }); g.text(764, 118, 'brightness', { size: 10, fill: C.muted });
@@ -425,42 +428,42 @@ function wiring(e: Electronics): Sheet {
   g.line([[560, 120], [580, 120]], { stroke: C.muted });
 
   // J1 pigtail
-  if (e.sides === 2) {
-    const pig = [{ colour: 'red', awg: 22 }, { colour: 'black', awg: 22 }, { colour: 'yellow', awg: 26 }, ...Array.from({ length: e.n }, (_, i) => ({ colour: ['blue', 'green', 'white', 'grey'][i], awg: 26 }))];
-    wireRun(740, 1010, 200, pig);
-    g.text(875, 190, 'pigtail out between the right spokes', { size: 11, anchor: 'middle', fill: C.muted });
-    // the connector pair
-    g.rect(1010, 186, 60, 64, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
-    g.text(1040, 214, 'J1', { anchor: 'middle', weight: 700 });
-    g.text(1040, 232, 'socket ♀', { anchor: 'middle', size: 10, fill: C.muted });
-    g.rect(1074, 186, 60, 64, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
-    g.text(1104, 214, 'P1', { anchor: 'middle', weight: 700 });
-    g.text(1104, 232, 'plug ♂', { anchor: 'middle', size: 10, fill: C.muted });
-    g.text(1072, 272, 'Weipu SP13 9-pin, IP68', { size: 11, anchor: 'middle', fill: C.muted });
-    g.text(1072, 288, 'tied to a right spoke', { size: 11, anchor: 'middle', fill: C.muted });
-    wireRun(1134, 1180, 200, pig);
-    // right panel
-    g.heading(1180, 30, 'RIGHT PANEL');
-    g.rect(1180, 50, 300, 360, { fill: C.box, stroke: C.boxLine, r: 8 });
-    for (let i = 0; i < e.n; i++) {
-      const y = 80 + i * 74;
-      g.rect(1230, y, 230, 22, { fill: '#202838', stroke: C.faint, r: 4 });
-      for (let k = 0; k < 14; k++) g.rect(1238 + k * 16, y + 6, 10, 10, { fill: '#3a4152' });
-      g.text(1234, y - 6, `strip ${i + 1}: ${e.leds} LEDs`, { size: 11, fill: C.muted });
-    }
-    g.text(1200, 395, 'hall sensor ties left empty (the left panel times both)', { size: 11, fill: C.muted });
-    // charging lead
-    g.heading(1010, 470, 'CHARGING LEAD (right panel off)');
-    g.rect(1010, 490, 110, 50, { fill: C.box, stroke: C.boxLine, r: 6 });
-    g.text(1065, 512, 'USB-C sink', { anchor: 'middle', weight: 700, size: 12 });
-    g.text(1065, 528, '5.1k on CC1/CC2', { anchor: 'middle', size: 10, fill: C.muted });
-    g.line([[1120, 505], [1240, 505]], { stroke: WIRE.red, w: 4 });
-    g.line([[1120, 520], [1240, 520]], { stroke: WIRE.black, w: 4 });
-    g.rect(1240, 482, 60, 64, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
-    g.text(1270, 512, 'P2', { anchor: 'middle', weight: 700 });
-    g.text(1270, 528, 'plug ♂', { anchor: 'middle', size: 10, fill: C.muted });
-    g.text(1010, 566, 'VBUS → pins 1 + 2, GND → pins 3 + 4. Charge with the wheel switched off: ~1 A.', { size: 11, fill: C.muted });
+  // the right panel
+  const pig = [{ colour: 'red', awg: 22 }, { colour: 'black', awg: 22 }, { colour: 'yellow', awg: 26 },
+    ...Array.from({ length: e.n }, (_, i) => ({ colour: ['blue', 'green', 'white', 'grey'][i], awg: 26 }))];
+  wireRun(740, 1010, 200, pig);
+  g.text(875, 190, 'pigtail out between the right spokes', { size: 11, anchor: 'middle', fill: C.muted });
+  // the connector pair
+  g.rect(1010, 186, 60, 64, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
+  g.text(1040, 214, 'J1', { anchor: 'middle', weight: 700 });
+  g.text(1040, 232, 'socket ♀', { anchor: 'middle', size: 10, fill: C.muted });
+  g.rect(1074, 186, 60, 64, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
+  g.text(1104, 214, 'P1', { anchor: 'middle', weight: 700 });
+  g.text(1104, 232, 'plug ♂', { anchor: 'middle', size: 10, fill: C.muted });
+  g.text(1072, 272, 'Weipu SP13 9-pin, IP68', { size: 11, anchor: 'middle', fill: C.muted });
+  g.text(1072, 288, 'tied to a right spoke', { size: 11, anchor: 'middle', fill: C.muted });
+  wireRun(1134, 1180, 200, pig);
+  // right panel
+  g.heading(1180, 30, 'RIGHT PANEL');
+  g.rect(1180, 50, 300, 360, { fill: C.box, stroke: C.boxLine, r: 8 });
+  for (let i = 0; i < e.n; i++) {
+    const y = 80 + i * 74;
+    g.rect(1230, y, 230, 22, { fill: '#202838', stroke: C.faint, r: 4 });
+    for (let k = 0; k < 14; k++) g.rect(1238 + k * 16, y + 6, 10, 10, { fill: '#3a4152' });
+    g.text(1234, y - 6, `strip ${i + 1}: ${e.leds} LEDs`, { size: 11, fill: C.muted });
   }
+  g.text(1200, 395, 'hall sensor ties left empty (the left panel times both)', { size: 11, fill: C.muted });
+  // charging lead
+  g.heading(1010, 470, 'CHARGING LEAD (right panel off)');
+  g.rect(1010, 490, 110, 50, { fill: C.box, stroke: C.boxLine, r: 6 });
+  g.text(1065, 512, 'USB-C sink', { anchor: 'middle', weight: 700, size: 12 });
+  g.text(1065, 528, '5.1k on CC1/CC2', { anchor: 'middle', size: 10, fill: C.muted });
+  g.line([[1120, 505], [1240, 505]], { stroke: WIRE.red, w: 4 });
+  g.line([[1120, 520], [1240, 520]], { stroke: WIRE.black, w: 4 });
+  g.rect(1240, 482, 60, 64, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
+  g.text(1270, 512, 'P2', { anchor: 'middle', weight: 700 });
+  g.text(1270, 528, 'plug ♂', { anchor: 'middle', size: 10, fill: C.muted });
+  g.text(1010, 566, 'VBUS → pins 1 + 2, GND → pins 3 + 4. Charge with the wheel switched off: ~1 A.', { size: 11, fill: C.muted });
 
   // wire table
   const ty = 580;
@@ -471,15 +474,14 @@ function wiring(e: Electronics): Sheet {
     g.text(52, y, `${w.net}`, { size: 11, fill: netColour(w.net), weight: 600 });
     g.text(130, y, `${w.awg} AWG ${w.colour} · ${w.use}`, { size: 11, fill: C.muted });
   });
-  if (e.sides === 2) {
-    g.heading(560, ty, 'J1 PINS');
-    e.connector.forEach((q, i) => {
-      const y = ty + 22 + i * 17;
-      g.text(560, y, `${q.n}`, { size: 11, weight: 700 });
-      g.text(580, y, q.net, { size: 11, fill: netColour(q.net), weight: 600 });
-      g.text(650, y, q.use, { size: 11, fill: C.muted });
-    });
-  }
+  // the right panel
+  g.heading(560, ty, 'J1 PINS');
+  e.connector.forEach((q, i) => {
+    const y = ty + 22 + i * 17;
+    g.text(560, y, `${q.n}`, { size: 11, weight: 700 });
+    g.text(580, y, q.net, { size: 11, fill: netColour(q.net), weight: 600 });
+    g.text(650, y, q.use, { size: 11, fill: C.muted });
+  });
   return { svg: g.svg(W, Math.max(H, ty + 30 + e.leftHarness.length * 17)), w: W, h: Math.max(H, ty + 30 + e.leftHarness.length * 17) };
 }
 
@@ -543,7 +545,8 @@ function hub(e: Electronics, spokes: number): Sheet {
   const [xx, xy] = P(pack.tangential / 2 - 2, pack.r0 + pack.radial);
   g.rect(xx, xy - 7, 26, 14, { fill: '#2a2f3b', stroke: C.ink, r: 3 });
   g.text(xx + 30, xy + 4, 'XT30', { size: 10, fill: C.muted });
-  g.text(20, oy + R * S + 30, `One stack on one side of the shell: ${h.moduleG} g, its centre ${h.moduleR} mm out. The bracket stays tied on; the strap holds the pack and box.`, { size: 11, fill: C.muted });
+  g.text(20, oy + R * S + 30, `One stack on one side of the shell: ${h.moduleG} g, its centre ${h.moduleR} mm out. The bracket stays tied `
+    + `on; the strap holds the pack and box.`, { size: 11, fill: C.muted });
   g.text(20, oy + R * S + 46, `Each goes in through the spokes end first: ${h.pieces.map((q) => `${q.name.toLowerCase()} ${q.opening.join(' × ')} mm`).join(', ')}.`, { size: 11, fill: C.muted });
 
   // ---- section through the axle and the stack ----
@@ -579,17 +582,18 @@ function hub(e: Electronics, spokes: number): Sheet {
   const tz = top.axial / 2;
   g.line([Q(-tz, outerR - 6), Q(-h.flangeZ * 0.8, outerR + 2), Q(-h.flangeZ - 8, outerR + 8)], { stroke: C.data, w: 2.5 });
   g.text(Q(-h.flangeZ - 10, 0)[0], Q(0, outerR + 12)[1], 'J2 → left panel', { size: 11, fill: C.data, anchor: 'end' });
-  if (e.sides === 2) {
-    const j = Q(h.flangeZ + 10, -70);
-    g.line([Q(tz, outerR - 6), Q(h.flangeZ * 0.7, outerR - 6), Q(h.flangeZ * 0.7, -40), [j[0], j[1]]], { stroke: C.data, w: 2.5, dash: '6 4' });
-    g.rect(j[0] - 10, j[1] - 14, 34, 28, { fill: '#2a2f3b', stroke: C.ink, r: 6 });
-    g.text(j[0] + 7, j[1] + 4, 'J1', { size: 11, anchor: 'middle', weight: 700 });
-    g.text(j[0] + 30, j[1] + 4, 'on a right spoke', { size: 11, fill: C.muted });
-    g.text(Q(h.flangeZ * 0.7, 0)[0] + 6, Q(0, -h.shellR - 10)[1], 'pigtail tied round the shell', { size: 11, fill: C.muted });
-  }
+  // the right panel
+  const j = Q(h.flangeZ + 10, -70);
+  g.line([Q(tz, outerR - 6), Q(h.flangeZ * 0.7, outerR - 6), Q(h.flangeZ * 0.7, -40), [j[0], j[1]]], { stroke: C.data, w: 2.5, dash: '6 4' });
+  g.rect(j[0] - 10, j[1] - 14, 34, 28, { fill: '#2a2f3b', stroke: C.ink, r: 6 });
+  g.text(j[0] + 7, j[1] + 4, 'J1', { size: 11, anchor: 'middle', weight: 700 });
+  g.text(j[0] + 30, j[1] + 4, 'on a right spoke', { size: 11, fill: C.muted });
+  g.text(Q(h.flangeZ * 0.7, 0)[0] + 6, Q(0, -h.shellR - 10)[1], 'pigtail tied round the shell', { size: 11, fill: C.muted });
   const outer = Math.hypot(outerR, top.tangential / 2);
-  g.text(sx, oy + R * S + 30, `Green dashes: room between the spoke cones; at the stack's outer corner (r ${Math.round(outer)} mm) there are ${Math.round(h.freeAxialAt(outer))} mm, it needs ${Math.round(top.axial)}.`, { size: 11, fill: C.muted });
-  g.text(sx, oy + R * S + 46, `Hub shell Ø${2 * h.shellR} mm, flanges ±${h.flangeZ} mm, flange holes Ø${2 * h.flangeR} mm. Measure your hub: Electronics (shell) and Panels → Hub and fork.`, { size: 11, fill: C.muted });
+  g.text(sx, oy + R * S + 30, `Green dashes: room between the spoke cones; at the stack's outer corner (r ${Math.round(outer)} mm) there `
+    + `are ${Math.round(h.freeAxialAt(outer))} mm, it needs ${Math.round(top.axial)}.`, { size: 11, fill: C.muted });
+  g.text(sx, oy + R * S + 46, `Hub shell Ø${2 * h.shellR} mm, flanges ±${h.flangeZ} mm, flange holes Ø${2 * h.flangeR} mm. Measure your `
+    + `hub: Hardware → Wheel → Hub.`, { size: 11, fill: C.muted });
 
   // ---- balance: the whole wheel, small ----
   const bx = sx + (2 * h.oldHalf + 20) * S + 120, k = 0.42;
@@ -613,7 +617,8 @@ function hub(e: Electronics, spokes: number): Sheet {
   g.text(cwx + 44, cwy - 44, `rim weight ${cw.massG} g`, { size: 11, fill: C.ok, weight: 600 });
   const lines = [...h.masses, cw].map((q) => `${q.name}: ${q.massG} g at r ${Math.round(q.r)} mm, ${q.angleDeg ? 'opposite' : 'module side'} → ${Math.round(q.massG * q.r)} g·mm`);
   lines.forEach((t, i) => g.text(bx, bcy + h.rimR * k + 50 + i * 16, t, { size: 11, fill: i === lines.length - 1 ? C.ok : C.muted }));
-  g.text(bx, bcy + h.rimR * k + 50 + lines.length * 16 + 6, `Stick the weight on the rim's inner face, centred, ${cw.angleDeg === 180 ? 'opposite the module' : 'on the module\'s side'}.`, { size: 11, fill: C.muted });
+  g.text(bx, bcy + h.rimR * k + 50 + lines.length * 16 + 6, `Stick the weight on the rim's inner face, centred, `
+    + `${cw.angleDeg === 180 ? 'opposite the module' : 'on the module\'s side'}.`, { size: 11, fill: C.muted });
 
   const W = bx + 2 * h.rimR * k + 140;
   const H = Math.max(oy + R * S + 70, bcy + h.rimR * k + 60 + lines.length * 16);
@@ -669,11 +674,17 @@ function board(e: Electronics): Sheet {
     const [bw, bh] = v ? [k.body.h, k.body.w] : [k.body.w, k.body.h];
     const [bx, by] = B(...T(k.body.at ?? [0, 0]));
     if (k.body.round) g.circle(bx, by, (bw / 2) * S, { fill: '#2a2f2a', stroke: GROUP[p.group], w: 1.4 });
-    else g.rect(bx - (bw * S) / 2, by - (bh * S) / 2, bw * S, bh * S, { fill: p.pkg === 'DIP-14' || p.pkg.startsWith('SIP') ? '#1b1b1b' : '#2a2f2a', stroke: GROUP[p.group], w: 1.4, r: p.pkg === 'TO-92' ? 8 : 2 });
+    else {
+      const fill = p.pkg === 'DIP-14' || p.pkg.startsWith('SIP') ? '#1b1b1b' : '#2a2f2a';
+      g.rect(bx - (bw * S) / 2, by - (bh * S) / 2, bw * S, bh * S, { fill, stroke: GROUP[p.group], w: 1.4, r: p.pkg === 'TO-92' ? 8 : 2 });
+    }
     k.pins.forEach((q, i) => {
       const [x, y] = T(q);
-      if (i === 0) { const [cx, cy] = B(x, y); g.rect(cx - (k.pad / 2) * S, cy - (k.pad / 2) * S, k.pad * S, k.pad * S, { fill: C.copper, r: 1 }); g.circle(cx, cy, (k.hole / 2) * S, { fill: '#0b0e15' }); }
-      else pad(x, y, k.pad, k.hole);
+      if (i === 0) {
+        const [cx, cy] = B(x, y);
+        g.rect(cx - (k.pad / 2) * S, cy - (k.pad / 2) * S, k.pad * S, k.pad * S, { fill: C.copper, r: 1 });
+        g.circle(cx, cy, (k.hole / 2) * S, { fill: '#0b0e15' });
+      } else pad(x, y, k.pad, k.hole);
     });
     const [cx, cy] = B(...p.at);
     if (p.pkg === 'DIP-14') {
@@ -689,7 +700,7 @@ function board(e: Electronics): Sheet {
   }
   // wire holes along the top (the left harness) and bottom (the right connector and the power board), numbered
   const leftPads = e.leftHarness.map((w) => w.net);
-  const rightPads = ['+5V_R', 'GND', 'CLK_R5', ...Array.from({ length: e.sides === 2 ? e.n : 0 }, (_, i) => `R${i + 1}_5`)];
+  const rightPads = ['+5V_R', 'GND', 'CLK_R5', ...Array.from({ length: e.n }, (_, i) => `R${i + 1}_5`)];
   const powerPads = ['+5V_L', 'GND', 'VBAT', 'LED_EN', 'CE', 'BTN_P', 'S1', 'GND'];
   const wireRow = (pads: string[], y: number, title: string, legendX: number, anchor: 'start' | 'end') => {
     pads.forEach((net, i) => {
@@ -701,7 +712,8 @@ function board(e: Electronics): Sheet {
   };
   wireRow(leftPads, 1.9, `top row: J2 left harness (${leftPads.length})`, ox - 24, 'end');
   wireRow([...rightPads, ...powerPads], Hmm - 1.9, `bottom row: J1 pigtail, power board (${rightPads.length + powerPads.length})`, ox + Wmm * S + 24, 'start');
-  g.text(B(Wmm / 2, 0)[0], oy + Hmm * S + 24, 'Box wires: power board (GND, +5V_L in 18 AWG) and the lid\'s two buttons; the charger\'s IN shares +5V_R.', { size: 11, fill: C.muted, anchor: 'middle' });
+  g.text(B(Wmm / 2, 0)[0], oy + Hmm * S + 24, 'Box wires: power board (GND, +5V_L in 18 AWG) and the lid\'s two buttons; the charger\'s IN '
+    + 'shares +5V_R.', { size: 11, fill: C.muted, anchor: 'middle' });
   const [sbx, sby] = [ox + Wmm * S - 10 * S, oy + Hmm * S + 48];
   g.line([[sbx, sby], [sbx + 10 * S, sby]], { stroke: C.muted, w: 2 });
   g.text(sbx + 5 * S, sby - 5, '10 mm', { size: 10, fill: C.muted, anchor: 'middle' });
@@ -733,7 +745,8 @@ function board(e: Electronics): Sheet {
     'The low parts (DIPs, resistor packs) sit under the Feather on its 8.5 mm female headers; everything taller sits beside it. Solder the low parts first, the headers last.',
     'Etched: about $5–15 for a few bare boards (OSH Park, JLCPCB, PCBWay); no assembly needed. Or build it on a perfboard cut to 90 × 32 mm, following this placement.',
     'Placement only, for routing in KiCad. Header pins follow Adafruit\'s Feather layout: check the long row\'s 3rd and last pins on the RP2350.',
-    'Keep each lane\'s 33 Ω pack by its shifter and every lane over unbroken ground. D3 carries the right side\'s 5 V (≤ 2 A): wide copper, and it gets warm. The cells\' current never comes onto this board.',
+    'Keep each lane\'s 33 Ω pack by its shifter and every lane over unbroken ground. D3 carries the right side\'s 5 V (≤ 2 A): wide copper, '
+      + 'and it gets warm. The cells\' current never comes onto this board.',
   ];
   notes.forEach((t, i) => g.text(20, y0 + i * 18, t, { size: 12, fill: C.muted }));
   const W = Math.max(ox + Wmm * S + 260, 1700);

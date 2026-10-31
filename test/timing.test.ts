@@ -8,7 +8,7 @@ describe('LED bus timing', () => {
   it('matches the Adafruit guide: 36 LEDs per lane at ~4 MHz is ~300 µs per column', () => {
     expect(clockedFrameBits(36)).toBe(1216);
     // The guide wires each back strip in parallel with its front strip (shared data).
-    const p = { ...defaultParams(), backData: 'same' as const, autoLength: false, stripLengthMm: 250, clockMHz: 4, stripCount: 3, overheadUs: 0 };
+    const p = { ...defaultParams(), backData: 'same' as const, panelStripMinMm: 45, clockMHz: 4, stripCount: 3 };
     const d = derive(p);
     expect(d.ledsPerStrip).toBe(36);
     expect(d.ledsPerLane).toBe(36);
@@ -16,7 +16,7 @@ describe('LED bus timing', () => {
   });
 
   it('gives every strip its own lane, both sides, up to the PIO\'s eight', () => {
-    const p = { ...defaultParams(), autoLength: false, stripLengthMm: 250 };
+    const p = { ...defaultParams(), stripCount: 4, panelStripMinMm: 45 }; // 36 LEDs a strip
     expect(p.backData).toBe('independent');
     expect(derive(p).stripUnits).toBe(8);
     expect(derive(p).ledsPerLane).toBe(36);
@@ -97,13 +97,13 @@ describe('firmware model', () => {
     return (worst * 180) / Math.PI;
   };
 
-  it('dead-reckons braking far better with a hall sensor per strip', () => {
-    const one = deadReckoningError({ ...p, hallPerStrip: false }, 0.25, 19, 30), per = deadReckoningError({ ...p, hallPerStrip: true }, 0.25, 19, 30);
+  it('dead-reckons braking far better with more strips, a hall sensor each', () => {
+    const one = deadReckoningError({ ...p, stripCount: 1 }, 0.25, 19, 30), per = deadReckoningError({ ...p, stripCount: 4 }, 0.25, 19, 30);
     expect(per).toBeLessThan(one / 4);
   });
 
   it('keeps the column count continuous as each strip\'s sensor syncs it', () => {
-    const q = { ...p, hallPerStrip: true };
+    const q = p;
     const segs = hallSegments(q, d, motion, 10, 11).filter((s) => s.enabled);
     expect(new Set(segs.map((s) => Math.round((s.k! % 1) * 3))).size).toBe(3); // every strip's sensor syncs
     for (const s of segs) for (let t = s.start; t < Math.min(s.end, 11); t += 0.002) {
@@ -121,7 +121,6 @@ describe('firmware model', () => {
     for (let t = 19; t < 30; t += 0.05) { const lit = lightsOn(p, d, m, t); if (was && !lit) offs++; was = lit; }
     expect(offs).toBe(1);
     expect(lightsOn(p, d, m, 30)).toBe(false);
-    expect(lightsOn({ ...p, syncMode: 'free' }, d, m, 30)).toBe(true); // no sensor: never knows it stopped
   });
 });
 
@@ -141,8 +140,8 @@ describe('banner mode dead reckoning', () => {
     }
   });
 
-  it('lags behind the true angle by up to one poll interval (one sensor)', () => {
-    const q = { ...banner, hallPollMs: 4, hallPerStrip: false };
+  it('lags behind the true angle by up to one poll interval (one strip, one sensor)', () => {
+    const q = { ...banner, hallPollMs: 4, stripCount: 1 };
     const w = (10 * MPH) / d.tireRadius;
     for (const s of buildSlices(q, d, motion, 10, 10.5, Math.PI, 2)) {
       expect(s.delta0).toBeLessThanOrEqual(1e-9);
@@ -152,7 +151,7 @@ describe('banner mode dead reckoning', () => {
 
   it('stays within one poll interval of the true angle with a sensor per strip', () => {
     // each strip's sensor times a third of a turn, so the poll jitter can put it a little ahead as well as behind
-    const q = { ...banner, hallPollMs: 4, hallPerStrip: true };
+    const q = { ...banner, hallPollMs: 4 };
     const w = (10 * MPH) / d.tireRadius;
     for (const s of buildSlices(q, d, motion, 10, 10.5, Math.PI, 2)) expect(Math.abs(s.delta0)).toBeLessThanOrEqual(w * 0.004 + 1e-9);
   });
@@ -328,12 +327,11 @@ describe('magnet acceleration estimate', () => {
     expect(magnetAccel(p, m, passes[0] + 1e-6)).toBeGreaterThan(-1);    // still mostly pre-brake
     expect(magnetAccel(p, m, passes[2] + 1e-6)).toBeCloseTo(-4.9, 0);  // two revolutions in
   });
-  it('reads the true acceleration in ideal mode and nothing when free-running', () => {
+  it('reads the true acceleration in ideal mode', () => {
     const m = new WheelMotion();
     m.configure(8.94, 0.339, 0, 1, 0);
     m.configure(0, 0.339, 0, 1, 10, 4.9);
     expect(magnetAccel({ ...defaultParams(), syncMode: 'ideal' }, m, 10.2)).toBeCloseTo(-4.9, 9);
-    expect(magnetAccel({ ...defaultParams(), syncMode: 'free' }, m, 10.2)).toBe(0);
   });
 });
 
@@ -419,6 +417,5 @@ describe('water rendering and spin estimate', () => {
     expect(magnetOmega(p, m, 20)).toBeCloseTo((10 * MPH) / 0.339, 3);
     m.configure(0, 0.339, 0, 1, 30, 4);
     expect(magnetOmega(p, m, 40)).toBe(0);
-    expect(magnetOmega({ ...p, syncMode: 'free' }, m, 20)).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { Params } from '../params';
+import { LED, type Params } from '../params';
 import type { Derived } from '../sim/timing';
 import { ledRadius } from '../image/polarize';
 import { DIE_T, SPOKE_R, spokeZ, STRIP_T, stripTilt } from './povMaterial';
@@ -44,8 +44,7 @@ export class WheelModel {
   private m = new THREE.Matrix4();
 
   build(p: Params, d: Derived) {
-    const key = [p.bsdMm, p.tireMm, p.rimDepthMm, p.spokes, p.stripCount, d.ledsPerStrip, p.doubleSided,
-      p.dieMm, p.stripStartMm, p.ledDensity, p.radialStagger].join('|');
+    const key = [d.rimRadius, d.rimWallR, p.tireMm, p.spokes, p.stripCount, d.ledsPerStrip, d.rStart].join('|');
     if (key === this.key) return;
     this.key = key;
     for (const mesh of [this.rotating, this.fixed]) {
@@ -61,7 +60,7 @@ export class WheelModel {
     const fixedParts: THREE.BufferGeometry[] = [];
     const tireTube = p.tireMm / 2000;
     fixedParts.push(colored(new THREE.TorusGeometry(d.rimRadius + tireTube, tireTube, 14, 96), 0x1b1b1d));
-    const rimInner = d.rimRadius - p.rimDepthMm / 1000;
+    const rimInner = d.rimWallR;
     const rimShape = new THREE.Shape();
     rimShape.absarc(0, 0, d.rimRadius, 0, Math.PI * 2, false);
     const hole = new THREE.Path();
@@ -97,11 +96,10 @@ export class WheelModel {
     // LED strips: strip s points at clockwise angle 2πs/N (matching the shader's convention).
     // Each lies radially on top of the spokes, starting at the hub flange and tilting in toward
     // the rim like the spokes beneath it.
-    const sides = p.doubleSided ? [1, -1] : [1];
     const tilt = stripTilt(d);
     for (let s = 0; s < p.stripCount; s++) {
       const a = -(s / p.stripCount) * Math.PI * 2;
-      for (const side of sides) {
+      for (const side of [1, -1]) {
         const r0 = d.rStart - 0.005, r1 = d.rEnd + 0.005, rMid = (r0 + r1) / 2;
         const strip = new THREE.BoxGeometry((r1 - r0) / Math.cos(tilt), 0.012, STRIP_T);
         strip.rotateY(side * tilt);
@@ -109,8 +107,8 @@ export class WheelModel {
         strip.rotateZ(a);
         parts.push(colored(strip, 0x111114));
         for (let k = 0; k < d.ledsPerStrip; k++) {
-          const r = ledRadius(p, d, s, k);
-          const die = new THREE.BoxGeometry(p.dieMm / 1000, p.dieMm / 1000, DIE_T);
+          const r = ledRadius(d, k);
+          const die = new THREE.BoxGeometry(LED.dieMm / 1000, LED.dieMm / 1000, DIE_T);
           die.rotateY(side * tilt);
           die.translate(r, 0, side * (spokeZ(d, r) + SPOKE_R + STRIP_T + DIE_T / 2));
           die.rotateZ(a);

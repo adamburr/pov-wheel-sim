@@ -3,7 +3,7 @@ import { defaultParams } from '../src/params';
 import { derive } from '../src/sim/timing';
 import { designPanels, designReport, holeSize, mirrorAxes, type PanelDesign, shapeContains, type SideResult } from '../src/panels/design';
 import { cutDxf, cutFiles, referenceDxf } from '../src/panels/dxf';
-import { applyToSim, panelInputs } from '../src/panels/fromParams';
+import { ledSpanOf, panelInputs } from '../src/panels/fromParams';
 import { adiff, arcMerge, boreContour, circlePts, cleanRing, dist, filletRing, mirrorPt, outlineOf, pmod, pointSegDist, pol, type Pt, rot, sampleBulge } from '../src/panels/geom';
 import { packDesign, unpackDesign } from '../src/panels/transport';
 import { Wheel } from '../src/panels/wheel';
@@ -180,7 +180,7 @@ describe('spoke-tied panels', () => {
           expect(x + pp.wireHoleD / 2).toBeGreaterThan(b.rho - pp.sensorBody[1] / 2 - pp.sensorLeads - 5);
         }
         expect(sm.forkClearance.sensorFaceToForkMm).toBeGreaterThan(5);
-        expect(sm.massG).toBeLessThan(12 * n + 15); // the disc is about 10 g
+        expect(sm.massG).toBeLessThan(12 * n + 15); // the disc is about 15 g, a blade with its tabs about 10 g
       }
     });
   }
@@ -244,7 +244,6 @@ describe('spoke-tied panels', () => {
   it('reports plain data', () => {
     const r = JSON.parse(JSON.stringify(designReport(design(2))));
     expect(r.sides.LEFT.spokeTies[0]).toHaveProperty('bladeDeg');
-    expect(r.simSettings).toMatchObject({ stripCount: 2, ledDensity: 144, stripStartMm: 33, stripLengthMm: 264 });
   });
 });
 
@@ -339,23 +338,72 @@ describe('worker transport', () => {
   });
 });
 
+describe('tabs cut from the wedges', () => {
+  it('ends every tab on a spoke line, and keeps every spoke tie inside the panel', () => {
+    for (const [bsdMm, spokes, spokeCrosses] of [[622, 32, 3], [559, 32, 3], [406, 28, 3], [305, 28, 2]]) {
+      for (const n of [1, 2, 3, 4]) {
+        const d = design(n, { bsdMm, spokes, spokeCrosses, panelTipRadiusMm: bsdMm === 622 ? 298.45 : 0 });
+        const pp = d.spec, reach = d.wheel.p.spokeD / 2 + pp.spokeGap + holeSize(pp) / 2 + (holeSize(pp) / 2 + pp.gridEdge) * Math.SQRT2 + 2;
+        for (const s of [d.sides.LEFT, d.sides.RIGHT]) {
+          const own = d.wheel.spokes.filter((k) => k.side === s.side);
+          const pts = s.g.outlineBulge;
+          // the outline's straight runs that lie along one of the panel's spokes: parallel, within a tie's pad of it
+          const onSpoke = pts.flatMap(([x0, y0, b], i) => {
+            const [x1, y1] = pts[(i + 1) % pts.length];
+            if (b || Math.hypot(x1 - x0, y1 - y0) < 3) return [];
+            const a = Math.atan2(y1 - y0, x1 - x0), mid: Pt = [(x0 + x1) / 2, (y0 + y1) / 2];
+            return own.some((k) => {
+              const ka = Math.atan2(k.p1[1] - k.p0[1], k.p1[0] - k.p0[0]);
+              if (Math.abs(pmod(a - ka + Math.PI / 2, Math.PI) - Math.PI / 2) > 1e-6) return false;
+              return Math.abs((mid[0] - k.p0[0]) * Math.sin(ka) - (mid[1] - k.p0[1]) * Math.cos(ka)) <= reach;
+            }) ? [mid] : [];
+          });
+          for (const t of s.spokeTies.filter((x) => x.earMm > 0)) {
+            const at: Pt = [(t.holes[0][0] + t.holes[1][0]) / 2, (t.holes[0][1] + t.holes[1][1]) / 2];
+            expect(onSpoke.some((q) => dist(q, at) < 25), `tab at r ${t.r} on ${s.label}, ${n} strips, ${bsdMm}`).toBe(true);
+          }
+          for (const h of s.g.holes.filter((q) => q.kind === 'spoke')) {
+            expect(s.g.outline.contains(h.ring.pts[0])).toBe(true);
+            expect(s.g.outline.boundaryDist(h.ring, pp.gridEdge)).toBeGreaterThanOrEqual(pp.gridEdge - 0.1);
+          }
+        }
+      }
+    }
+  });
+});
+
 describe('shared settings', () => {
-  it('designs from the simulator\'s settings, and points its strips at the panels', () => {
+  it('designs from the simulator\'s settings, and puts the LEDs where the simulator draws them', () => {
     const p = { ...defaultParams(), stripCount: 2 };
     const { wheel, panel } = panelInputs(p);
     expect(wheel).toMatchObject({ size: '700c', spokes: 32, crosses: 3, rimWallR: 302, erd: 612 });
     expect(panel).toMatchObject({ strips: 2, material: 'pp_08', tipEndR: 298.45, discCross: 0, stripStartR: 30 });
     const d = designPanels(wheel, panel);
     expect(d.rimNote).toBe(''); // the default rim is the one the measured tips imply
-    // the simulator's defaults already hold the panels' strips
-    expect(derive(p).ledsPerStrip).toBe(d.sides.LEFT.summary.ledsPerStrip);
-    expect(p).toMatchObject({ stripStartMm: d.sim.stripStartMm, stripLengthMm: d.sim.stripLengthMm, autoLength: false });
-    // a deeper rim: the panels assume one just outside the tips, and Use in simulator brings the rim depth down
+    // one rule places the LEDs for both: 38 a strip, from just outside 30 mm to 2 mm inside the tip
+    const sd = derive(p), L = d.sides.LEFT.summary;
+    expect(sd.ledsPerStrip).toBe(38);
+    expect(L.ledsPerStrip).toBe(38);
+    expect(sd.rStart * 1000).toBeCloseTo(L.ledStartR, 0);
+    expect(sd.rEnd * 1000).toBeCloseTo(L.ledEndR, 0);
+    // a deeper rim: the panels assume one just outside the measured tips, and say so
     const q = { ...p, rimDepthMm: 22 };
     const e = designPanels(panelInputs(q).wheel, panelInputs(q).panel);
     expect(e.rimNote).toMatch(/Rim wall assumed/);
-    applyToSim(q, e);
-    expect(q.rimDepthMm).toBeLessThan(22);
+    expect(ledSpanOf(q).rimNote).toBe(e.rimNote);
     expect(derive(q).ledsPerStrip).toBe(e.sides.LEFT.summary.ledsPerStrip);
+  });
+
+  it('places the LEDs the same way for the simulator and the panels on every wheel size', () => {
+    for (const [bsdMm, spokes, crosses] of [[622, 32, 3], [559, 32, 3], [406, 28, 2], [305, 28, 2], [203, 16, 1]]) {
+      const p = { ...defaultParams(), bsdMm, spokes, spokeCrosses: crosses, panelTipRadiusMm: 0, stripCount: 2 };
+      const { wheel, panel } = panelInputs(p);
+      const d = designPanels(wheel, panel), L = d.sides.LEFT.summary, sd = derive(p);
+      expect(d.rimNote).toBe('');
+      expect(L.tipR).toBeLessThan(bsdMm / 2 - p.rimDepthMm); // inside the rim
+      expect(sd.ledsPerStrip).toBe(L.ledsPerStrip);
+      expect(sd.rStart * 1000).toBeCloseTo(L.ledStartR, 0);
+      expect(sd.rEnd * 1000).toBeCloseTo(L.ledEndR, 0);
+    }
   });
 });

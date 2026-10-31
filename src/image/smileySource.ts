@@ -44,8 +44,7 @@ export class SmileySource {
       this.aEstimate = 0;
       fresh = true;
     }
-    const posKey = [p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.doubleSided, p.backData,
-      p.radialStagger, p.imageRotationDeg].join('|');
+    const posKey = [p.columnsPerRev, p.stripCount, d.ledsPerStrip, d.rStart, d.pitch, p.backData, p.imageRotationDeg].join('|');
     if (posKey !== this.posKey) {
       this.posKey = posKey;
       this.pos = ledPositions(p, d);
@@ -119,7 +118,7 @@ export class SmileySource {
       const px = Math.min(IMAGE - 1, Math.floor(((u + 1) / 2) * IMAGE));
       const py = Math.min(IMAGE - 1, Math.floor(((1 - v) / 2) * IMAGE));
       const k = Math.floor(idx / C) % n;
-      const comp = p.radialCompensation ? ledRadius(p, d, 0, k) / d.rEnd : 1;
+      const comp = p.radialCompensation ? ledRadius(d, k) / d.rEnd : 1;
       const src = (py * IMAGE + px) * 4;
       for (let ch = 0; ch < 3; ch++) {
         const val = lut[img[src + ch]] * comp;

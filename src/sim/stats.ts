@@ -1,4 +1,4 @@
-import { brightnessScale, CHIP, LED, type Params, playbackFps, SHUTTERS } from '../params';
+import { brightnessScale, CHIP, type Params, playbackFps, SHUTTERS } from '../params';
 import { type Derived, lanesFor } from './timing';
 
 export interface StatLine { label: string; value: string }
@@ -30,7 +30,6 @@ export interface PhysicsInfo { label: string; detail: string; flopsPerStep: numb
 export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: BannerInfo, frames = 1, water?: WaterInfo,
   physics?: PhysicsInfo): Stats {
   const chip = CHIP;
-  const led = LED;
   const C = p.columnsPerRev;
   const rps = d.revPerSec;
   const warnings: string[] = [];
@@ -42,8 +41,9 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   const T = p.exposureModel === 'eye' ? p.eyeTauMs / 1000 : SHUTTERS[p.shutter];
   const coverage = Math.min(1, rps * T * p.stripCount);
 
-  const totalLeds = d.ledsPerStrip * p.stripCount * (p.doubleSided ? 2 : 1);
-  const gbScale = (led.gbMode === 'none' ? 1 : p.globalBrightness / 31) * brightnessScale(p);
+  const totalLeds = d.ledsPerStrip * p.stripCount * 2; // both sides
+  const gbScale = (p.globalBrightness / 31) * brightnessScale(p); // the SK9822's global brightness sets its current
+  const batteryMah = p.cells * p.cellMah;
   const avgmA = totalLeds * (1 + 60 * meanDuty * gbScale);
   const peakmA = totalLeds * 61;
   const lanes = lanesFor(d.stripUnits);
@@ -53,15 +53,25 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   const targetFps = playbackFps(p);
   const playFps = p.frameAdvance === 'timed' ? targetFps : (rps * p.playbackRate) / Math.max(0.01, p.revsPerFrame);
   const usableRam = chip.ramKB * 1024 * 0.8;
+  // Frames that don't fit in RAM go to PSRAM, and the firmware streams the shown one from there as it
+  // sends each column. Wheel-locked frames read in order; a banner reads a pixel for every LED,
+  // scattered, and each read fetches a whole 8-byte cache line. Physics looks keep their state in RAM.
+  const inPsram = !water && !physics && imageBytes > usableRam;
+  const usablePsram = chip.psramKB * 1024 * 0.9;
+  const colsPerSec = rps > 0 ? Math.min(required, d.maxColumnRate) : 0;
+  const streamMBps = (colsPerSec * (banner ? totalLeds * 8 : frameBytes / C)) / 1e6;
+  // The eye fuses flicker above about 50 Hz. A POV wheel's points refresh far slower at riding
+  // speeds, so the stat says so rather than a warning that would always show.
+  const flicker = refreshHz >= 50 ? 'steady to the eye' : 'flickers to the eye (it fuses ≈ 50 Hz)';
 
   const lines: StatLine[] = [
     { label: 'Wheel', value: `${fmt(rps * 60, 0)} rpm · ${fmt(rps, 2)} rev/s` },
     { label: 'LEDs', value: `${d.ledsPerStrip}/strip · ${totalLeds} total · pitch ${fmt(d.pitch * 1000, 2)} mm` },
-    { label: 'Column send', value: `${fmtTime(d.transferS)} + ${fmt(p.overheadUs, 0)} µs overhead` },
+    { label: 'Column send', value: `${fmtTime(d.transferS)} + ${fmt(chip.overheadUs, 0)} µs overhead` },
     { label: 'Column rate', value: `need ${fmt(required, 0)}/s · max ${fmt(d.maxColumnRate, 0)}/s` },
     { label: 'Columns/rev', value: `${fmt(achievedCols, 0)} of ${C} target` },
     { label: 'Pixel at rim', value: `${fmt(arcAtRim * 1000, 1)} mm arc × ${fmt(d.pitch * 1000, 1)} mm radial` },
-    { label: 'Point refresh', value: `${fmt(refreshHz, 1)} Hz (${p.stripCount} strips)` },
+    { label: 'Point refresh', value: `${fmt(refreshHz, 1)} Hz (${p.stripCount} strips) · ${flicker}` },
     { label: 'Exposure sweep', value: `${fmt(coverage * 100, 0)}% of the disc per ${p.exposureModel === 'eye' ? 'τ' : 'shot'}` },
     ...(banner ? [{ label: 'Banner', value: `${banner.width}×${banner.height} px · repeats every ${fmt(banner.tileM, 2)} m` }] : []),
     ...(frames > 1 ? [{
@@ -78,9 +88,11 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
       { label: physics.label, value: `${physics.detail} · ${p.waterHz} Hz` },
       { label: `${physics.label} CPU`, value: `${fmt(physicsMflops(p, physics.flopsPerStep), 2)} MFLOP/s ≈ ${fmt(corePct(p, physics.flopsPerStep), 1)}% of one ${chip.name} core` },
     ] : []),
-    { label: water || physics ? 'Firmware RAM' : 'Image buffer', value: `${fmt(imageBytes / 1024, 1)} KB of ${chip.ramKB} KB RAM` },
+    inPsram
+      ? { label: 'Image buffer', value: `${fmt(imageBytes / 1048576, 2)} MB of ${chip.psramKB / 1024} MB PSRAM · streams ${fmt(streamMBps, 1)} MB/s` }
+      : { label: water || physics ? 'Firmware RAM' : 'Image buffer', value: `${fmt(imageBytes / 1024, 1)} KB of ${chip.ramKB} KB RAM` },
     { label: 'Current', value: `${fmt(avgmA, 0)} mA avg · ${fmt(peakmA / 1000, 1)} A peak` },
-    { label: 'Battery', value: `${fmt(p.batteryMah / Math.max(avgmA, 1), 1)} h on ${p.batteryMah} mAh` },
+    { label: 'Battery', value: `${fmt(batteryMah / Math.max(avgmA, 1), 1)} h on ${batteryMah} mAh` },
   ];
 
   if (rps > 0 && required > d.maxColumnRate) {
@@ -96,13 +108,9 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   if (p.syncMode === 'hall' && rps > 0 && rps < 1 / 1.5) {
     warnings.push('Too slow to arm: the firmware needs two magnet passes within 1.5 s.');
   }
-  if (refreshHz > 0 && refreshHz < 50) {
-    warnings.push(`Each point refreshes at ${fmt(refreshHz, 1)} Hz, so the image will flicker to the eye (fusion ≈ 50–60 Hz). Add strips or ride faster.`);
-  }
   if (banner && rps > 0) {
     const v = rps * d.circumference;
     const revealed = v * T + 2 * d.rEnd;
-    if (p.syncMode === 'free') warnings.push('Banner mode needs a position estimate, so free-running firmware falls back to hall-sensor timing.');
     if (p.exposureModel === 'eye') {
       warnings.push(`A bystander only sees about the last ${fmt(revealed, 2)} m painted (eye persistence). The whole banner appears in a long-exposure photo.`);
     } else if (revealed < banner.tileM) {
@@ -111,16 +119,22 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
   } else if (p.exposureModel === 'camera' && coverage < 1 && rps > 0) {
     warnings.push(`At this shutter each strip sweeps only ${fmt(rps * T * 360, 0)}°, so the photo shows wedges. Try ≥ ${fmt(1 / (rps * p.stripCount), 2)} s.`);
   }
-  if (imageBytes > usableRam) {
-    const fit = Math.floor(usableRam / frameBytes);
+  if (!inPsram && imageBytes > usableRam) {
+    const look = water ? 'water' : physics!.label.toLowerCase();
+    warnings.push(`The ${look} simulation needs ${fmt(imageBytes / 1024, 0)} KB, more than fits in ${chip.name} RAM. Lower its grid or detail.`);
+  } else if (inPsram && imageBytes > usablePsram) {
+    const fit = Math.floor(usablePsram / frameBytes);
     warnings.push(frames > 1
-      ? `${frames} frames need ${fmt(imageBytes / 1024, 0)} KB, but only ${fit} fit in ${chip.name} RAM. Stream frames from flash/PSRAM, use fewer frames, or lower columns/rev.`
-      : `The prepacked image (${fmt(imageBytes / 1024, 1)} KB) won't fit in ${chip.name} RAM.`);
+      ? `${frames} frames need ${fmt(imageBytes / 1048576, 1)} MB, but only ${fit} fit in the ${chip.psramKB / 1024} MB PSRAM. Use fewer frames, or lower columns/rev.`
+      : `The prepacked image (${fmt(imageBytes / 1048576, 1)} MB) won't fit even in the ${chip.psramKB / 1024} MB PSRAM. Lower columns/rev.`);
+  }
+  if (inPsram && streamMBps > chip.psramMBps) {
+    warnings.push(`Streaming the frames from PSRAM takes ${fmt(streamMBps, 1)} MB/s at this speed, more than it gives (≈ ${chip.psramMBps} MB/s), `
+      + `so columns arrive late and the image stretches. Lower columns/rev, or use few enough frames to fit in RAM.`);
   }
   if (water) {
     const pct = corePct(p, water.flopsPerStep);
     if (pct > 60) warnings.push(`The water simulation needs about ${fmt(pct, 0)}% of one ${chip.name} core. Lower the grid, sim rate or pressure iterations.`);
-    if (p.syncMode === 'free') warnings.push('Free-running firmware has no speed sensor, so the water can\'t react to braking.');
     if (p.displayMode === 'banner') warnings.push('Water always uses the wheel-locked display.');
   }
   if (frames > 1 && rps > 0) {
@@ -130,16 +144,12 @@ export function computeStats(p: Params, d: Derived, meanDuty: number, banner?: B
       warnings.push(`Synced to the wheel, the animation plays at ${fmt(playFps, 1)} fps instead of ${fmt(targetFps, 1)} fps. It speeds up and slows down with the bike.`);
     }
   }
-  if (led.gbMode === 'pwm' && p.globalBrightness < 31) {
-    warnings.push(`APA102 global brightness < 31 adds a slow ~${p.gbPwmHz} Hz PWM, which shows as dashed arcs. Dim through the color values instead.`);
-  }
-  if (led.protocol === 'single-wire' && p.pwmHz < 2000) {
-    warnings.push(`${led.name} PWM ≈ ${p.pwmHz} Hz breaks each arc into dashes at POV speeds.`);
-  }
-  if (p.doubleSided && p.backData === 'same') {
+  if (p.pwmHz < 2000) warnings.push(`LED PWM ≈ ${p.pwmHz} Hz breaks each arc into dashes at POV speeds.`);
+  if (p.backData === 'same') {
     warnings.push('Back strips share the front data, so the image is mirrored on the non-drive side.');
   }
-  if (d.ledsPerStrip < 8) warnings.push('Very few LEDs per strip. Check the strip start radius and the wheel size.');
+  if (d.rimNote) warnings.push(`The tip radius (${p.panelTipRadiusMm} mm) doesn't fit inside this rim. ${d.rimNote}`);
+  if (d.ledsPerStrip < 8) warnings.push('Very few LEDs per strip. Check the tip radius, the inner limit on the strips and the wheel size.');
   return { lines, warnings };
 }
 

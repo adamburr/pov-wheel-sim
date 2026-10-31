@@ -1,11 +1,12 @@
-// The panel design's inputs from the app's settings. The strips, LED density, spokes, rim and
-// magnet sensors are the same settings the simulator uses; the rest are the panels' own.
-import { type Params, WHEELS } from '../params';
-import { LED_RIM_CLEAR_MM } from '../sim/timing';
-import type { PanelDesign, PanelSpec, WheelInput } from './design';
+// The panel design's inputs from the app's settings, and where the LEDs sit for them. The wheel,
+// hub and fork, the strips and the LED placement are the same settings the simulator uses; the
+// rest are the panels' own. Nothing here loads the designer: the simulator uses ledSpanOf at startup.
+import { LED, type Params, WHEELS } from '../params';
+import type { PanelSpec, WheelInput } from './design';
+import { type LedSpan, ledSpan, SPAN_DEFAULTS, STRIP_SLEEVE_W } from './ledSpan';
 
 /** Strip counts the panel layouts cover. */
-export { PANEL_STRIP_RANGE as PANEL_STRIPS } from './design';
+export { PANEL_STRIP_RANGE as PANEL_STRIPS } from './strips';
 
 /** A short wheel size for file names: "700c", "29in", or the bead seat diameter when it's custom. */
 function sizeName(p: Params): string {
@@ -25,9 +26,9 @@ export function panelInputs(p: Params): { wheel: WheelInput; panel: Partial<Pane
       old: p.hubOldMm,
     },
     panel: {
-      strips: p.stripCount, ledPitch: 1000 / p.ledDensity, material: p.panelMaterial,
+      strips: p.stripCount, ledPitch: 1000 / LED.perM, material: p.panelMaterial,
       boreMinD: p.panelBoreMm, tipEndR: p.panelTipRadiusMm > 0 ? p.panelTipRadiusMm : null, tipSlot: p.panelTipSlot,
-      stripW: p.panelStripWidthMm, stripT: p.panelStripThickMm, tieW: p.panelTieWidthMm, tieClear: p.panelTieClearMm,
+      tieW: p.panelTieWidthMm, tieClear: p.panelTieClearMm,
       stripStartR: p.panelStripMinMm, holesEvery: p.panelHolesEvery, gridEdge: p.panelEdgeMm, cornerR: p.panelCornerMm, bladeW: p.panelBladeWidthMm,
       discCross: p.panelDiscCross, tieSpan: p.panelTieSpanMm, tipTieZone: p.panelTipTieMm, earMax: p.panelTabMaxMm,
       forkCrownR: p.forkCrownRadiusMm, forkCrownHalf: p.forkCrownHalfMm,
@@ -38,15 +39,12 @@ export function panelInputs(p: Params): { wheel: WheelInput; panel: Partial<Pane
 /** Changes whenever the design's inputs change. */
 export const panelKey = (p: Params) => JSON.stringify(panelInputs(p));
 
-/**
- * Point the simulator's strips at where these panels hold the LEDs. The rim depth comes down too
- * when the outer LEDs would otherwise sit closer to the rim than the simulator allows.
- */
-export function applyToSim(p: Params, d: PanelDesign) {
-  p.ledDensity = d.sim.ledDensity;
-  p.stripStartMm = d.sim.stripStartMm;
-  p.stripLengthMm = d.sim.stripLengthMm;
-  p.autoLength = false;
-  const room = p.bsdMm / 2 - LED_RIM_CLEAR_MM - (d.sim.stripStartMm + d.sim.stripLengthMm);
-  if (p.rimDepthMm > room) p.rimDepthMm = Math.max(1, Math.floor(room));
+/** Where the LEDs sit for these settings, by the panels' rule (ledSpan.ts), without designing the panels. */
+export function ledSpanOf(p: Params): LedSpan {
+  return ledSpan({
+    ...SPAN_DEFAULTS, rimWallR: p.bsdMm / 2 - p.rimDepthMm,
+    tipEndR: p.panelTipRadiusMm > 0 ? p.panelTipRadiusMm : null, tipSlot: p.panelTipSlot,
+    stripW: STRIP_SLEEVE_W, tieW: p.panelTieWidthMm, tieClear: p.panelTieClearMm, gridEdge: p.panelEdgeMm, bladeW: p.panelBladeWidthMm,
+    boreMinD: p.panelBoreMm, stripStartR: p.panelStripMinMm, ledPitch: 1000 / LED.perM,
+  });
 }

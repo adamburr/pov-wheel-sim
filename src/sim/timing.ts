@@ -1,12 +1,13 @@
 import { CHIP, LED, type Params, speedMps } from '../params';
+import { ledSpanOf } from '../panels/fromParams';
 
 // Geometry and LED-bus timing derived from the parameters. All lengths in metres, times in seconds.
 export interface Derived {
   tireRadius: number;      // rolling radius
   rimRadius: number;       // bead seat radius
-  maxLedRadius: number;    // inner edge of the rim minus clearance
-  rStart: number;
-  stripLength: number;
+  rimWallR: number;        // the rim's inner wall: the wheel's, or just outside a measured tip that wouldn't fit inside it
+  rimNote: string;         // says so when it is
+  rStart: number;          // inner end of the first pixel
   ledsPerStrip: number;
   pitch: number;
   rEnd: number;
@@ -21,11 +22,7 @@ export interface Derived {
   maxColumnRate: number;
   latchBaseS: number;      // delay from column start until LED 0 of a chain shows new data
   latchPerLedS: number;    // additional delay per LED further down the chain
-  clocked: boolean;
 }
-
-/** The simulator keeps the LEDs this far inside the rim wall: the panels' tip clearance and strip end. */
-export const LED_RIM_CLEAR_MM = 5;
 
 export function clockedFrameBits(nLeds: number): number {
   // 32-bit start frame, 32 bits per LED, end frame of at least n/2 clocks rounded up to a byte.
@@ -33,38 +30,37 @@ export function clockedFrameBits(nLeds: number): number {
 }
 
 export function derive(p: Params): Derived {
-  const led = LED;
-  const rimRadius = p.bsdMm / 2000;
+  // where the panels hold the LEDs: laid from the blade tip in, whole pixels. A measured tip that
+  // doesn't fit inside this rim makes the panels assume a rim just outside it, and so does the simulator.
+  const span = ledSpanOf(p);
+  const rimWallR = span.rimWallR / 1000;
+  const rimRadius = Math.max(p.bsdMm / 2000, rimWallR + p.rimDepthMm / 1000);
   const tireRadius = rimRadius + p.tireMm / 1000;
-  const maxLedRadius = rimRadius - p.rimDepthMm / 1000 - LED_RIM_CLEAR_MM / 1000;
-  const rStart = p.stripStartMm / 1000;
-  const pitch = 1 / p.ledDensity;
-  const maxLength = Math.max(0, maxLedRadius - rStart);
-  const stripLength = p.autoLength ? maxLength : Math.min(p.stripLengthMm / 1000, maxLength);
-  const ledsPerStrip = Math.max(1, Math.floor(stripLength / pitch + 1e-6));
+  const pitch = 1 / LED.perM;
+  // at least one LED, inside the tip, however small the wheel
+  const ledsPerStrip = Math.max(1, span.ledsPerStrip);
+  const rStart = Math.max(0, span.ledStart / 1000 - (ledsPerStrip - span.ledsPerStrip) * pitch);
   const circumference = 2 * Math.PI * tireRadius;
   const revPerSec = speedMps(p) / circumference;
 
-  const stripUnits = p.stripCount * (p.doubleSided && p.backData === 'independent' ? 2 : 1);
+  const stripUnits = p.stripCount * (p.backData === 'independent' ? 2 : 1);
   const lanes = lanesFor(stripUnits);
   const ledsPerLane = Math.ceil(stripUnits / lanes) * ledsPerStrip;
-  const clocked = led.protocol === 'clocked';
-  const clockHz = (clocked ? p.clockMHz : led.maxClockMHz) * 1e6;
-  const bitsPerLane = clocked ? clockedFrameBits(ledsPerLane) : led.bitsPerLed * ledsPerLane;
-  const transferS = bitsPerLane / clockHz + (clocked ? 0 : led.resetUs * 1e-6);
-  const columnTimeS = transferS + p.overheadUs * 1e-6;
+  const clockHz = p.clockMHz * 1e6;
+  const bitsPerLane = clockedFrameBits(ledsPerLane);
+  const transferS = bitsPerLane / clockHz;
+  const columnTimeS = transferS + CHIP.overheadUs * 1e-6;
 
   return {
-    tireRadius, rimRadius, maxLedRadius, rStart, stripLength, ledsPerStrip, pitch,
+    tireRadius, rimRadius, rimWallR, rimNote: span.rimNote, rStart, ledsPerStrip, pitch,
     rEnd: rStart + ledsPerStrip * pitch,
-    halfWidth: (p.dieMm / 2 + p.diffusionMm) / 1000,
+    halfWidth: (LED.dieMm / 2 + p.diffusionMm) / 1000,
     circumference, revPerSec, stripUnits, ledsPerLane, bitsPerLane, transferS, columnTimeS,
     maxColumnRate: 1 / columnTimeS,
-    // Clocked parts (APA102 family) show new data as soon as their own 32 bits arrive, so the
-    // update ripples outward along the chain. Single-wire parts all latch after the reset gap.
-    latchBaseS: clocked ? 64 / clockHz : transferS,
-    latchPerLedS: clocked ? 32 / clockHz : 0,
-    clocked,
+    // The SK9822 shows new data as soon as its own 32 bits arrive, so the update ripples outward
+    // along the chain.
+    latchBaseS: 64 / clockHz,
+    latchPerLedS: 32 / clockHz,
   };
 }
 
