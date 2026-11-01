@@ -1,0 +1,556 @@
+import type { PatternName } from '../params';
+
+export type ImageSource = HTMLCanvasElement | ImageBitmap;
+
+/** A looping sequence of frames; a still image is a one-frame animation. */
+export interface Animation {
+  frames: ImageSource[];
+  fps: number;
+  /** Optional frames laid out for the wheel-locked display. */
+  wheelFrames?: ImageSource[];
+  /** Optional frames already laid out for banner mode; otherwise `bannerTile` lays out `frames`. */
+  bannerFrames?: ImageSource[];
+}
+
+const SIZE = 512;
+
+function canvas(w = SIZE, h = SIZE) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return { c, g: c.getContext('2d')! };
+}
+
+const ROMAN = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+
+/**
+ * An old-fashioned clock dial in white on black, after the clock in a 1960s TV anthology's
+ * opening: double rim, minute and hour ticks, Roman numerals, a spade hour hand and an arrow
+ * minute hand. Hand angles are clockwise from twelve, in radians.
+ */
+function drawClock(g: CanvasRenderingContext2D, minute: number, hour: number) {
+  const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
+  const ink = '#f4f1e8';
+  g.strokeStyle = ink;
+  g.lineWidth = R * 0.035;
+  g.beginPath(); g.arc(cx, cy, R * 0.95, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = R * 0.015;
+  g.beginPath(); g.arc(cx, cy, R * 0.88, 0, Math.PI * 2); g.stroke();
+  for (let m = 0; m < 60; m++) {
+    const a = (m / 60) * Math.PI * 2, major = m % 5 === 0;
+    const r0 = R * (major ? 0.8 : 0.84), r1 = R * 0.88;
+    g.lineWidth = R * (major ? 0.03 : 0.012);
+    g.beginPath();
+    g.moveTo(cx + Math.sin(a) * r0, cy - Math.cos(a) * r0);
+    g.lineTo(cx + Math.sin(a) * r1, cy - Math.cos(a) * r1);
+    g.stroke();
+  }
+  g.fillStyle = ink;
+  g.font = `bold ${R * 0.13}px Georgia, 'Times New Roman', serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  ROMAN.forEach((numeral, h) => {
+    const a = (h / 12) * Math.PI * 2;
+    g.fillText(numeral, cx + Math.sin(a) * R * 0.66, cy - Math.cos(a) * R * 0.66);
+  });
+  // Hands, drawn pointing up from the centre and turned into place.
+  const hand = (angle: number, path: [number, number][]) => {
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(angle);
+    g.beginPath();
+    path.forEach(([x, y], i) => (i ? g.lineTo(x * R, -y * R) : g.moveTo(x * R, -y * R)));
+    g.closePath();
+    g.fill();
+    g.restore();
+  };
+  // Hour: a broad blade ending in a spade.
+  hand(hour, [[-0.035, -0.1], [-0.03, 0.3], [-0.08, 0.36], [0, 0.48], [0.08, 0.36], [0.03, 0.3], [0.035, -0.1]]);
+  // Minute: long and slim with an arrow tip.
+  hand(minute, [[-0.02, -0.14], [-0.018, 0.6], [-0.05, 0.6], [0, 0.72], [0.05, 0.6], [0.018, 0.6], [0.02, -0.14]]);
+  g.beginPath(); g.arc(cx, cy, R * 0.06, 0, Math.PI * 2); g.fill();
+}
+
+/** Four rainbow arms spiralling out from the centre. */
+function drawSpiral(g: CanvasRenderingContext2D) {
+  const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
+  g.lineWidth = R * 0.07;
+  g.lineCap = 'round';
+  for (let arm = 0; arm < 4; arm++) {
+    g.strokeStyle = `hsl(${arm * 90 + 20}, 100%, 55%)`;
+    g.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const t = i / 200, a = t * Math.PI * 3 + (arm * Math.PI) / 2, r = t * R * 0.95;
+      const x = cx - Math.cos(a) * r, y = cy + Math.sin(a) * r; // mirrored left to right
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    }
+    g.stroke();
+  }
+}
+
+/** Built-in test images, drawn on a black background like a night-time display. */
+export function makePattern(name: PatternName, text: string): HTMLCanvasElement {
+  if (name === 'Wide text') return wideText(text);
+  const { c, g } = canvas();
+  const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, SIZE, SIZE);
+  g.lineCap = 'round';
+
+  switch (name) {
+    case 'Smiley':
+    case 'Bouncing smiley': { // the bouncing smiley's face; the live simulation moves it
+      g.fillStyle = '#ffd21f';
+      g.beginPath(); g.arc(cx, cy, R * 0.92, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#000';
+      for (const dx of [-1, 1]) {
+        g.beginPath(); g.ellipse(cx + dx * R * 0.34, cy - R * 0.28, R * 0.1, R * 0.17, 0, 0, Math.PI * 2); g.fill();
+      }
+      g.strokeStyle = '#000'; g.lineWidth = R * 0.11;
+      g.beginPath(); g.arc(cx, cy + R * 0.02, R * 0.56, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+      g.strokeStyle = '#ff2a6d'; g.lineWidth = R * 0.05;
+      g.beginPath(); g.arc(cx, cy, R * 0.96, 0, Math.PI * 2); g.stroke();
+      break;
+    }
+    case 'Polar test grid': {
+      for (let i = 10; i >= 1; i--) {
+        g.strokeStyle = `hsl(${i * 36}, 100%, 55%)`; g.lineWidth = R * 0.035;
+        g.beginPath(); g.arc(cx, cy, (R * i) / 10.5, 0, Math.PI * 2); g.stroke();
+      }
+      g.strokeStyle = '#fff'; g.lineWidth = 4;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); g.stroke();
+      }
+      g.fillStyle = '#fff'; g.font = `bold ${R * 0.22}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('▲', cx, cy - R * 0.62);
+      g.fillText('R', cx + R * 0.62, cy);
+      break;
+    }
+    case 'Clock face': {
+      drawClock(g, (2 / 12) * Math.PI * 2, (10.2 / 12) * Math.PI * 2);
+      break;
+    }
+    case 'Color wheel': {
+      const grad = g.createConicGradient(0, cx, cy);
+      for (let i = 0; i <= 12; i++) grad.addColorStop(i / 12, `hsl(${i * 30}, 100%, 50%)`);
+      g.fillStyle = grad; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+      const fade = g.createRadialGradient(cx, cy, 0, cx, cy, R);
+      fade.addColorStop(0, 'rgba(255,255,255,1)'); fade.addColorStop(0.35, 'rgba(255,255,255,0)');
+      g.fillStyle = fade; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+      break;
+    }
+    case 'Rainbow spiral': {
+      drawSpiral(g);
+      break;
+    }
+    case 'Checkerboard': {
+      const n = 10, s = SIZE / n;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        g.fillStyle = (i + j) % 2 ? '#000' : `hsl(${(i * 7 + j * 13) * 9}, 90%, 55%)`;
+        g.fillRect(i * s, j * s, s, s);
+      }
+      break;
+    }
+    case 'Text': {
+      g.fillStyle = '#00e5ff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const label = text || ' ';
+      let size = R * 0.6;
+      g.font = `900 ${size}px sans-serif`;
+      while (g.measureText(label).width > R * 1.5 && size > 10) { size *= 0.9; g.font = `900 ${size}px sans-serif`; }
+      g.fillText(label, cx, cy);
+      // Repeat the text around the rim, where POV resolution is best.
+      g.fillStyle = '#ff3df2'; g.font = `bold ${R * 0.13}px sans-serif`;
+      const ring = `${label} • `.repeat(Math.max(1, Math.floor(40 / (label.length + 3))));
+      const step = (Math.PI * 2) / ring.length;
+      for (let i = 0; i < ring.length; i++) {
+        const a = i * step - Math.PI / 2;
+        g.save(); g.translate(cx + Math.cos(a) * R * 0.86, cy + Math.sin(a) * R * 0.86); g.rotate(a + Math.PI / 2);
+        g.fillText(ring[i], 0, 0); g.restore();
+      }
+      break;
+    }
+    case 'Tumble dryer': { // a still of the drum: rainbow ribbons heaped at the bottom; the live simulation tumbles them
+      g.strokeStyle = 'rgb(217, 235, 255)'; g.lineWidth = R * 0.06;
+      g.beginPath(); g.arc(cx, cy, R * 0.97, 0, Math.PI * 2); g.stroke();
+      for (let i = 0; i < 6; i++) {
+        g.strokeStyle = `hsl(${i * 60}, 100%, 55%)`; g.lineWidth = R * 0.12;
+        const a = Math.PI / 2 + (i - 2.5) * 0.18;
+        g.beginPath(); g.arc(cx, cy, R * (0.85 - 0.08 * (i % 4)), a - 0.6, a + 0.6); g.stroke();
+      }
+      break;
+    }
+  }
+  return c;
+}
+
+/**
+ * Wide text laid out for the wheel-locked display: rainbow lines above and below the text,
+ * the whole block in the upper half of the wheel, clear of the dark hub. The text is centred
+ * between the lines and as large as the round wheel's width allows at that height.
+ */
+function wideTextWheel(text: string): HTMLCanvasElement {
+  const { c, g } = canvas();
+  const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
+  const at = (f: number) => cy - f * R; // canvas y for a height f·R above the hub
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, SIZE, SIZE);
+  const stripe = g.createLinearGradient(0, 0, SIZE, 0);
+  for (let i = 0; i <= 6; i++) stripe.addColorStop(i / 6, `hsl(${i * 60}, 100%, 50%)`);
+  g.fillStyle = stripe;
+  const lineH = 0.06 * R, low = 0.2, high = 0.8; // line centres, as fractions of R above the hub
+  g.fillRect(0, at(high) - lineH / 2, SIZE, lineH);
+  g.fillRect(0, at(low) - lineH / 2, SIZE, lineH);
+
+  const label = text || ' ';
+  const gap = 0.07; // clearance between text and lines (fraction of R)
+  const capTop = high - 0.03 - gap, capBottom = low + 0.03 + gap;
+  let size = ((capTop - capBottom) * R) / 0.72; // cap height ≈ 0.72 em
+  const fits = () => {
+    g.font = `900 ${size}px sans-serif`;
+    // The top of the text is the narrowest part of the wheel the text covers.
+    const top = capBottom + (0.72 * size) / R;
+    return g.measureText(label).width <= 2 * Math.sqrt(Math.max(0, 1 - top * top)) * R * 0.92;
+  };
+  while (!fits() && size > 10) size *= 0.95;
+  const capH = 0.72 * size, mid = (capTop + capBottom) / 2;
+  g.fillStyle = '#ffffff';
+  g.textAlign = 'center';
+  g.textBaseline = 'alphabetic';
+  g.fillText(label, cx, at(mid) + capH / 2);
+  return c;
+}
+
+/**
+ * Decoration for the lower half of a banner: coloured bands running along the road. Near the
+ * ground the LEDs barely move along the road, so they resolve little detail across it (and smear
+ * into bright cusps), but bands that don't change along the road still read cleanly.
+ */
+function bannerDecoration(g: CanvasRenderingContext2D, w: number, top: number, h: number) {
+  const bands = [[0.14, 0.1, 55], [0.36, 0.08, 46], [0.56, 0.06, 38], [0.74, 0.045, 30], [0.9, 0.035, 24]];
+  bands.forEach(([y, bandH, light], i) => {
+    const grad = g.createLinearGradient(0, 0, w, 0);
+    for (let k = 0; k <= 6; k++) grad.addColorStop(k / 6, `hsl(${k * 60 + i * 50}, 100%, ${light}%)`);
+    g.fillStyle = grad;
+    g.fillRect(0, top + y * h, w, bandH * h);
+  });
+}
+
+/**
+ * Lay out a picture for banner mode: fitted into the upper half, where the LEDs sweep along the
+ * road and resolve detail. The lower half is left dark for a pattern drawn around the voids.
+ */
+export function bannerTile(src: ImageSource): HTMLCanvasElement {
+  const H = SIZE, top = H * 0.04, contentH = H * 0.42;
+  const contentW = Math.max(1, Math.round((contentH * src.width) / src.height));
+  const { c, g } = canvas(Math.round(contentW + H * 0.25), H);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, c.width, H);
+  g.drawImage(src, (c.width - contentW) / 2, top, contentW, contentH);
+  return c;
+}
+
+/**
+ * A banner at least 4:1: a rainbow stripe and the text in the upper half, decoration in the lower
+ * half. Longer text makes a longer banner (up to 16:1), so the letters keep their full height.
+ */
+function wideText(text: string): HTMLCanvasElement {
+  const label = text || ' ';
+  const bandTop = SIZE * 0.12, bandBottom = SIZE * 0.46;
+  const fullSize = (bandBottom - bandTop) / 0.72; // cap height ≈ 0.72 em fills the band
+  const measure = canvas(1, 1).g;
+  measure.font = `900 ${fullSize}px sans-serif`;
+  // The tile fits the text plus half an em of space, so short text repeats often along the road.
+  const gap = 0.5 * fullSize;
+  const width = Math.round(Math.min(SIZE * 16, measure.measureText(label).width + gap));
+  const { c, g } = canvas(width, SIZE);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, c.width, c.height);
+  const stripe = g.createLinearGradient(0, 0, c.width, 0);
+  for (let i = 0; i <= 6; i++) stripe.addColorStop(i / 6, `hsl(${i * 60}, 100%, 50%)`);
+  g.fillStyle = stripe;
+  g.fillRect(0, 0, c.width, SIZE * 0.08);
+  bannerDecoration(g, c.width, SIZE / 2, SIZE / 2);
+  // Text sits in the top half, between the top stripe and the hub line.
+  g.fillStyle = '#ffffff';
+  g.textAlign = 'center';
+  g.textBaseline = 'alphabetic';
+  let size = fullSize;
+  g.font = `900 ${size}px sans-serif`;
+  while (g.measureText(label).width > c.width - gap && size > 10) { size *= 0.9; g.font = `900 ${size}px sans-serif`; }
+  g.fillText(label, c.width / 2, bandBottom - (bandBottom - bandTop - size * 0.72) / 2);
+  return c;
+}
+
+// Classic parametric heart outline (x in ±16, y down), used by the beating-heart pattern.
+const HEART: [number, number][] = Array.from({ length: 101 }, (_, k) => {
+  const a = (k / 100) * Math.PI * 2;
+  return [16 * Math.sin(a) ** 3, -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a))];
+});
+
+/** Smallest circle around the heart with its centre on the vertical axis (c = centre y). */
+const HEART_FIT = (() => {
+  let best = { c: 0, r: Infinity };
+  for (let c = -10; c <= 10; c += 0.02) {
+    const r = Math.max(...HEART.map(([x, y]) => Math.hypot(x, y - c)));
+    if (r < best.r) best = { c, r };
+  }
+  return best;
+})();
+
+// Lub-dub: a strong swell, then a smaller second beat. The heart fills the rim at its peak, so at
+// rest it is about 70% of that size.
+const heartBeat = (t: number) =>
+  1 + 0.4 * Math.max(Math.sin(t * Math.PI * 2), 0) ** 3 + 0.18 * Math.max(Math.sin(t * Math.PI * 2 - 1.2), 0) ** 3;
+const HEART_FRAMES = 16;
+const HEART_BEAT_MAX = Math.max(...Array.from({ length: HEART_FRAMES }, (_, i) => heartBeat(i / HEART_FRAMES)));
+
+const ANIMATED: Record<string, { frames: number; fps: number; draw: (g: CanvasRenderingContext2D, t: number, i: number) => void }> = {
+  // The hands spin in opposite directions, one full turn each per loop: minute hand anticlockwise,
+  // hour hand clockwise.
+  'Clock face': {
+    frames: 24, fps: 12,
+    draw: (g, t) => drawClock(g, (2 / 12 - t) * Math.PI * 2, (10.2 / 12 + t) * Math.PI * 2),
+  },
+  'Bouncing ball (animated)': {
+    frames: 24, fps: 12,
+    draw: (g, t) => {
+      const R = SIZE / 2;
+      const ball = R * 0.2;
+      const floor = R + R * 0.925; // inner edge of the blue rim at the bottom
+      const top = SIZE * 0.28;     // ball centre at the top of the bounce
+      const h = Math.abs(Math.sin(t * Math.PI));
+      const squash = 1 - 0.25 * Math.max(0, 1 - h * 6);
+      // While squashed the ball is in contact, so its bottom rests on the rim.
+      const y = squash < 1 ? floor - ball * squash : floor - ball - h * (floor - ball - top);
+      g.strokeStyle = '#3a7bff'; g.lineWidth = R * 0.05;
+      g.beginPath(); g.arc(R, R, R * 0.95, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#ff5a1f';
+      g.beginPath(); g.ellipse(R, y, ball / squash, ball * squash, 0, 0, Math.PI * 2); g.fill();
+    },
+  },
+  'Beating heart (animated)': {
+    frames: HEART_FRAMES, fps: 10,
+    draw: (g, t) => {
+      const R = SIZE / 2;
+      // Scale so the strongest beat just reaches the rim.
+      const s = (heartBeat(t) * R * 0.975) / (HEART_FIT.r * HEART_BEAT_MAX);
+      g.save(); g.translate(R, R); g.scale(s, s); g.translate(0, -HEART_FIT.c);
+      g.fillStyle = '#ff1f4b';
+      g.beginPath();
+      HEART.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
+      g.fill(); g.restore();
+    },
+  },
+  'Counter (animated)': {
+    frames: 10, fps: 2,
+    draw: (g, _t, i) => {
+      const R = SIZE / 2;
+      g.strokeStyle = '#00e5a0'; g.lineWidth = R * 0.06;
+      g.beginPath(); g.arc(R, R, R * 0.92, -Math.PI / 2, -Math.PI / 2 + ((i + 1) / 10) * Math.PI * 2); g.stroke();
+      g.fillStyle = '#fff'; g.font = `900 ${R * 1.1}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(i), R, R * 1.06);
+    },
+  },
+};
+
+/**
+ * Banner frames for the bouncing ball: it bounces on the deck of the truss-bridge lower half,
+ * flattening as it lands. The deck itself comes from that pattern; its top edge is DECK_TOP of the
+ * way down the banner (0.19 of the half height above the hub). With the picture riding with the
+ * bike, the ball stays over the hub while the bridge passes underneath.
+ */
+const DECK_TOP = 0.405;
+function ballBanner(frames: number, ridesWithBike: boolean): HTMLCanvasElement[] {
+  const H = SIZE, W = Math.round(H * 0.75), ball = H * 0.0825;
+  // Bounce as high as the LEDs reach. Riding with the bike, every point of the disc is swept each
+  // turn, so the ball can touch the top. Pinned to the road, the outer LEDs leave gaps above
+  // ~0.8 of their reach, so the bounce stays below that.
+  const floor = H * DECK_TOP, apex = H * (ridesWithBike ? 0.01 : 0.11) + ball, rest = floor - ball;
+  return Array.from({ length: frames }, (_, i) => {
+    const { c, g } = canvas(W, H);
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, W, H);
+    // Two bounces per loop under gravity: a parabola in time, squashed on the landing frame.
+    const u = ((2 * i) / frames) % 1;
+    const squash = u === 0 ? 0.7 : 1;
+    const y = u === 0 ? floor - ball * squash : rest - 4 * u * (1 - u) * (rest - apex);
+    g.fillStyle = '#ff5a1f';
+    g.beginPath();
+    g.ellipse(W / 2, y, ball / squash, ball * squash, 0, 0, Math.PI * 2);
+    g.fill();
+    // A light orange highlight towards the upper left, squashed with the ball.
+    g.fillStyle = '#ffa030';
+    g.beginPath();
+    g.ellipse(W / 2 - (0.35 * ball) / squash, y - 0.35 * ball * squash, (0.35 * ball) / squash, 0.35 * ball * squash, 0, 0, Math.PI * 2);
+    g.fill();
+    return c;
+  });
+}
+
+/**
+ * Built-in patterns as animations (stills have one frame). ridesWithBike: the banner picture is
+ * drawn around the hub rather than pinned to the road, which lets the bouncing ball go higher.
+ */
+export function makeAnimation(name: PatternName, text: string, ridesWithBike = false): Animation {
+  const anim = ANIMATED[name];
+  if (name === 'Wide text') {
+    const banner = wideText(text);
+    return { frames: [banner], fps: 1, wheelFrames: [wideTextWheel(text)], bannerFrames: [banner] };
+  }
+  // In banner mode, text goes in the upper half with decoration below, like wide text.
+  if (name === 'Text') return { frames: [makePattern(name, text)], fps: 1, bannerFrames: [wideText(text)] };
+  if (!anim) return { frames: [makePattern(name, text)], fps: 1 };
+  const frames: HTMLCanvasElement[] = [];
+  for (let i = 0; i < anim.frames; i++) {
+    const { c, g } = canvas();
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, SIZE, SIZE);
+    anim.draw(g, i / anim.frames, i);
+    frames.push(c);
+  }
+  // The wheel-locked ball stays inside its rim; on a banner it bounces on a bridge deck instead.
+  const bannerFrames = name === 'Bouncing ball (animated)' ? ballBanner(anim.frames, ridesWithBike) : undefined;
+  return { frames, fps: anim.fps, bannerFrames };
+}
+
+/** Copy a decoded frame onto a canvas no bigger than SIZE on its long side. */
+function snapshot(src: CanvasImageSource, w: number, h: number): HTMLCanvasElement {
+  const s = Math.min(1, SIZE / Math.max(w, h));
+  const { c, g } = canvas(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+  g.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+
+/**
+ * Load an image or a short clip. Animated GIF/WebP/APNG decode through WebCodecs'
+ * ImageDecoder where the browser has it (otherwise only the first frame is used); videos are
+ * sampled at `videoFps`. At most `maxFrames` frames are kept.
+ */
+export async function loadMedia(file: File, maxFrames: number, videoFps: number): Promise<Animation> {
+  if (file.type.startsWith('video/')) return loadVideo(file, maxFrames, videoFps);
+  const Decoder = (globalThis as { ImageDecoder?: any }).ImageDecoder;
+  if (Decoder && (await Decoder.isTypeSupported(file.type).catch(() => false))) {
+    const dec = new Decoder({ data: await file.arrayBuffer(), type: file.type });
+    await dec.tracks.ready;
+    const count = Math.max(1, Math.min(dec.tracks.selectedTrack?.frameCount ?? 1, maxFrames));
+    const frames: HTMLCanvasElement[] = [];
+    let totalUs = 0;
+    for (let i = 0; i < count; i++) {
+      const { image } = await dec.decode({ frameIndex: i });
+      frames.push(snapshot(image, image.displayWidth, image.displayHeight));
+      totalUs += image.duration ?? 0;
+      image.close();
+    }
+    dec.close();
+    const fps = totalUs > 0 ? (count * 1e6) / totalUs : 10;
+    return { frames, fps: Math.min(60, Math.max(0.5, fps)) };
+  }
+  return { frames: [await createImageBitmap(file)], fps: 1 };
+}
+
+async function loadVideo(file: File, maxFrames: number, fps: number): Promise<Animation> {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.muted = true;
+  v.playsInline = true;
+  v.preload = 'auto';
+  v.src = url;
+  const once = (ev: string) => new Promise<void>((resolve, reject) => {
+    v.addEventListener(ev, () => resolve(), { once: true });
+    v.addEventListener('error', () => reject(new Error('Could not decode video')), { once: true });
+  });
+  try {
+    await once('loadeddata');
+    const count = Math.max(1, Math.min(maxFrames, Math.floor((v.duration || 0) * fps)));
+    const frames: HTMLCanvasElement[] = [];
+    for (let i = 0; i < count; i++) {
+      const seeked = once('seeked');
+      v.currentTime = i / fps;
+      await seeked;
+      frames.push(snapshot(v, v.videoWidth, v.videoHeight));
+    }
+    return { frames, fps };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** A dark picture: image mode before a file is chosen, or when the stored file is gone. */
+export function blankAnimation(): Animation {
+  const { c, g } = canvas();
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, SIZE, SIZE);
+  return { frames: [c], fps: 1 };
+}
+
+/**
+ * Square copy for polar mapping: cropped to fill the square, or letterboxed whole, then scaled
+ * by zoom about the centre and moved right by x and up by y (shares of the square's size).
+ * Where the picture doesn't reach, edges fills in: dark, or a heavily blurred mirror tiling of
+ * the picture (flipped copies all around, so its edges continue softly into the rest of the wheel).
+ */
+export function squareImageData(src: ImageSource, crop = false, zoom = 1, x = 0, y = 0,
+  edges: 'dark' | 'mirror' = 'dark'): ImageData {
+  const { g } = canvas();
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, SIZE, SIZE);
+  const s = (crop ? Math.max : Math.min)(SIZE / src.width, SIZE / src.height) * zoom;
+  const w = src.width * s, h = src.height * s;
+  const left = (SIZE - w) / 2 + x * SIZE, top = (SIZE - h) / 2 - y * SIZE;
+  if (edges === 'mirror') {
+    // Tile at a small size, blur that heavily, then enlarge it smoothly. The blur is done here
+    // rather than with the canvas blur filter, which Safari lacks.
+    const k = 1 / 8, tiny = canvas(SIZE * k, SIZE * k), mid = canvas(SIZE / 2, SIZE / 2);
+    for (let i = Math.floor(-left / w); left + i * w < SIZE; i++) {
+      for (let j = Math.floor(-top / h); top + j * h < SIZE; j++) {
+        const fx = i % 2 !== 0, fy = j % 2 !== 0; // flipped in turn, so each edge meets its own mirror image
+        tiny.g.save();
+        tiny.g.translate((left + i * w + (fx ? w : 0)) * k, (top + j * h + (fy ? h : 0)) * k);
+        tiny.g.scale(fx ? -1 : 1, fy ? -1 : 1);
+        tiny.g.drawImage(src, 0, 0, w * k, h * k);
+        tiny.g.restore();
+      }
+    }
+    const px = tiny.g.getImageData(0, 0, tiny.c.width, tiny.c.height);
+    blur(px, Math.round(tiny.c.width / 10));
+    tiny.g.putImageData(px, 0, 0);
+    for (const t of [mid.g, g]) { t.imageSmoothingEnabled = true; t.imageSmoothingQuality = 'high'; }
+    mid.g.drawImage(tiny.c, 0, 0, SIZE / 2, SIZE / 2);
+    g.drawImage(mid.c, 0, 0, SIZE, SIZE);
+  }
+  g.drawImage(src, left, top, w, h);
+  return g.getImageData(0, 0, SIZE, SIZE);
+}
+
+/** Blur pixels in place: three passes of a box blur `radius` wide each way (close to a Gaussian). */
+function blur(img: ImageData, radius: number) {
+  const { data, width, height } = img, line = new Float32Array(Math.max(width, height) * 4);
+  const pass = (n: number, count: number, at: (line: number, i: number) => number) => {
+    for (let l = 0; l < count; l++) {
+      for (let i = 0; i < n; i++) for (let ch = 0; ch < 4; ch++) line[i * 4 + ch] = data[at(l, i) + ch];
+      for (let i = 0; i < n; i++) {
+        const lo = Math.max(0, i - radius), hi = Math.min(n - 1, i + radius);
+        for (let ch = 0; ch < 4; ch++) {
+          let sum = 0;
+          for (let j = lo; j <= hi; j++) sum += line[j * 4 + ch];
+          data[at(l, i) + ch] = sum / (hi - lo + 1);
+        }
+      }
+    }
+  };
+  for (let p = 0; p < 3; p++) {
+    pass(width, height, (y, x) => (y * width + x) * 4);
+    pass(height, width, (x, y) => (y * width + x) * 4);
+  }
+}
+
+/** Native-resolution copy (capped) for the Adafruit columns-as-angles mapping. */
+export function rawImageData(src: ImageSource): ImageData {
+  const s = Math.min(1, 1024 / src.width, 1024 / src.height);
+  const w = Math.max(1, Math.round(src.width * s)), h = Math.max(1, Math.round(src.height * s));
+  const { g } = canvas(w, h);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, w, h);
+  g.drawImage(src, 0, 0, w, h);
+  return g.getImageData(0, 0, w, h);
+}

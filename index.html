@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POV Wheel Simulator (pre-alpha)</title>
+    <style>
+      :root { color-scheme: dark; --panel: rgba(12, 14, 20, 0.82); --solid: #0e1118; --line: #262c3a; --text: #d8dde6; --muted: #8b93a3; --warn: #ffb547; --accent: #4aa3ff; --panel-w: min(380px, 100vw); }
+      html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; font: 12px/1.45 ui-sans-serif, system-ui, sans-serif; color: var(--text); }
+      button { font: inherit; color: var(--text); }
+      #app { position: fixed; inset: 0; }
+      #buffer { position: fixed; left: 12px; bottom: 190px; background: var(--panel); border-radius: 8px; padding: 8px; display: none; }
+      #buffer canvas { display: block; image-rendering: pixelated; width: 330px; height: 140px; }
+      #buffer div { color: var(--muted); margin-bottom: 4px; }
+      /* Roadside strip: a label over its corner, and it keeps drags from turning the main camera. */
+      #strip-frame { position: fixed; box-sizing: border-box; border-bottom: 1px solid var(--line); border-top: 1px solid var(--line); }
+      #strip-frame[hidden] { display: none; }
+      #strip-frame span { position: absolute; left: 8px; bottom: 6px; padding: 2px 8px; border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 12px; pointer-events: none; }
+      /* A destructive button armed by its first click; a second click within 4 s carries it out. */
+      body .armed, body .lil-gui .lil-controller.armed button { background: #6a1f2a !important; border-color: #b03a4a !important; color: #fff !important; }
+      #toast { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; box-sizing: border-box; max-width: min(520px, calc(100% - 32px)); padding: 10px 14px; border-radius: 10px; background: #3a1d24; border: 1px solid #a03a4a; font-size: 14px; }
+      #toast[hidden] { display: none; }
+      /* The guided tour: a ring round what a step is about (the rest dimmed), and its card. */
+      .tour-ring { position: fixed; z-index: 10; border: 2px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45); pointer-events: none; transition: left 0.15s, top 0.15s, width 0.15s, height 0.15s; }
+      .tour-card { position: fixed; z-index: 11; box-sizing: border-box; width: min(340px, calc(100vw - 16px)); padding: 14px 16px 12px; border-radius: 12px; background: var(--solid); border: 1px solid #3a4152; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); font-size: 14px; }
+      .tour-card[hidden], .tour-ring[hidden] { display: none; }
+      .tour-card h2 { margin: 2px 0 6px; font-size: 16px; }
+      .tour-card p { margin: 0 0 12px; color: var(--text); line-height: 1.5; }
+      .tour-card a { color: var(--accent); }
+      .tour-count { color: var(--muted); font-size: 12px; }
+      .tour-buttons { display: flex; gap: 6px; align-items: center; }
+      .tour-buttons span { flex: 1; }
+      .tour-buttons button { font-size: 14px; padding: 6px 12px; border-radius: 8px; border: 1px solid #3a4152; background: #1b2030; cursor: pointer; }
+      .tour-buttons button:hover:not(:disabled) { background: #262d42; }
+      .tour-buttons button:disabled { opacity: 0.4; cursor: default; }
+      .tour-buttons button.primary { border-color: #2f5d93; background: #1d3a5f; font-weight: 600; }
+      #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; font-size: 20px; background: rgba(0, 120, 255, 0.15); border: 3px dashed var(--accent); pointer-events: none; }
+
+      /* Ride panel: the preset's name, then the wheel's two buttons (Next, brightness), the speed, its slider and Auto. */
+      #ride { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); box-sizing: border-box; display: grid; gap: 6px; background: var(--panel); border-radius: 12px; padding: 8px 12px; backdrop-filter: blur(6px); user-select: none; transition: left 0.2s; }
+      #ride .row { display: flex; align-items: center; gap: 12px; }
+      #preset-name { max-width: 100%; min-width: 0; text-align: left; font: inherit; font-size: 14px; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #ride #preset-next { font-size: 13px; padding: 5px 12px; border-radius: 8px; border: 1px solid #2f5d93; background: #1d3a5f; font-weight: 600; cursor: pointer; white-space: nowrap; }
+      #ride #preset-next:hover { background: #24497a; }
+      #ride #bright { font-size: 13px; padding: 5px 10px; border-radius: 8px; border: 1px solid #3a4152; background: #1b2030; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      #ride #bright:hover { background: #262d42; }
+      #ride .auto { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+      #ride .auto input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+      #ride .speed { flex: none; white-space: nowrap; }
+      #ride-speed { display: inline-block; min-width: 2.3em; text-align: right; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+      #ride-unit { margin-left: 4px; font-size: 12px; color: var(--muted); }
+      #ride-slider { flex: 1 1 220px; min-width: 80px; height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+      #ride label { margin-left: 2px; font-size: 13px; display: flex; gap: 5px; align-items: center; cursor: pointer; white-space: nowrap; }
+      #ride input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+      /* A phone (an iPhone mini is 375 px across): the bar spans the screen and the slider gets a line of its own,
+         so Auto stays on screen. */
+      @media (max-width: 420px) {
+        #ride { bottom: calc(8px + env(safe-area-inset-bottom)); padding: 6px 8px; width: calc(100% - 16px); max-width: none; }
+        #ride .row { gap: 5px; flex-wrap: wrap; }
+        #ride button { padding: 5px 8px; }
+        #ride-slider { order: 1; flex: 1 1 100%; }
+        #ride .auto { margin-left: auto; }
+      }
+
+      /* Settings panel: a side panel on wide screens, a bottom sheet on phones. */
+      /* On the follow view, below the roadside strip when that's at the top (--view-top, set by main.ts). */
+      /* The app's stage, in the follow view's top-left corner: nothing it designs has been built yet. */
+      #stage { position: fixed; top: calc(var(--view-top, 0px) + 10px); left: 10px; z-index: 2; padding: 4px 9px; border-radius: 8px; border: 1px solid #7a5a1c; background: rgba(60, 40, 8, 0.85); color: var(--warn); font-size: 12px; font-weight: 600; letter-spacing: 0.02em; cursor: help; }
+      body.view-panels #stage, body.view-elec #stage { display: none; }
+      @media (max-width: 699px) { #stage { top: calc(var(--view-top, 0px) + 8px); left: 8px; } }
+      .pane .untested { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid #7a5a1c; background: rgba(60, 40, 8, 0.6); color: var(--warn); font-size: 13px; }
+      /* The top corner of the follow view: the tour and the settings. */
+      #corner { position: fixed; top: calc(var(--view-top, 0px) + 10px); right: 10px; z-index: 2; display: flex; gap: 6px; }
+      #corner button { padding: 9px 14px; font-size: 15px; border-radius: 10px; border: 1px solid #3a4152; background: var(--panel); backdrop-filter: blur(6px); cursor: pointer; }
+      #corner button:hover { background: #1b2030; }
+      #panel { position: fixed; top: 0; right: 0; bottom: 0; width: var(--panel-w); z-index: 3; display: flex; flex-direction: column; background: var(--solid); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4); transform: translateX(100%); visibility: hidden; transition: transform 0.2s, visibility 0.2s; }
+      body.panel-open #panel { transform: none; visibility: visible; }
+      body.panel-open #corner { display: none; }
+      body.panel-open #ride { left: calc((100% - var(--panel-w)) / 2); }
+      #panel header { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px 12px; }
+      #panel header button:not(#panel-close) { padding: 6px 10px; }
+      #panel header .label { color: var(--muted); font-size: 13px; margin-right: 2px; }
+      #setup-name { flex: 1 1 auto; min-width: 70px; width: 0; font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 8px; border: 1px solid #3a4152; background: #10131c; color: inherit; }
+      #setup-name:focus { outline: none; border-color: var(--accent); }
+      #panel header button, .preset-actions button { font-size: 14px; padding: 6px 12px; border-radius: 8px; border: 1px solid #3a4152; background: #1b2030; cursor: pointer; }
+      #panel header button:hover, .preset-actions button:hover { background: #262d42; }
+      #panel-close { margin-left: auto; padding: 6px 10px !important; }
+      #panel nav { display: flex; border-bottom: 1px solid var(--line); }
+      #panel nav button { flex: 1; padding: 10px 2px; font-size: 14px; white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; }
+      #panel nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+      .pane { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; }
+      #panel footer { flex: none; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; }
+      #panel footer a { color: var(--muted); text-decoration: none; }
+      #panel footer a:hover { color: inherit; text-decoration: underline; }
+      .pane[hidden] { display: none; }
+      .pane .hint { margin: 10px 12px 0; color: var(--muted); font-size: 13px; }
+      #preset-list { list-style: none; margin: 0; padding: 8px 8px 0; display: grid; gap: 4px; }
+      #preset-list li { display: flex; gap: 4px; }
+      #preset-list button { border-radius: 8px; border: 1px solid transparent; background: #161a24; cursor: pointer; font-size: 14px; padding: 7px 10px; }
+      #preset-list button:hover:not(:disabled) { background: #20263a; }
+      #preset-list button:disabled { opacity: 0.3; cursor: default; }
+      #preset-list .pick { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #preset-list .num { display: inline-block; width: 22px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      #preset-list li.active .pick { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
+      .preset-actions { display: flex; gap: 6px; padding: 8px; }
+      .preset-actions button:disabled { opacity: 0.4; cursor: default; }
+      .section { margin: 14px 12px 2px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+      #stats { padding: 12px; font-size: 13px; line-height: 1.4; }
+      #stats table { border-collapse: collapse; width: 100%; }
+      #stats td { padding: 2px 0; vertical-align: top; }
+      #stats td:first-child { color: var(--muted); white-space: nowrap; padding-right: 10px; }
+      #stats ul { margin: 8px 0 0; padding-left: 16px; color: var(--warn); }
+      #stats li { margin-bottom: 4px; }
+      @media (max-width: 699px) {
+        #panel { top: auto; left: 0; width: auto; height: 62dvh; border-left: 0; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4); transform: translateY(100%); }
+        body.panel-open #ride { display: none; }
+        #corner { top: calc(var(--view-top, 0px) + 8px); right: 8px; }
+        #corner button { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+      }
+      @media (pointer: coarse) {
+        #panel header button, .preset-actions button, #preset-list button, #ride button { min-height: 40px; }
+        #preset-list button:not(.pick) { min-width: 40px; }
+      }
+
+      /* Panels: the drawing takes the main area while the Panels tab is open; the ride and its views step aside. */
+      #panels-view { position: fixed; inset: 0; display: none; background: #0b0e15; touch-action: none; user-select: none; }
+      #panels-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      body.view-panels #panels-view { display: block; }
+      body.view-panels.panel-open #panels-view { right: var(--panel-w); }
+      body.view-panels #app, body.view-panels #ride, body.view-panels #strip-frame, body.view-panels #buffer { visibility: hidden; }
+      /* Electronics: its drawings take the main area the same way. */
+      #elec-view { position: fixed; inset: 0; display: none; background: #0b0e15; overflow: hidden; touch-action: none; user-select: none; }
+      body.view-elec #elec-view { display: block; }
+      body.view-elec.panel-open #elec-view { right: var(--panel-w); }
+      body.view-elec #app, body.view-elec #ride, body.view-elec #strip-frame, body.view-elec #buffer { visibility: hidden; }
+      .ev-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+      .ev-stage svg { display: block; }
+      .elec-pane ul.notes { margin: 8px 0 0; padding-left: 16px; color: var(--muted); }
+      .elec-pane ul.notes li { margin-top: 4px; }
+      .elec-pane .bom-group { margin: 12px 0 4px; font-weight: 600; }
+      .elec-pane .bom-group span { color: var(--muted); font-weight: 400; }
+      .elec-pane table.bom { border-collapse: collapse; width: 100%; }
+      .elec-pane .bom td { padding: 3px 0; vertical-align: top; border-top: 1px solid var(--line); }
+      .elec-pane .bom td.qty { width: 34px; color: var(--muted); }
+      .elec-pane .bom td.price { text-align: right; white-space: nowrap; padding-left: 8px; font-variant-numeric: tabular-nums; }
+      .elec-pane .bom .src { color: var(--muted); font-size: 12px; }
+      .elec-pane .bom a { color: var(--accent); text-decoration: none; }
+      .elec-pane .bom a:hover { text-decoration: underline; }
+      /* The drawing views' header: the bar, then the title and hint, stacked so a wrapped bar pushes them down. */
+      .pv-head { position: absolute; z-index: 1; top: 10px; left: 10px; right: 150px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+      body.panel-open .pv-head { right: 12px; }
+      .pv-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: auto; }
+      .pv-bar button { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #3a4152; background: var(--panel); cursor: pointer; white-space: nowrap; }
+      .pv-bar button:hover { background: #1b2030; }
+      .pv-bar button[aria-pressed="true"] { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
+      .pv-group { display: inline-flex; }
+      .pv-group[hidden] { display: none; }
+      .pv-group button { border-radius: 0; margin-left: -1px; }
+      .pv-group button:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
+      .pv-group button:last-child { border-radius: 0 8px 8px 0; }
+      .pv-readout, .pv-status { position: absolute; z-index: 1; left: 12px; pointer-events: none; }
+      .pv-title { padding: 2px 2px 0; font-size: 13px; font-weight: 600; }
+      .pv-hint { padding: 0 2px; color: var(--muted); }
+      .pv-readout { bottom: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .pv-status { top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 10px 14px; border-radius: 10px; background: var(--panel); font-size: 14px; }
+      .pv-status[hidden] { display: none; }
+      .pv-status.over { top: auto; bottom: 12px; transform: translateX(-50%); font-size: 13px; color: var(--muted); }
+      .panels-summary { padding: 4px 12px 0; font-size: 13px; }
+      .panels-summary .hint { margin: 8px 0 0; }
+      .panels-summary table.kv { border-collapse: collapse; width: 100%; margin-top: 8px; }
+      .panels-summary .kv td { padding: 2px 0; vertical-align: top; }
+      .panels-summary .kv td:first-child { color: var(--muted); white-space: nowrap; padding-right: 10px; }
+      .panels-summary ul.warn { margin: 8px 0 0; padding-left: 16px; color: var(--warn); }
+      .panels-summary .warn { color: var(--warn); }
+      .panels-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+      .panels-actions:empty { display: none; }
+      .panels-actions .order-note { flex-basis: 100%; margin: 2px 0 0; color: var(--text); }
+      .panels-summary button { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #3a4152; background: #1b2030; cursor: pointer; }
+      .panels-summary button:hover { background: #262d42; }
+      .panels-summary button.primary { background: #1d3a5f; border-color: #2f5d93; font-weight: 600; }
+      .panels-summary button.primary:hover { background: #24497a; }
+      @media (max-width: 699px) {
+        body.view-panels.panel-open #panels-view, body.view-elec.panel-open #elec-view { right: 0; bottom: 62dvh; }
+        .pv-head { right: 110px; }
+        .pv-bar button { padding: 5px 8px; font-size: 12px; }
+        .pv-title, .pv-hint { display: none; }
+      }
+
+      /* lil-gui inside the tabs: full width, no title bar of its own, larger text. 'body' outranks lil-gui's own rules. */
+      body .lil-gui { --font-size: 14px; --input-font-size: 14px; --widget-height: 26px; --padding: 6px; --spacing: 6px; --name-width: 60%; --background-color: transparent; --title-background-color: #161a24; }
+      body .pane .lil-gui.lil-root { --width: 100%; width: 100%; }
+      body .pane .lil-gui.lil-root > .lil-title { display: none; }
+      body .lil-gui .lil-gui > .lil-title { font-size: 14px; }
+      /* Numbers are typed (or dragged, or scrolled, in the box): the sliders are too short to set them with.
+         Strips per side, with only four values, keeps its slider. */
+      body .lil-gui .lil-controller.lil-number:not(.keep-slider) .lil-slider { display: none; }
+      body .lil-gui .lil-controller.lil-number.lil-has-slider:not(.keep-slider) input { width: 100%; min-width: 0; margin-left: 0; }
+      @media (pointer: coarse) { body .lil-gui { --input-font-size: 16px; } }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="buffer"><div>Firmware column buffer (x = column, y = strip/LED)</div><canvas></canvas></div>
+    <div id="strip-frame" hidden><span>Roadside</span></div>
+    <div id="ride">
+      <button id="preset-name" type="button" title="Edit presets">Preset</button>
+      <div class="row">
+        <button id="preset-next" type="button" title="The wheel's preset button: click for the next preset (N), double-click to toggle Auto">Next ▶</button>
+        <button id="bright" type="button" title="The wheel's brightness button: click to step 100 → 50 → 25 → 12 % (B), double-click to switch the wheel off or on">☀ 100%</button>
+        <span class="speed"><span id="ride-speed">0.0</span><span id="ride-unit">mph</span></span>
+        <input id="ride-slider" type="range" min="0" max="40" step="0.5" aria-label="Bicycle speed" />
+        <label class="auto" title="Ride stop-and-go through the city, and go to the next preset at each stop, when the lights go out"><input id="auto-next" type="checkbox" />Auto</label>
+      </div>
+    </div>
+    <div id="stage" title="Pre-alpha: nothing here has been built and tested yet. Check every part, dimension and wire before you build.">Pre-alpha · untested</div>
+    <div id="corner">
+      <button id="tour-start" type="button" title="A short guided tour of the app">? Tour</button>
+      <button id="panel-toggle" type="button" aria-controls="panel" aria-expanded="false">⚙️ Settings</button>
+    </div>
+    <aside id="panel" aria-label="Settings">
+      <header>
+        <span class="label">Setup</span>
+        <input id="setup-name" type="text" maxlength="60" spellcheck="false" aria-label="Setup name" title="The setup's name, which names its file" />
+        <button id="setup-reset" type="button" title="Start over with the default hardware, built-in presets and simulator settings">Reset</button>
+        <button id="setup-open" type="button" title="Open a setup file">Open</button>
+        <button id="setup-save" type="button" title="Download the hardware and presets as a setup file">Save</button>
+        <button id="panel-close" type="button" aria-label="Close settings">✕</button>
+      </header>
+      <nav role="tablist">
+        <button type="button" role="tab" data-tab="presets">Presets</button>
+        <button type="button" role="tab" data-tab="hardware">Hardware</button>
+        <button type="button" role="tab" data-tab="simulator">Simulator</button>
+        <button type="button" role="tab" data-tab="stats">Stats</button>
+        <button type="button" role="tab" data-tab="panels" title="The flat-cut panels that hold the strips on the hub">Panels</button>
+        <button type="button" role="tab" data-tab="electronics" title="Circuit, wiring, hub module and shopping list">Electronics</button>
+      </nav>
+      <div class="pane" data-pane="presets" role="tabpanel">
+        <ol id="preset-list"></ol>
+        <div class="preset-actions">
+          <button id="preset-add" type="button">＋ New preset</button>
+          <button id="preset-delete" type="button">Delete</button>
+        </div>
+        <div class="section">Selected preset</div>
+        <div class="gui"></div>
+      </div>
+      <div class="pane" data-pane="hardware" role="tabpanel">
+        <div class="gui"></div>
+      </div>
+      <div class="pane" data-pane="simulator" role="tabpanel">
+        <p class="hint">How the simulation looks and rides. Not part of the setup.</p>
+        <div class="gui"></div>
+      </div>
+      <div class="pane" data-pane="stats" role="tabpanel">
+        <div id="stats"></div>
+      </div>
+      <div class="pane" data-pane="panels" role="tabpanel">
+        <p class="untested">Pre-alpha: these panels haven't been cut and built yet. Print the reference DXF at 1:1 and check it on your wheel before you cut.</p>
+        <p class="hint">Two flat-cut panels lie on the spokes, one each side, zip-tied to them, and hold the strips. The wheel, hub and fork, the strips and where the LEDs sit come from the Hardware tab.</p>
+        <div class="panels-summary panels-actions"></div>
+        <div class="section">Panel build</div>
+        <div class="gui"></div>
+        <div class="section">Result</div>
+        <div class="panels-summary panels-result"></div>
+      </div>
+      <div class="pane elec-pane" data-pane="electronics" role="tabpanel">
+        <p class="untested">Pre-alpha: this circuit hasn't been built and tested yet. Check every part, pin and wire against its datasheet before you buy or build.</p>
+        <p class="hint">A Feather RP2350 in a module round the hub drives every strip; the left panel is wired to it and the right panel plugs in. Worked out from the Hardware and Panels settings.</p>
+        <div class="panels-summary panels-actions"></div>
+        <div class="section">Battery and hub</div>
+        <div class="gui"></div>
+        <div class="section">Result</div>
+        <div class="panels-summary elec-result"></div>
+        <div class="section">Shopping list</div>
+        <div class="panels-summary elec-shopping"></div>
+      </div>
+      <footer><a href="https://github.com/adamburr/pov-wheel-sim" target="_blank" rel="noopener">Source on GitHub ↗</a></footer>
+    </aside>
+    <div id="panels-view" aria-label="Panel drawing"></div>
+    <div id="elec-view" aria-label="Electronics drawings"></div>
+    <div id="toast" role="status" hidden></div>
+    <div id="drop">Drop an image, clip or setup file</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

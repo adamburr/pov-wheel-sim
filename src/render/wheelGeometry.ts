@@ -1,0 +1,184 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { LED, type Params } from '../params';
+import type { Derived } from '../sim/timing';
+import { ledRadius } from '../image/polarize';
+import { DIE_T, SPOKE_R, spokeZ, STRIP_T, stripTilt } from './povMaterial';
+
+const MAX_COPIES = 24;
+
+function colored(geo: THREE.BufferGeometry, hex: number): THREE.BufferGeometry {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  g.deleteAttribute('uv');
+  const c = new THREE.Color(hex);
+  const n = g.getAttribute('position').count;
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+
+/** A stick between two points, as a thin cylinder. */
+function rod(a: THREE.Vector3, b: THREE.Vector3, radius: number, segments = 5, capped = false): THREE.BufferGeometry {
+  const len = a.distanceTo(b);
+  const g = new THREE.CylinderGeometry(radius, radius, len, segments, 1, !capped);
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  g.applyQuaternion(q);
+  g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  return g;
+}
+
+/**
+ * The physical wheel. Rotating parts are drawn as several instanced copies spread over the
+ * exposure, which gives spokes and strips the same motion blur a camera would record.
+ */
+export class WheelModel {
+  readonly group = new THREE.Group();
+  private material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
+  // The fork and the round parts (tire, rim, hub) have their own material so they can stay
+  // solid (and hide what's behind them) while the spokes and strips are see-through blur copies.
+  private fixedMaterial = this.material.clone();
+  private rotating?: THREE.InstancedMesh;
+  private fixed?: THREE.InstancedMesh;
+  private key = '';
+  private m = new THREE.Matrix4();
+
+  build(p: Params, d: Derived) {
+    const key = [d.rimRadius, d.rimWallR, p.tireMm, p.spokes, p.stripCount, d.ledsPerStrip, d.rStart].join('|');
+    if (key === this.key) return;
+    this.key = key;
+    for (const mesh of [this.rotating, this.fixed]) {
+      if (!mesh) continue;
+      this.group.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.dispose();
+    }
+
+    const parts: THREE.BufferGeometry[] = [];
+    // Round parts look the same at every angle, so they need no blur copies and go with the fork.
+    // Blur copies can't write depth, which would let the rim paint over the tire in front of it.
+    const fixedParts: THREE.BufferGeometry[] = [];
+    const tireTube = p.tireMm / 2000;
+    fixedParts.push(colored(new THREE.TorusGeometry(d.rimRadius + tireTube, tireTube, 14, 96), 0x1b1b1d));
+    const rimInner = d.rimWallR;
+    const rimShape = new THREE.Shape();
+    rimShape.absarc(0, 0, d.rimRadius, 0, Math.PI * 2, false);
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, rimInner, 0, Math.PI * 2, true);
+    rimShape.holes.push(hole);
+    const rim = new THREE.ExtrudeGeometry(rimShape, { depth: 0.02, bevelEnabled: false, curveSegments: 96 });
+    rim.translate(0, 0, -0.01);
+    fixedParts.push(colored(rim, 0x8a8f98));
+
+    const hub = new THREE.CylinderGeometry(0.018, 0.018, 0.1, 20);
+    hub.rotateX(Math.PI / 2);
+    fixedParts.push(colored(hub, 0x9aa0a8));
+    for (const z of [-0.035, 0.035]) {
+      const flange = new THREE.CylinderGeometry(0.03, 0.03, 0.004, 24);
+      flange.rotateX(Math.PI / 2);
+      flange.translate(0, 0, z);
+      fixedParts.push(colored(flange, 0x9aa0a8));
+    }
+    // 3-cross lacing: rim holes alternate between flanges; on each flange spokes alternate leading
+    // and trailing, leaving the hub 4π·crosses/N from their rim hole, which keeps the hub holes
+    // evenly spaced. Low spoke counts can't fit three crosses, so they drop to 2- or 1-cross.
+    const crosses = Math.max(1, Math.min(3, Math.floor(p.spokes / 8)));
+    const hubOffset = (4 * Math.PI * crosses) / p.spokes;
+    for (let i = 0; i < p.spokes; i++) {
+      const a = (i / p.spokes) * Math.PI * 2;
+      const z = i % 2 ? 0.035 : -0.035;
+      const ha = a + (Math.floor(i / 2) % 2 ? -hubOffset : hubOffset);
+      const from = new THREE.Vector3(Math.cos(ha) * 0.028, Math.sin(ha) * 0.028, z);
+      const to = new THREE.Vector3(Math.cos(a) * rimInner, Math.sin(a) * rimInner, 0);
+      parts.push(colored(rod(from, to, 0.001), 0xb8bcc4));
+    }
+
+    // LED strips: strip s points at clockwise angle 2πs/N (matching the shader's convention).
+    // Each lies radially on top of the spokes, starting at the hub flange and tilting in toward
+    // the rim like the spokes beneath it.
+    const tilt = stripTilt(d);
+    for (let s = 0; s < p.stripCount; s++) {
+      const a = -(s / p.stripCount) * Math.PI * 2;
+      for (const side of [1, -1]) {
+        const r0 = d.rStart - 0.005, r1 = d.rEnd + 0.005, rMid = (r0 + r1) / 2;
+        const strip = new THREE.BoxGeometry((r1 - r0) / Math.cos(tilt), 0.012, STRIP_T);
+        strip.rotateY(side * tilt);
+        strip.translate(rMid, 0, side * (spokeZ(d, rMid) + SPOKE_R + STRIP_T / 2));
+        strip.rotateZ(a);
+        parts.push(colored(strip, 0x111114));
+        for (let k = 0; k < d.ledsPerStrip; k++) {
+          const r = ledRadius(d, k);
+          const die = new THREE.BoxGeometry(LED.dieMm / 1000, LED.dieMm / 1000, DIE_T);
+          die.rotateY(side * tilt);
+          die.translate(r, 0, side * (spokeZ(d, r) + SPOKE_R + STRIP_T + DIE_T / 2));
+          die.rotateZ(a);
+          parts.push(colored(die, 0xe8e4d8));
+        }
+      }
+    }
+    const rotGeo = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)));
+    this.rotating = new THREE.InstancedMesh(rotGeo, this.material, MAX_COPIES);
+
+    // Fork: it translates with the bike but does not spin. The hall magnet sits hidden behind it
+    // and the electronics behind the spokes, so neither is drawn.
+    // Typical road geometry: the steering axis leans back at 73° from horizontal and passes 45 mm
+    // behind the axle (fork offset). The crown sits on that axis at the axle-to-crown length.
+    const head = (73 * Math.PI) / 180, offset = 0.045, axleToCrown = d.tireRadius + 0.03;
+    const up = new THREE.Vector2(-Math.cos(head), Math.sin(head));     // along the steering axis
+    const fwd = new THREE.Vector2(Math.sin(head), Math.cos(head));     // perpendicular, forward
+    const onAxis = fwd.clone().multiplyScalar(-offset);                // axis point nearest the axle
+    const along = -onAxis.dot(up) + Math.sqrt(onAxis.dot(up) ** 2 - onAxis.lengthSq() + axleToCrown ** 2);
+    const crown = onAxis.clone().addScaledVector(up, along);
+    // Crown: a capped tube across the top of the legs, its underside at the axle-to-crown point.
+    // The legs end on its axis, inside the tube, so the joint is closed from every angle.
+    const crownR = 0.01;
+    const crownAxis = crown.clone().addScaledVector(up, crownR);
+    fixedParts.push(colored(rod(new THREE.Vector3(crownAxis.x, crownAxis.y, -0.054), new THREE.Vector3(crownAxis.x, crownAxis.y, 0.054), crownR, 16, true), 0x3a5a8a));
+    const legTop = crownAxis;
+    for (const z of [-0.055, 0.055]) {
+      fixedParts.push(colored(rod(new THREE.Vector3(0, 0, z), new THREE.Vector3(legTop.x, legTop.y, z * 0.8), 0.008, 12, true), 0x3a5a8a));
+    }
+    const fixedGeo = mergeGeometries(fixedParts.map((g) => (g.index ? g.toNonIndexed() : g)));
+    this.fixed = new THREE.InstancedMesh(fixedGeo, this.fixedMaterial, MAX_COPIES);
+    this.group.add(this.rotating, this.fixed);
+  }
+
+  /** Lay out blur copies at evenly spaced times across the exposure. */
+  pose(times: number[], angleAt: (t: number) => number, hubAt: (t: number) => number) {
+    if (!this.rotating || !this.fixed) return;
+    const k = Math.min(times.length, MAX_COPIES);
+    const pos = new THREE.Vector3(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
+    const z = new THREE.Vector3(0, 0, 1);
+    for (let i = 0; i < k; i++) {
+      pos.set(hubAt(times[i]), 0, 0);
+      q.setFromAxisAngle(z, -angleAt(times[i]));
+      this.rotating.setMatrixAt(i, this.m.compose(pos, q, one));
+      q.identity();
+      this.fixed.setMatrixAt(i, this.m.compose(pos, q, one));
+    }
+    // The fixed parts only need blur copies when they move during the exposure (ride-by). Otherwise
+    // one solid copy is exact, and it writes depth so the spokes and LED light behind it are hidden.
+    const hub0 = hubAt(times[0]);
+    const moves = times.slice(0, k).some((t) => Math.abs(hubAt(t) - hub0) > 1e-4);
+    const fixedCopies = moves ? k : 1;
+    this.rotating.count = k;
+    this.fixed.count = fixedCopies;
+    this.rotating.instanceMatrix.needsUpdate = this.fixed.instanceMatrix.needsUpdate = true;
+    setBlur(this.material, k);
+    setBlur(this.fixedMaterial, fixedCopies);
+  }
+}
+
+/**
+ * k overlapping copies at alpha a stack to 1-(1-a)^k; pick a so full overlap is ~opaque.
+ * Blurred copies can't write depth, or they would hide each other.
+ */
+function setBlur(material: THREE.Material, k: number) {
+  const blur = k > 1;
+  if (material.transparent !== blur) {
+    material.transparent = blur;
+    material.depthWrite = !blur;
+    material.needsUpdate = true;
+  }
+  material.opacity = blur ? 1 - Math.pow(0.03, 1 / k) : 1;
+}
