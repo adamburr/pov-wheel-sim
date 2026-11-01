@@ -32,7 +32,7 @@ These are all renders from the simulator, starting from the Water preset and the
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/dryer-ride.jpg" alt="Colourful ribbons tumbling up the rear side of the wheel"><br><sub><b>Tumble dryer preset,</b> 12 mph, 1/4 s: the paddles carry the ribbons up the rear side of the drum until they fall back, the nearer ribbons covering the ones behind.</sub></td>
-    <td width="50%"><img src="docs/images/soup-preset.jpg" alt="A photo of a cat cropped to fill the wheel"><br><sub><b>Soup preset,</b> 15 mph, 1/2 s: your own picture (here the author's photo of a cat, from <code>media/</code>), zoomed out and moved so the hub sits on its chest, with the whole cat in view; a heavily blurred mirror of the photo fills the rest of the wheel.</sub></td>
+    <td width="50%"><img src="docs/images/soup-preset.jpg" alt="A photo of a cat cropped to fill the wheel"><br><sub><b>Soup preset,</b> 15 mph, 1/2 s: your own picture (here the author's photo of a cat, from <code>media/</code>), zoomed to 125% with its chin just above the hub; a heavily blurred mirror of the photo fills the rest of the wheel.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/shutter-1-30.jpg" alt="Three wedges at a 1/30 s shutter"><br><sub><b>1/30 s photo</b> at 10 mph: each of the 3 strips sweeps only 25°.</sub></td>
