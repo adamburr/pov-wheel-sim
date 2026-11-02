@@ -159,7 +159,7 @@ class Pen {
 // ---------------------------------------------------------------- circuit
 function circuit(e: Electronics): Sheet {
   const g = new Pen();
-  const W = 1860;
+  const W = 2480;
 
   // ---- Power (left column) ----
   g.heading(20, 30, 'POWER');
@@ -344,21 +344,46 @@ function circuit(e: Electronics): Sheet {
 
   // ---- Connectors and panels (right column) ----
   const cx = 1530;
-  g.heading(cx, 30, 'LEFT PANEL (J2, Weipu SP21 15-pin)');
+  g.heading(cx, 30, 'LEFT CONNECTOR (J2, Weipu SP21 15-pin)');
   g.block(cx + 40, 50, 150, 'J2  socket', 'module side, female', e.leftConnector.map((q) => [`pin ${q.n}`, q.net]), [], { stub: 30, pitch: 20 });
-  y = 50 + 44 + e.leftConnector.length * 20 + 20;
-  g.text(cx, y, `Strips 1–${e.n}: 5V ← +5V_L, GND, CI ← CLK_L5, DI ← L#_5`, { size: 11, fill: C.muted });
-  g.text(cx, y + 16, `Hall H1–H${e.halls}: VDD ← HALL_V, GND ← HALL_GND, OUT → HALL#`, { size: 11, fill: C.muted });
-  g.text(cx, y + 32, '100 nF across each sensor; 470 µF at the 5 V star', { size: 11, fill: C.muted });
-  y += 66;
+  y = 50 + 44 + e.leftConnector.length * 20 + 40;
   // the right panel
-  g.heading(cx, y, 'RIGHT PANEL (J1, Weipu SP13 9-pin)');
+  g.heading(cx, y, 'RIGHT CONNECTOR (J1, Weipu SP13 9-pin)');
   g.block(cx + 40, y + 20, 150, 'J1  socket', 'module side, female', e.connector.map((q) => [`pin ${q.n}`, q.net]), [], { stub: 30, pitch: 20 });
   y += 20 + 44 + e.connector.length * 20 + 20;
-  g.text(cx, y, `Strips 1–${e.n}: 5V ← +5V_R, GND, CI ← CLK_R5, DI ← R#_5`, { size: 11, fill: C.muted });
-  g.text(cx, y + 16, 'Charging lead: USB-C VBUS → pins 1–2, GND → pins 3–4', { size: 11, fill: C.muted });
-  y += 40;
-  const H = Math.max(powerBottom, y + 40, by + 150);
+  g.text(cx, y, 'Charging lead: USB-C VBUS → pins 1–2, GND → pins 3–4', { size: 11, fill: C.muted });
+  y += 24;
+
+  // ---- The panels: each panel's strips (and the left's hall sensors) are alike, so each is drawn once, with its count ----
+  const px = 1900;
+  const span = (pre: string, post: string, k: number) => (k > 1 ? `${pre}1${post}–${pre}${k}${post}` : `${pre}1${post}`);
+  let py = 30;
+  const panel = (side: 'L' | 'R', title: string) => {
+    g.heading(px, py, title);
+    py += 20;
+    const strip = g.block(px + 100, py, 150, e.n > 1 ? `Strips 1–${e.n}` : 'Strip 1', `${e.n > 1 ? `× ${e.n}, ` : ''}${e.leds} SK9822${e.n > 1 ? ' each' : ''}`,
+      [['5V', `+5V_${side}`], ['GND', 'GND'], ['CI', `CLK_${side}5`], ['DI', span(side, '_5', e.n)]], [], { stub: 30, pitch: 20 });
+    g.text(px + 175, py + strip.h + 14, e.n > 1 ? 'strip k\'s DI on its own lane; tip ends open' : 'tip end open', { size: 10, fill: C.muted, anchor: 'middle' });
+    if (side === 'L') {
+      const hx = px + 400;
+      g.block(hx, py, 120, span('H', '', e.halls), `${e.halls > 1 ? `× ${e.halls}, ` : ''}US5881 hall`, [['VDD', 'HALL_V'], ['GND', 'HALL_GND'], ['OUT', span('HALL', '', e.halls)]], [], { stub: 30, pitch: 20 });
+      g.text(hx + 60, py + 44 + 3 * 20 + 26, `100 nF across VDD–GND${e.halls > 1 ? ' at each' : ''}`, { size: 10, fill: C.muted, anchor: 'middle' });
+    } else {
+      g.text(px + 300, py + 52, 'no hall sensors on this side', { size: 11, fill: C.muted });
+    }
+    py += strip.h + 44;
+    // the 470 µF at the panel's 5 V star, where the harness meets the strips
+    g.net(px + 60, py, `+5V_${side}`, 'end');
+    g.line([[px + 60, py], [px + 80, py]], { stroke: C.power });
+    g.cap(px + 80, py, '470 µF, low ESR, at the 5 V star');
+    g.gnd(px + 80, py + 30);
+    py += 76;
+  };
+  panel('L', 'LEFT PANEL (through J2)');
+  panel('R', 'RIGHT PANEL (through J1)');
+  g.text(px, py, 'Each strip is cut from its input end, and its own wires run to its panel\'s star.', { size: 11, fill: C.muted });
+  py += 30;
+  const H = Math.max(powerBottom, y + 40, by + 150, py);
   return { svg: g.svg(W, H), w: W, h: H };
 }
 

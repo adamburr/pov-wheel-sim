@@ -106,9 +106,9 @@ One platform: an Adafruit Feather RP2350 (8 MB PSRAM) in a module on the hub she
 
 The **Electronics** tab works all of this out from the build (strips per side, LEDs per strip, spokes, hub). It lists the power budget and a **shopping list** (on screen and as CSV), and draws four sheets. [docs/electronics.md](docs/electronics.md) has the design notes.
 
-The **Circuit** sheet shows the power path, the on/off latch, the controller's pins, the level shifters, the buttons and both panels' connections:
+The **Circuit** sheet shows the power path, the on/off latch, the controller's pins, the level shifters, the buttons, both panel connectors, and each panel's strips and hall sensors (alike ones drawn once, with their count):
 
-![Circuit sheet: battery, protection, fuse, boost and charger; the on/off latch; the Feather's pin map with the data lanes on GPIO0–7; hall and button inputs; the 74AHCT125 level shifters; both panel connectors' pins](docs/images/electronics-circuit.png)
+![Circuit sheet: battery, protection, fuse, boost and charger; the on/off latch; the Feather's pin map with the data lanes on GPIO0–7; hall and button inputs; the 74AHCT125 level shifters; both panel connectors' pins; each panel's strips, hall sensors and 5 V capacitor](docs/images/electronics-circuit.png)
 
 The **Wiring** sheet shows the left panel's harness, the hub module's layers, the right panel's plug-in connector and the charging lead, with every wire's colour and gauge:
 
