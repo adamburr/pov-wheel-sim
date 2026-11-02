@@ -102,17 +102,17 @@ One platform: an Adafruit Feather RP2350 (8 MB PSRAM) in a module on the hub she
 - **Sensors:** a hall sensor per strip sits on the left panel.
 - **Power:** two 18650 cells feed a 5 V boost converter, which the firmware turns off when the wheel stops.
 - **Controls:** two sealed buttons in the electronics box's lid choose the preset and the brightness, as the ride bar's **Next ▶** and **☀** do in the simulator. A double click on the brightness button, which is wired into the power latch, switches the wheel off or on.
-- **Connections:** the left panel is wired straight to the module. The right panel plugs in through a 9-pin IP68 connector (Weipu SP13), which also takes a USB-C charging lead when the right panel is off.
+- **Connections:** both panels plug in, so the module comes off for service with the panels left on the wheel. The left panel uses a 15-pin IP68 connector (Weipu SP21), which also carries the hall sensors. The right panel uses a 9-pin one (Weipu SP13), which also takes a USB-C charging lead when the right panel is off.
 
 The **Electronics** tab works all of this out from the build (strips per side, LEDs per strip, spokes, hub). It lists the power budget and a **shopping list** (on screen and as CSV), and draws four sheets. [docs/electronics.md](docs/electronics.md) has the design notes.
 
 The **Circuit** sheet shows the power path, the on/off latch, the controller's pins, the level shifters, the buttons and both panels' connections:
 
-![Circuit sheet: battery, protection, fuse, boost and charger; the on/off latch; the Feather's pin map with the data lanes on GPIO0–7; hall and button inputs; the 74AHCT125 level shifters; the left harness and the right connector's pins](docs/images/electronics-circuit.png)
+![Circuit sheet: battery, protection, fuse, boost and charger; the on/off latch; the Feather's pin map with the data lanes on GPIO0–7; hall and button inputs; the 74AHCT125 level shifters; both panel connectors' pins](docs/images/electronics-circuit.png)
 
 The **Wiring** sheet shows the left panel's harness, the hub module's layers, the right panel's plug-in connector and the charging lead, with every wire's colour and gauge:
 
-![Wiring sheet: the left panel's harness into the hub module, the logic, power board and battery pack in their bracket, the 9-pin connector to the right panel, the USB-C charging lead, and the harness and connector pin tables](docs/images/electronics-wiring.png)
+![Wiring sheet: the left panel's harness through its 15-pin connector into the hub module, the logic, power board and battery pack in their bracket, the 9-pin connector to the right panel, the USB-C charging lead, and the harness and both connectors' pin tables](docs/images/electronics-wiring.png)
 
 The **Hub module** sheet shows the module to scale. It is one stack on one side of the hub shell: the battery pack, then the electronics box, in a 3D-printed bracket tied to the shell. A hook-and-loop strap holds the pack and box, so they come off easily. The sheet checks the stack's fit between the spoke cones, and adds up the module, the connector and the valve to work out the rim weight that balances them (10.5 g on the default wheel):
 

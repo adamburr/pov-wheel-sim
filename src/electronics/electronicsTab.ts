@@ -41,10 +41,12 @@ export function buildElectronicsTab(p: Params, pane: HTMLElement, onChange: (key
       ['Battery', `${p.cells} × 18650 (1S${p.cells}P), ${w.ah} Ah · ${w.battA} A at the limit (${w.perCellA} A a cell) · ≥ ${w.runtimeAtCapH} h even at the limit`],
       ['Charging', `~${w.chargeA} A through J1 with the right panel off: ~${w.chargeH} h from empty`],
       ['Right connector', `Weipu SP13 9-pin, IP68: ${w.perSideA} A on two 5 V contacts (${w.perPinA} A each, rated 3 A)`],
+      ['Left connector', `Weipu SP21 15-pin, IP68 (J2): the strips and hall sensors, ${w.perSideA} A on two 5 V contacts (rated 5 A each)`],
+      ['Service', 'undo the strap and unplug J1 and J2: the module comes off, both panels stay on the wheel'],
       ['On/off', 'double-click the brightness button; the firmware also turns off after a while stopped'],
       ['Hub module', `one stack in a printed bracket on a Ø${2 * e.hub.shellR} mm shell: ${e.hub.moduleG} g, centre ${e.hub.moduleR} mm out`],
       ['Balance', `${e.hub.counterweight.massG} g on the rim's inner face ${e.hub.counterweight.angleDeg === 180 ? 'opposite the '
-        + 'module' : 'on the module\'s side'} (module opposite the ${e.n === 1 ? 'blades, valve' : 'valve'} and J1)`],
+        + 'module' : 'on the module\'s side'} (module opposite the ${e.n === 1 ? 'blades, valve' : 'valve'}, J1 and J2)`],
       ['Strips idle', `${w.idleMa} mA with the LEDs dark: the firmware turns the boost off when stopped`],
     ];
     summary.innerHTML = `

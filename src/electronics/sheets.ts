@@ -344,9 +344,9 @@ function circuit(e: Electronics): Sheet {
 
   // ---- Connectors and panels (right column) ----
   const cx = 1530;
-  g.heading(cx, 30, 'LEFT PANEL (J2, wired)');
-  g.block(cx + 40, 50, 150, 'J2  harness', `${e.leftHarness.length} wires`, e.leftHarness.map((w) => [w.net.replace('_5', ''), w.net]), [], { stub: 30, pitch: 20 });
-  y = 50 + 44 + e.leftHarness.length * 20 + 20;
+  g.heading(cx, 30, 'LEFT PANEL (J2, Weipu SP21 15-pin)');
+  g.block(cx + 40, 50, 150, 'J2  socket', 'module side, female', e.leftConnector.map((q) => [`pin ${q.n}`, q.net]), [], { stub: 30, pitch: 20 });
+  y = 50 + 44 + e.leftConnector.length * 20 + 20;
   g.text(cx, y, `Strips 1–${e.n}: 5V ← +5V_L, GND, CI ← CLK_L5, DI ← L#_5`, { size: 11, fill: C.muted });
   g.text(cx, y + 16, `Hall H1–H${e.halls}: VDD ← HALL_V, GND ← HALL_GND, OUT → HALL#`, { size: 11, fill: C.muted });
   g.text(cx, y + 32, '100 nF across each sensor; 470 µF at the 5 V star', { size: 11, fill: C.muted });
@@ -386,10 +386,19 @@ function wiring(e: Electronics): Sheet {
     }
   }
   g.text(40, 395, '5 V star + 470 µF at the wire slot; hall leads 100 nF', { size: 11, fill: C.muted });
-  // left harness
-  wireRun(320, 560, 120, e.leftHarness);
-  g.text(440, 108, `J2 harness, ${e.leftHarness.length} wires, hard-wired`, { size: 12, anchor: 'middle', weight: 600 });
-  g.text(440, 128 + e.leftHarness.length * 7 + 14, 'out through the wire slot, between the left spokes', { size: 11, anchor: 'middle', fill: C.muted });
+  // left harness, through the J2 pair: the panel's plug, then the module's socket
+  const lh = e.leftHarness.length * 7 + 22;
+  wireRun(320, 372, 120, e.leftHarness);
+  wireRun(508, 560, 120, e.leftHarness);
+  g.rect(372, 106, 64, lh, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
+  g.text(404, 106 + lh / 2 - 4, 'P3', { anchor: 'middle', weight: 700 });
+  g.text(404, 106 + lh / 2 + 12, 'plug ♂', { anchor: 'middle', size: 10, fill: C.muted });
+  g.rect(440, 106, 64, lh, { fill: '#2a2f3b', stroke: C.ink, r: 10 });
+  g.text(472, 106 + lh / 2 - 4, 'J2', { anchor: 'middle', weight: 700 });
+  g.text(472, 106 + lh / 2 + 12, 'socket ♀', { anchor: 'middle', size: 10, fill: C.muted });
+  g.text(440, 94, `${e.leftHarness.length} wires, plugged in`, { size: 12, anchor: 'middle', weight: 600 });
+  g.text(440, 106 + lh + 18, 'Weipu SP21 15-pin, IP68,', { size: 11, anchor: 'middle', fill: C.muted });
+  g.text(440, 106 + lh + 34, 'tied to a left spoke', { size: 11, anchor: 'middle', fill: C.muted });
 
   // hub module
   g.heading(560, 30, 'HUB MODULE (one stack, in a printed bracket)');
@@ -466,23 +475,28 @@ function wiring(e: Electronics): Sheet {
   g.text(1010, 566, 'VBUS → pins 1 + 2, GND → pins 3 + 4. Charge with the wheel switched off: ~1 A.', { size: 11, fill: C.muted });
 
   // wire table
-  const ty = 580;
-  g.heading(20, ty, 'J2 LEFT HARNESS');
+  const ty = 600;
+  g.heading(20, ty, 'LEFT HARNESS (through J2)');
   e.leftHarness.forEach((w, i) => {
     const y = ty + 22 + i * 17;
     g.line([[20, y - 4], [44, y - 4]], { stroke: WIRE[w.colour] ?? C.muted, w: 5 });
     g.text(52, y, `${w.net}`, { size: 11, fill: netColour(w.net), weight: 600 });
     g.text(130, y, `${w.awg} AWG ${w.colour} · ${w.use}`, { size: 11, fill: C.muted });
   });
-  // the right panel
-  g.heading(560, ty, 'J1 PINS');
-  e.connector.forEach((q, i) => {
-    const y = ty + 22 + i * 17;
-    g.text(560, y, `${q.n}`, { size: 11, weight: 700 });
-    g.text(580, y, q.net, { size: 11, fill: netColour(q.net), weight: 600 });
-    g.text(650, y, q.use, { size: 11, fill: C.muted });
-  });
-  return { svg: g.svg(W, Math.max(H, ty + 30 + e.leftHarness.length * 17)), w: W, h: Math.max(H, ty + 30 + e.leftHarness.length * 17) };
+  // the two connectors' pins
+  const pinTable = (x: number, title: string, pins: Electronics['connector']) => {
+    g.heading(x, ty, title);
+    pins.forEach((q, i) => {
+      const y = ty + 22 + i * 17;
+      g.text(x, y, `${q.n}`, { size: 11, weight: 700 });
+      g.text(x + 22, y, q.net, { size: 11, fill: netColour(q.net), weight: 600 });
+      g.text(x + 92, y, q.use, { size: 11, fill: C.muted });
+    });
+  };
+  pinTable(560, 'J2 PINS (left)', e.leftConnector);
+  pinTable(1010, 'J1 PINS (right)', e.connector);
+  const rows = Math.max(e.leftHarness.length, e.leftConnector.length);
+  return { svg: g.svg(W, Math.max(H, ty + 30 + rows * 17)), w: W, h: Math.max(H, ty + 30 + rows * 17) };
 }
 
 // ---------------------------------------------------------------- hub module
@@ -581,7 +595,7 @@ function hub(e: Electronics, spokes: number): Sheet {
   }
   const tz = top.axial / 2;
   g.line([Q(-tz, outerR - 6), Q(-h.flangeZ * 0.8, outerR + 2), Q(-h.flangeZ - 8, outerR + 8)], { stroke: C.data, w: 2.5 });
-  g.text(Q(-h.flangeZ - 10, 0)[0], Q(0, outerR + 12)[1], 'J2 → left panel', { size: 11, fill: C.data, anchor: 'end' });
+  g.text(Q(-h.flangeZ - 10, 0)[0], Q(0, outerR + 12)[1], 'J2 pigtail → left panel', { size: 11, fill: C.data, anchor: 'end' });
   // the right panel
   const j = Q(h.flangeZ + 10, -70);
   g.line([Q(tz, outerR - 6), Q(h.flangeZ * 0.7, outerR - 6), Q(h.flangeZ * 0.7, -40), [j[0], j[1]]], { stroke: C.data, w: 2.5, dash: '6 4' });
@@ -609,7 +623,14 @@ function hub(e: Electronics, spokes: number): Sheet {
   };
   const [mod, ...rest] = h.masses;
   mark(mod.r, mod.angleDeg, C.data, `module ${mod.massG} g`, 6);
-  for (const q of rest) mark(q.r, q.angleDeg, C.muted, `${q.name} ${q.massG} g`, 4, q.r > 200 ? 'middle' : 'start');
+  // masses at the same spot (the two connector pairs) share one mark
+  const spots = new Map<string, typeof rest>();
+  for (const q of rest) spots.set(`${q.r}|${q.angleDeg}`, [...(spots.get(`${q.r}|${q.angleDeg}`) ?? []), q]);
+  for (const qs of spots.values()) {
+    const label = qs.length > 1 ? `${qs.map((q) => q.name.split(' ')[0]).join(' + ')} connector pairs ${qs.reduce((m, q) => m + q.massG, 0)} g`
+      : `${qs[0].name} ${qs[0].massG} g`;
+    mark(qs[0].r, qs[0].angleDeg, C.muted, label, 4, qs[0].r > 200 ? 'middle' : 'start');
+  }
   const cw = h.counterweight;
   const [cwx, cwy] = at(cw.r, cw.angleDeg + 10);
   g.circle(cwx, cwy, 7, { fill: C.ok });

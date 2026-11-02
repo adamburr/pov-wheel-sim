@@ -3,9 +3,10 @@
 // shifters. The hub module is one stack on one side of the hub shell, between the flanges, held by a
 // few zip ties so it goes on and comes off in one piece: a battery pack (18650 cells) on a saddle that
 // sits on the shell, and an electronics box on top (power board, then the Feather on its carrier). A
-// weight on the rim opposite balances it. The left panel is wired straight to it; the right panel
-// plugs in through a waterproof 9-pin connector, which also takes the charging lead when the right
-// panel is off.
+// weight on the rim opposite balances it. Each panel plugs in through a waterproof connector, so the
+// module comes off for service with both panels left on the wheel: the left through a 15-pin (J2,
+// which carries the hall sensors too), the right through a 9-pin (J1), which also takes the charging
+// lead when the right panel is off.
 //
 // The data: one PIO program shifts eight lanes out on GPIO0–7, a run of eight pins that all reach the
 // Feather's headers (TX, RX, SDA, SCL, D12, D5, D6, D13), and side-sets the two clocks on GPIO10/11.
@@ -42,7 +43,8 @@ export interface Electronics {
   halls: number;
   pins: PinUse[];
   shifters: Shifter[];
-  connector: ConnPin[];
+  connector: ConnPin[];      // J1, the right panel
+  leftConnector: ConnPin[];  // J2, the left panel
   leftHarness: Wire[];
   rightHarness: Wire[];
   power: {
@@ -74,6 +76,7 @@ const BOOST_IN_A = 7;        // Pololu U3V70F5: input current it sustains
 const BOOST_EFF = 0.85;
 const CELL_V = 3.6;          // a working cell voltage under load
 const PIN_A = 3;             // Weipu SP13 9-pin, per contact
+const J2_PIN_A = 5;          // Weipu SP21 15-pin, per contact
 const CELL = { d: 18.4, len: 65.2, g: 46.5 };
 const STRIP_G_PER_MM = 0.06;  // DotStar 144/m in its sleeve, about 60 g a metre (estimate: weigh yours)
 const BLADE_G_PER_MM = 0.04;  // a 27 mm polypropylene blade with its tabs, per mm of length (estimate)
@@ -151,6 +154,26 @@ export function designElectronics(p: Params): Electronics {
       : { n: 6 + i, net: 'GND', use: 'spare (ground)' });
   }
 
+  // ---- Connector J2 (left panel, Weipu SP21 15-pin): the strips and the hall sensors, one part for any strip count ----
+  const leftConnector: ConnPin[] = [
+    { n: 1, net: '+5V_L', use: '5 V to the left strips' },
+    { n: 2, net: '+5V_L', use: '5 V, second contact' },
+    { n: 3, net: 'GND', use: 'ground' },
+    { n: 4, net: 'GND', use: 'ground, second contact' },
+    { n: 5, net: 'CLK_L5', use: 'clock to every left strip' },
+  ];
+  for (let i = 0; i < 4; i++) {
+    leftConnector.push(i < n
+      ? { n: 6 + i, net: `L${i + 1}_5`, use: `left strip ${i + 1} data` }
+      : { n: 6 + i, net: 'GND', use: 'spare (ground)' });
+  }
+  leftConnector.push({ n: 10, net: 'HALL_V', use: 'hall sensors\' supply' }, { n: 11, net: 'HALL_GND', use: 'hall sensors\' ground' });
+  for (let i = 0; i < 4; i++) {
+    leftConnector.push(i < halls
+      ? { n: 12 + i, net: `HALL${i + 1}`, use: `hall sensor ${i + 1} output` }
+      : { n: 12 + i, net: 'HALL_GND', use: 'spare (hall ground)' });
+  }
+
   // ---- Harnesses ----
   const leftHarness: Wire[] = [
     { net: '+5V_L', colour: 'red', awg: 22, use: '5 V to the left strips' },
@@ -185,6 +208,7 @@ export function designElectronics(p: Params): Electronics {
   if (capA > boostMaxA) warnings.push(`The ${capA} A LED limit is more than the boost gives from a ${CELL_V} V cell (about ${power.boostMaxA} A): lower it, or use a second boost per side.`);
   if (battA / p.cells > 10) warnings.push(`Each cell gives ${power.perCellA} A at the LED limit: add a cell or lower the limit (keep high-drain cells under ~10 A).`);
   if (perSideA / 2 > PIN_A) warnings.push(`The right side draws ${power.perSideA} A over two 5 V contacts, more than the connector's ${PIN_A} A each.`);
+  if (perSideA / 2 > J2_PIN_A) warnings.push(`The left side draws ${power.perSideA} A over two 5 V contacts, more than J2's ${J2_PIN_A} A each.`);
   notes.push(`Full white on every LED would need ${power.peakA} A. The firmware scales each column so the strips never draw more than `
     + `${power.capA} A in all (most pictures need far less: see Stats).`);
 
@@ -245,8 +269,10 @@ export function designElectronics(p: Params): Electronics {
     { name: 'Valve (Presta)', massG: 6, r: rimR, angleDeg: 180 },
   ];
   const sum = (ms: Mass[]) => ms.reduce((m, q) => m + q.massG * q.r * Math.cos((q.angleDeg * Math.PI) / 180), 0);
-  // J1 goes on whichever side is light, so it takes the place of some of the rim weight
-  masses.splice(masses.length - 1, 0, { name: 'J1 connector pair', massG: 20, r: 70, angleDeg: sum(masses) >= 0 ? 180 : 0 });
+  // J1 and J2 go on whichever side is light, so they take the place of some of the rim weight
+  const light = sum(masses) >= 0 ? 180 : 0;
+  masses.splice(masses.length - 1, 0, { name: 'J1 connector pair', massG: 20, r: 70, angleDeg: light },
+    { name: 'J2 connector pair', massG: 32, r: 70, angleDeg: light });
   const net = sum(masses);
   const cwR = rimR - p.rimDepthMm;
   const counterweight: Mass = { name: 'Rim weight', massG: Math.ceil((Math.abs(net) / cwR) * 2) / 2, r: cwR, angleDeg: net >= 0 ? 180 : 0 };
@@ -257,16 +283,16 @@ export function designElectronics(p: Params): Electronics {
   ];
   notes.push(`The hub module is one stack on one side of the shell. A 3D-printed bracket stays tied to the shell (three zip ties, or `
     + `through the flange windows on a cut-out track hub); the battery pack and the electronics box sit in it, joined by an XT30, under a `
-    + `hook-and-loop strap. To take the electronics off: undo the strap, unplug J1 (the left panel comes with them).`);
+    + `hook-and-loop strap. To take the electronics off for service: undo the strap and unplug J1 and J2; both panels stay on the wheel.`);
   const cwSide = counterweight.angleDeg === 180 ? 'opposite the module' : 'on the module\'s side';
   if (n === 1) {
     const j1 = masses.find((q) => q.name.startsWith('J1'));
     notes.push(`Balance: one blade a side puts both blades and strips (about ${oneBlade[0].massG} g) on one side of the wheel. Fit the `
-      + `module opposite them, the valve on their side${j1 ? `, J1 ${j1.angleDeg ? 'on their side' : 'on the module\'s side'}` : ''}, and `
+      + `module opposite them, the valve on their side${j1 ? `, J1 and J2 ${j1.angleDeg ? 'on their side' : 'on the module\'s side'}` : ''}, and `
       + `stick ${counterweight.massG} g on the rim's inner face ${cwSide}. The blade and strip masses are estimates: weigh them, and check `
       + `by spinning the wheel in the stand.`);
   } else {
-    notes.push(`Balance: ${Math.round(moduleG)} g with its centre ${Math.round(moduleR)} mm out. Fit it opposite the valve, tie J1 on the `
+    notes.push(`Balance: ${Math.round(moduleG)} g with its centre ${Math.round(moduleR)} mm out. Fit it opposite the valve, tie J1 and J2 on the `
       + `far side too, and stick ${counterweight.massG} g on the rim's inner face ${cwSide}. Take the weight off with the module.`);
   }
   notes.push(`Each piece goes in through the spokes on its own, end first: the bracket needs a gap of about ${pieces[0].opening.join(' '
@@ -329,6 +355,9 @@ export function designElectronics(p: Params): Electronics {
       + 'SP1311/S9', source: 'Digi-Key, Mouser', note: 'module side: live pins stay shrouded' },
     { group: 'Wheel', qty: 2, item: 'Waterproof circular connector, 9-pin, IP68, cable plug (male)', part: 'Weipu SP1310/P9', source: 'Digi-Key, Mouser', note: 'right panel + charging lead' },
     { group: 'Wheel', qty: 1, item: 'SP13 dust cap for the socket (riding without the right panel)', part: 'Weipu SP13 cap', source: 'Digi-Key, Mouser' },
+    { group: 'Wheel', qty: 1, item: 'Waterproof circular connector, 15-pin, IP68, inline socket (female)', part: 'Weipu SP2111/S15', source: 'Digi-Key, '
+      + 'Mouser', note: 'J2, module side: live pins stay shrouded' },
+    { group: 'Wheel', qty: 1, item: 'Waterproof circular connector, 15-pin, IP68, cable plug (male)', part: 'Weipu SP2110/P15', source: 'Digi-Key, Mouser', note: 'left panel' },
     { group: 'Wheel', qty: 1, item: 'USB-C sink breakout with 5.1 kΩ CC resistors (charging lead)', part: 'any USB-C breakout', source: 'any' },
     { group: 'Carrier board', qty: 1, item: `Carrier PCB, ${CARRIER.w} × ${CARRIER.h} mm, 2-layer, through-hole (from the Board `
       + `sheet)`, part: '—', source: 'PCB fab (OSH Park, JLCPCB, PCBWay)', note: 'bare board: every part below is through-hole, soldered by hand' },
@@ -355,7 +384,7 @@ export function designElectronics(p: Params): Electronics {
 
 
   return {
-    n, cells: p.cells, leds: L, totalLeds, lanes, halls, pins, shifters, connector, leftHarness, rightHarness, power,
+    n, cells: p.cells, leds: L, totalLeds, lanes, halls, pins, shifters, connector, leftConnector, leftHarness, rightHarness, power,
     hub: { shellR, flangeR, flangeZ, oldHalf: p.hubOldMm / 2, rimR, layers, bracket, freeAxialAt, moduleG: Math.round(moduleG), moduleR: r1(moduleR), masses, counterweight, pieces },
     bom, knownCost, notes, warnings,
   };

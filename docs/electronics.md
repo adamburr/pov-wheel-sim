@@ -23,6 +23,7 @@ The tab also lists the power budget, warns about anything that doesn't fit, and 
 | On/off | The brightness button, wired into a soft latch: double-click | No extra switch or magnet |
 | Buttons | Two sealed 12 mm IP67 momentary pushbuttons in the electronics box's lid: preset and brightness | The wheel's controls, on the hub package |
 | Right connector | Weipu SP13 9-pin, IP68: an inline socket on the module's pigtail, a plug on the right panel | Screw-lock, 3 A a contact, and cheap |
+| Left connector | Weipu SP21 15-pin, IP68: an inline socket on the module's left pigtail, a plug on the left panel | The module comes off for service with both panels left on the wheel; 15 pins carry the strips and the hall sensors for any strip count |
 
 The simulator models only this platform, with the standard build fixed: the strip, both sides lit, each strip on its own data lane at 12 MHz, and a hall sensor per strip on an interrupt. The other chips and LED types and the magnetometer are gone. Only the LED PWM rate, which datasheets disagree on, is still editable, under Hardware → LEDs.
 
@@ -120,6 +121,22 @@ The firmware also drops `HOLD` after some minutes stopped.
 
 At the limit the right side draws 1.75 A, about 0.9 A per 5 V contact; each contact is rated 3 A. The live side, the module's pigtail, carries the shrouded socket (SP1311/S9). The right panel and the charging lead carry plugs (SP1310/P9). Cap the socket when the right panel is off. Check the pin genders and numbering against the part's drawing before you wire it.
 
+## Connector J2 (Weipu SP21 15-pin)
+
+The left panel plugs in too, so the module comes off for service with both panels left on the wheel. J2 carries the left strips and every hall sensor, so it has more pins than J1. It is one part for any strip count: unused pins are tied to ground.
+
+| Pin | Net | Use |
+|---|---|---|
+| 1, 2 | +5V_L | 5 V to the left strips |
+| 3, 4 | GND | ground |
+| 5 | CLK_L5 | clock to every left strip |
+| 6–9 | L1_5–L4_5 | left strip data (spare: GND) |
+| 10 | HALL_V | hall sensors' supply (filtered battery) |
+| 11 | HALL_GND | hall sensors' ground, kept off the strip ground |
+| 12–15 | HALL1–HALL4 | hall sensor outputs (spare: HALL_GND) |
+
+Each contact is rated 5 A. As with J1, the module's pigtail carries the shrouded socket (SP2111/S15) and the left panel the plug (SP2110/P15). Tie the pair to a left spoke, on the same side of the wheel as J1: together they take the place of some of the rim weight.
+
 ## Hub module
 
 The module is one stack on one side of the hub shell, between the flanges, built so it goes on and comes off easily:
@@ -128,7 +145,7 @@ The module is one stack on one side of the hub shell, between the flanges, built
 2. **Battery pack:** the cells and their protection board in a printed shell. The cells lie across the axle, two side by side along it. A 65 mm cell along the axle wouldn't clear the spoke cones on a typical road hub.
 3. **Electronics box:** a printed shell with the power board (boost, charger, fuse) and the Feather on its carrier above it. An XT30 joins it to the pack.
 
-A hook-and-loop strap through the bracket's rails holds the pack and the box. To take the electronics off, undo the strap and unplug J1; the left panel comes with them, since it's wired straight on.
+A hook-and-loop strap through the bracket's rails holds the pack and the box. To take the electronics off for service, undo the strap and unplug J1 and J2; both panels stay on the wheel.
 
 Each piece goes in through the spokes on its own, end first, so check the gaps on your wheel. On the defaults:
 
@@ -176,7 +193,7 @@ The board is 90 × 32 mm and etched, 2-layer: a few bare boards cost about $5–
 - **Beside the Feather:** the third shifter, the standing resistors, the transistors, the diodes and the capacitors.
 - **Order:** solder the low parts first and the headers last.
 
-The harnesses solder into numbered 1 mm holes along the board's long edges. J2 runs along the top. Along the bottom go the J1 pigtail, the power board's wires and the lid's two buttons.
+The harnesses solder into numbered 1 mm holes along the board's long edges. The J2 pigtail runs along the top. Along the bottom go the J1 pigtail, the power board's wires and the lid's two buttons.
 
 The board is 96 mm long in its box. The box still fits between the spoke cones, with about 47 mm free where 38 are needed.
 
@@ -187,13 +204,13 @@ The Board sheet is a placement for routing in KiCad, not a routed board. It name
 - **Conformal coating:** coat the carrier, the Feather and the power boards.
 - **Pack and box:** give the printed shells gasketed lids, with neutral-cure silicone where the wires leave.
 - **Strip ends:** the strips' silicone sleeves are weatherproof, but cutting them opens the ends. Cap the cut ends with silicone end caps and neutral-cure RTV. Acetic-cure RTV corrodes copper.
-- **Connector:** the SP13 is IP68 when mated, or with its cap on.
+- **Connectors:** the SP13 and SP21 are IP68 when mated, and the SP13 with its cap on.
 - **Buttons:** IP67 pushbuttons, each sealed in the lid with its own O-ring and nut.
 - **Firmware updates:** the Feather's USB-C is inside the electronics box. Put a removable boot over it in the box's end, or plan to reopen the box.
 
 ## Open questions
 
-- **Pinout check:** check the SP13 9-pin's genders and numbering, and the Feather's header pin positions, against the parts' drawings.
+- **Pinout check:** check the SP13 9-pin's and SP21 15-pin's genders and numbering, and the Feather's header pin positions, against the parts' drawings.
 - **Hub measurements:** measure the hub shell diameter, the spoke hole circle, and the gap between the flanges, and enter them under Hardware → Wheel → Hub.
 - **Spoke gaps:** check that each piece passes through a gap between the spokes.
 - **Charger CE:** confirm the bq24074 breakout's CE pad and its default state.

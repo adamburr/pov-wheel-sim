@@ -47,11 +47,24 @@ describe('electronics', () => {
     expect(e.power.perPinA).toBeLessThanOrEqual(3);
   });
 
+  it('plugs the left panel in through J2, so the module comes off with both panels left on', () => {
+    expect(e.leftConnector.map((c) => c.n)).toEqual(Array.from({ length: 15 }, (_, i) => i + 1));
+    expect(e.leftConnector.map((c) => c.net)).toEqual(['+5V_L', '+5V_L', 'GND', 'GND', 'CLK_L5', 'L1_5', 'L2_5', 'L3_5', 'L4_5',
+      'HALL_V', 'HALL_GND', 'HALL1', 'HALL2', 'HALL3', 'HALL4']);
+    // every wire of the left harness has a pin
+    for (const w of e.leftHarness) expect(e.leftConnector.some((c) => c.net === w.net)).toBe(true);
+    expect(e.bom.find((b) => b.part === 'Weipu SP2111/S15')!.qty).toBe(1);
+    expect(e.bom.find((b) => b.part === 'Weipu SP2110/P15')!.qty).toBe(1);
+    expect(e.hub.masses.find((q) => q.name.startsWith('J2'))!.angleDeg).toBe(e.hub.masses.find((q) => q.name.startsWith('J1'))!.angleDeg);
+  });
+
   it('fills spare connector pins with ground and fewer lanes with fewer strips', () => {
     const f = designElectronics({ ...p, stripCount: 3 });
     expect(f.lanes.map((l) => l.gpio)).toEqual([0, 1, 2, 4, 5, 6]);
     expect(f.shifters).toHaveLength(2);
     expect(f.connector[8].net).toBe('GND');
+    expect(f.leftConnector[8].net).toBe('GND');
+    expect(f.leftConnector[14].net).toBe('HALL_GND'); // a spare hall pin, on the hall sensors' ground
   });
 
   it('wires the standard build even while the simulator compares it with shared back data', () => {
@@ -76,7 +89,7 @@ describe('electronics', () => {
     expect(Math.abs(sum)).toBeLessThan(0.5 * h.counterweight.r); // within half a gram at the rim
     expect(h.counterweight.angleDeg).toBe(180);
     expect(h.counterweight.r).toBe(p.bsdMm / 2 - p.rimDepthMm);
-    expect(h.counterweight.massG).toBeGreaterThan(5);
+    expect(h.counterweight.massG).toBeGreaterThan(0); // the connectors, on the light side, take some of it
     // more cells, more weight
     expect(designElectronics({ ...p, cells: 4 }).hub.counterweight.massG).toBeGreaterThan(h.counterweight.massG);
   });
